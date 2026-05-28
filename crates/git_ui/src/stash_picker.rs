@@ -527,7 +527,9 @@ impl PickerDelegate for StashListDelegate {
         _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
-        let entry_match = &self.matches[ix];
+        let Some(entry_match) = self.matches.get(ix) else {
+            return None;
+        };
 
         let stash_message =
             Self::bounded_format_message(entry_match.entry.index, &entry_match.entry.message);

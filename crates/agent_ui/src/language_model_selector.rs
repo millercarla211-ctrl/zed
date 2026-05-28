@@ -256,7 +256,14 @@ impl LanguageModelPickerDelegate {
             (current_index + 1) % self.all_models.favorites.len()
         };
 
-        let next_model = self.all_models.favorites[next_index].model.clone();
+        let Some(next_model) = self
+            .all_models
+            .favorites
+            .get(next_index)
+            .map(|info| info.model.clone())
+        else {
+            return;
+        };
 
         (self.on_model_changed)(next_model, cx);
 

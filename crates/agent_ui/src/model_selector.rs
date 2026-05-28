@@ -184,7 +184,9 @@ impl ModelPickerDelegate {
             (current_index_in_favorites + 1) % favorite_models.len()
         };
 
-        let next_model = favorite_models[next_index].clone();
+        let Some(next_model) = favorite_models.get(next_index).cloned() else {
+            return;
+        };
 
         self.agent_server
             .set_default_model(Some(next_model.id.clone()), self.fs.clone(), cx);
@@ -193,7 +195,7 @@ impl ModelPickerDelegate {
             .select_model(next_model.id.clone(), cx)
             .detach_and_log_err(cx);
 
-        self.selected_model = Some(next_model);
+        self.selected_model = Some((*next_model).clone());
 
         // Keep the picker selection aligned with the newly-selected model
         if let Some(new_index) = self.filtered_entries.iter().position(|entry| {

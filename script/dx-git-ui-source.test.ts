@@ -153,6 +153,16 @@ test("stash picker bounds stash entries, fuzzy candidates, and rendered labels",
     /Self::bounded_format_message\(entry_match\.entry\.index, &entry_match\.entry\.message\)/,
     "stash rows must compact stash messages before label rendering",
   );
+  assert.match(
+    renderMatch,
+    /let\s+Some\(entry_match\)\s*=\s*self\.matches\.get\(ix\)\s*else\s*\{\s*return\s+None;\s*\};/,
+    "stash row rendering must fail closed when a stale row index arrives",
+  );
+  assert.doesNotMatch(
+    renderMatch,
+    /self\.matches\s*\[\s*ix\s*\]/,
+    "stash row rendering must not direct-index stale row indexes",
+  );
 });
 
 test("git pickers guard stale fuzzy IDs and selected indexes", () => {

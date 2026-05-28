@@ -181,7 +181,7 @@ impl ConfigOptionsView {
             (current_index + 1) % options.len()
         };
 
-        Some(options[next_index].value.clone())
+        Some(options.get(next_index)?.value.clone())
     }
 
     fn config_option_ids(

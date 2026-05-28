@@ -49,8 +49,8 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-prompt-store-source.test.ts` - prompt metadata fuzzy candidate materialization boundaries.
 - `node --test script/dx-task-inventory-source.test.ts` - task inventory template, debug scenario, and validation-list boundaries.
 - `node --test script/dx-lsp-aggregation-source.test.ts` - document link and symbol LSP response aggregation boundaries.
-- `node --test script/dx-language-model-selector-source.test.ts` - language model picker provider/model/result materialization boundaries.
-- `node --test script/dx-model-selector-source.test.ts` - agent model selector grouped/fuzzy materialization boundaries.
+- `node --test script/dx-language-model-selector-source.test.ts` - language model picker provider/model/result materialization and favorite-cycle boundaries.
+- `node --test script/dx-model-selector-source.test.ts` - agent model selector grouped/fuzzy materialization and favorite-cycle boundaries.
 - `node --test script/dx-agent-ui-selector-source.test.ts` - Agent UI model selector stale fuzzy candidate-id boundaries.
 - `node --test script/zed-open-listener-source.test.ts` - CLI/open-listener path, diff, item, and fanout boundaries.
 - `node --test script/dx-context-server-store-source.test.ts` - context server configuration, command, OAuth, and fanout boundaries.
@@ -80,6 +80,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-search-ui-source.test.ts` - project-search active-match label and navigation index boundaries.
 - `node --test script/dx-debugger-ui-source.test.ts` - debugger console DAP completion materialization boundaries.
 - `node --test script/dx-debugger-stack-frame-source.test.ts` - debugger stack-frame filtered-row and entry render boundaries.
+- `node --test script/dx-debugger-module-list-source.test.ts` - debugger module-list stale-row render boundaries.
 - `node --test script/dx-collab-panel-source.test.ts` - collab panel stale fuzzy candidate-id materialization boundaries.
 - `node --test script/dx-collab-notifications-source.test.ts` - collab contact finder async-result selection boundaries.
 - `node --test script/dx-markdown-preview-source.test.ts` - remote directory listing response materialization boundaries.
@@ -103,7 +104,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-tasks-modal-source.test.ts` - tasks modal candidate, match, tooltip tag, stale-selection, and confirm boundaries.
 - `node --test script/dx-feedback-source.test.ts` - feedback installed-extension clipboard and prompt materialization boundaries.
 - `node --test script/dx-font-panel-source.test.ts` - font panel custom web-font, element-id, and preview-file materialization boundaries.
-- `node --test script/dx-agent-config-options-source.test.ts` - agent config option row, current overflow option, fuzzy, and stale-selection boundaries.
+- `node --test script/dx-agent-config-options-source.test.ts` - agent config option row, current overflow option, fuzzy, stale-selection, and stale next-index boundaries.
 - `node --test script/dx-agent-tool-picker-source.test.ts` - agent tool picker row cap, context-server header, and stale-selection boundaries.
 - `node --test script/dx-debugger-attach-modal-source.test.ts` - debugger attach process candidate, command text, fuzzy row, and stale-selection boundaries.
 - `node --test script/dx-debugger-new-process-source.test.ts` - debugger scenario candidate, prompt command, stale-selection, and render candidate-id boundaries.
@@ -122,6 +123,7 @@ Current handoff and production-readiness guards:
 - `node --test script/dx-agent-configuration-source.test.ts` - Agent Configuration settings editor insertion boundaries.
 - `node --test script/dx-agent-configuration-modal-source.test.ts` - Agent Configuration modal text-input byte boundaries.
 - `node --test script/dx-agent-persisted-state-source.test.ts` - Agent Panel and draft prompt persisted KVP JSON boundaries.
+- `node --test script/dx-agent-thread-view-source.test.ts` - Agent thread view thinking-effort stale-cycle boundaries.
 - `node --test script/dx-mention-set-source.test.ts` - external skill mention file bounded reads.
 - `node --test script/dx-message-editor-source.test.ts` - pasted markdown mention-link parsing size boundaries.
 - `node --test script/dx-thread-metadata-source.test.ts` - persisted remote-connection metadata JSON boundaries.
@@ -169,6 +171,8 @@ Adjacent source guards:
 - Wire DX Agents CLI receipts, social/account readiness, automations, and provider/model catalog readiness into GPUI status surfaces.
 
 ## Current Worker Update
+
+- Completed a six-agent stale cycle/render-index hardening pass for Agent Config Options, Agent Model Selector, Language Model Selector, Agent Thread View, Git Stash Picker, and Debugger Module List without `just run` or Cargo. Config option cycling, agent model favorite cycling, language model favorite cycling, and thread thinking-effort cycling now use checked next-index lookups before mutating model/thread/settings state; Git stash row rendering now skips stale picker rows; Debugger module-list rendering now returns an empty row for stale uniform-list indexes. Added and registered `script/dx-agent-thread-view-source.test.ts` and `script/dx-debugger-module-list-source.test.ts`, and extended `script/dx-agent-config-options-source.test.ts`, `script/dx-model-selector-source.test.ts`, `script/dx-language-model-selector-source.test.ts`, and `script/dx-git-ui-source.test.ts`. Passed source-only integration: 29/29 targeted Node source subtests including the handoff registry, targeted rustfmt checks, stale direct-index pattern scan, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 
 - Completed a six-agent stale fuzzy-candidate hardening pass for Keymap Editor, Prompt Store, Project Symbols, Outline, Snippets UI, and Toolchain Selector without `just run` or Cargo. Keymap search/materialization and action completions now skip stale candidate IDs before reading bindings or action names; Prompt Store fuzzy metadata search skips stale cache rows; Project Symbols filters stale symbol IDs before sorting, confirming, or building fake workspace-symbol responses; Outline search guards item/prefix/range lookups and outline helper reads; Snippets scope confirm/render guards stale scope candidates; Toolchain Selector confirm ignores stale toolchain candidates before workspace side effects. Added and registered `script/dx-prompt-store-source.test.ts`, and extended `script/dx-settings-keymap-source.test.ts`, `script/dx-project-symbols-source.test.ts`, `script/dx-outline-theme-source.test.ts`, `script/dx-snippets-source.test.ts`, and `script/dx-toolchain-selector-source.test.ts`. Passed source-only integration: 37/37 targeted Node source subtests including the handoff registry, targeted rustfmt checks, refined stale candidate-id pattern scans, line-anchored conflict-marker scan, and `git diff --check`. Skipped by direct instruction: Cargo build/check/test/clippy, `just run`, local servers, browser automation, and live editor runtime proof.
 

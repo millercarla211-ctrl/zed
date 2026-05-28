@@ -47,6 +47,22 @@ test("favorites and picker rows are bounded before render materialization", () =
   assert.doesNotMatch(entries, /values\(\)\.flatten\(\)\.collect/);
 });
 
+test("favorite cycling checks the next favorite before selecting it", () => {
+  const cycleStart = source.indexOf("pub fn cycle_favorite_models");
+  const helperStart = source.indexOf("\nfn capped_model_refs", cycleStart);
+
+  assert.ok(cycleStart >= 0, "expected favorite cycling method");
+  assert.ok(helperStart > cycleStart, "expected capped refs helper after favorite cycling");
+
+  const cycle = source.slice(cycleStart, helperStart);
+
+  assert.match(
+    cycle,
+    /let\s+Some\(next_model\)\s*=\s*favorite_models\s*\.get\(next_index\)\s*\.cloned\(\)\s*else\s*\{\s*return;\s*\};/,
+  );
+  assert.doesNotMatch(cycle, /favorite_models\s*\[\s*next_index\s*\]/);
+});
+
 test("fuzzy search caps candidates and grouped fanout before collection", () => {
   const fuzzyStart = source.indexOf("async fn fuzzy_search");
   const testsStart = source.indexOf("\n#[cfg(test)]", fuzzyStart);

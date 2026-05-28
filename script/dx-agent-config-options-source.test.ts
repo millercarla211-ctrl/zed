@@ -138,6 +138,14 @@ test("agent config option fuzzy search caps candidates and guards match ids", ()
   assert.doesNotMatch(fuzzy, /options\[mat\.candidate_id\]/);
 });
 
+test("agent config option cycling guards stale next indexes", () => {
+  const nextValue = functionBody("next_value_for_config");
+
+  assert.match(nextValue, /let\s+next_index\s*=/);
+  assert.match(nextValue, /options\s*\.get\(\s*next_index\s*\)/);
+  assert.doesNotMatch(nextValue, /options\s*\[\s*next_index\s*\]/);
+});
+
 test("agent config option selection is clamped after filtered entries are replaced", () => {
   const updateMatches = sliceBetween(
     "fn update_matches(",

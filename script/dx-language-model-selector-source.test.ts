@@ -177,6 +177,25 @@ test("grouped model buckets and render entries are capped before materialization
   );
 });
 
+test("favorite cycling uses checked favorite lookup", () => {
+  const cycleFavoriteModels = sliceBetween(
+    source,
+    "pub fn cycle_favorite_models(",
+    "struct GroupedModels",
+  );
+
+  assert.doesNotMatch(
+    cycleFavoriteModels,
+    /\.favorites\s*\[\s*next_index\s*\]/,
+    "favorite cycling must not direct-index favorites by next_index",
+  );
+  assert.match(
+    cycleFavoriteModels,
+    /\.favorites\s*\.get\(\s*next_index\s*\)/,
+    "favorite cycling must use a checked favorites lookup before cloning the next model",
+  );
+});
+
 test("model matcher caps searchable candidates and result vectors", () => {
   const matcher = sliceBetween(source, "impl ModelMatcher {", "impl PickerDelegate");
   const matcherNew = sliceBetween(matcher, "fn new(", "pub fn fuzzy_search");

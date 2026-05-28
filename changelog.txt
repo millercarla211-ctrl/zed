@@ -1,3 +1,28 @@
+[2026-05-29] - Selector Cycle And Stale Row Hardening
+
+ADDED:
+- Added `script\dx-agent-thread-view-source.test.ts` for Agent Thread View thinking-effort stale-cycle boundaries.
+- Added `script\dx-debugger-module-list-source.test.ts` for Debugger Module List stale uniform-row render boundaries.
+
+CHANGED:
+- Agent config option cycling now checks `options.get(next_index)` before returning the next value.
+- Agent model favorite cycling now checks `favorite_models.get(next_index)` before setting the default/selected model.
+- Language Model Selector favorite cycling now checks `favorites.get(next_index)` before calling the model-change callback.
+- Agent Thread View thinking-effort cycling now checks `effort_levels.get(next_index)` before mutating thread/settings state.
+- Git Stash Picker row rendering now skips stale picker row indexes instead of direct-indexing `self.matches`.
+- Debugger Module List row rendering now returns an empty row for stale uniform-list indexes instead of direct-indexing entries.
+- `DX.md`, `todo.txt`, and the handoff source guard registry now list the two new guards and the extended stale-index coverage.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-agent-config-options-source.test.ts script\dx-model-selector-source.test.ts script\dx-language-model-selector-source.test.ts script\dx-agent-thread-view-source.test.ts script\dx-git-ui-source.test.ts script\dx-debugger-module-list-source.test.ts` (29/29 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true` on edited Rust files
+- Targeted stale direct-index pattern scan over edited Rust files
+- Line-anchored conflict-marker scan over touched files
+- `git diff --check`
+
+NOTES:
+- Still skipping Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live editor runtime proof by direct user instruction.
+
 [2026-05-29] - Keymap Prompt Symbols Outline Snippets And Toolchain Candidate Hardening
 
 ADDED:

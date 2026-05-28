@@ -9717,7 +9717,10 @@ impl ThreadView {
             Some(index) => (index + 1) % effort_levels.len(),
             None => 0,
         };
-        let next_effort = effort_levels[next_index].value.to_string();
+        let Some(next_effort_level) = effort_levels.get(next_index) else {
+            return;
+        };
+        let next_effort = next_effort_level.value.to_string();
 
         thread.update(cx, |thread, cx| {
             thread.set_thinking_effort(Some(next_effort.clone()), cx);
