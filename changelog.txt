@@ -17,6 +17,26 @@ NOTES:
 - Audio cards currently render an honest `Duration unavailable` label rather than probing media duration on the UI path; real duration extraction should be added as a background metadata task before claiming full audio-duration parity.
 - Skipped Cargo build/check/test/clippy, `just run`, just check/build/fmt/lint, local servers/apps, browser automation, and live editor/runtime proof by direct instruction.
 
+[2026-05-29] - Project Panel Media Preview Lane
+
+ADDED:
+- Added `crates/project_panel/src/media_preview.rs` for bounded expanded-folder media classification, cached preview data, direct image preview cards, video sidecar-frame preview cards with play fallback, and audio cards with honest duration-unavailable state.
+- Extended `script\dx-project-panel-source.test.ts` to guard lazy expanded-directory probing, scan/item caps, negative-result caching, inline-card caps, direct image rendering, video frame/fallback rendering, audio card text, variable-height uniform-list regression prevention, and avoidance of UI-path filesystem metadata probes.
+
+CHANGED:
+- `crates/project_panel/src/project_panel.rs` now caches optional folder media previews by worktree and entry, invalidates them with worktree/settings changes, and only builds preview data for expanded directories from direct child entries.
+- Normal Project Panel tree rows remain the source of truth for code/document files, selection, rename, drag/drop, context menu, reveal, keyboard navigation, sticky rows, uniform-list scroll math, and panel behavior.
+- Expanded media folders now show compact rectangle previews inside the existing row end slot without adding fake entries, variable-height list rows, or disconnected demo controls.
+
+PASSED:
+- `node --test script\dx-handoff-source-guard-registry.test.ts script\dx-project-panel-source.test.ts` (13/13 passing)
+- `rustfmt --edition 2024 --check --config skip_children=true crates\project_panel\src\project_panel.rs crates\project_panel\src\media_preview.rs`
+- Line-anchored conflict-marker scan over touched lane files
+- `git diff --check -- crates/project_panel/src/project_panel.rs crates/project_panel/src/media_preview.rs script/dx-project-panel-source.test.ts`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, thumbnail/duration extraction workers, and live editor/runtime proof by direct instruction.
+
 [2026-05-29] - Right Dock Panel Stack Controls
 
 CHANGED:
