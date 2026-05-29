@@ -204,6 +204,8 @@ pub struct DockData {
     pub visible: bool,
     pub active_panel: Option<String>,
     pub zoom: bool,
+    #[serde(default)]
+    pub stacked_panels: Vec<String>,
 }
 
 impl Column for DockData {
@@ -216,6 +218,7 @@ impl Column for DockData {
                 visible: visible.unwrap_or(false),
                 active_panel,
                 zoom: zoom.unwrap_or(false),
+                stacked_panels: Vec::new(),
             },
             next_index,
         ))

@@ -201,6 +201,21 @@ pub struct DxLaunchPreviewTargets {
 }
 
 impl DxLaunchPreviewTargets {
+    pub fn local_web_preview_onboarding(url: String) -> Self {
+        let fallback = DxLaunchPreviewTarget {
+            title: "Local onboarding".to_string(),
+            detail: "Lightweight local Web Preview onboarding page".to_string(),
+            url,
+            source: DxLaunchPreviewSource::BundledFallback,
+        };
+
+        Self {
+            primary: fallback.clone(),
+            dx_www: None,
+            fallback,
+        }
+    }
+
     pub fn detect() -> Self {
         let fallback = DxLaunchPreviewTarget {
             title: "Bundled DX launch page".to_string(),

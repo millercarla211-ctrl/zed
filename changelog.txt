@@ -1,3 +1,37 @@
+[2026-05-29] - Web Preview Onboarding And Media Explorer Lane
+
+ADDED:
+- `crates/project_panel/src/media_preview.rs` adds a bounded, snapshot-driven media preview model for expanded project-panel folders, with image cards, video cards that reuse available same-stem image frames, and centered audio rectangles that avoid blocking file metadata probes.
+- `crates/onboarding/src/onboarding.rs` now serves onboarding from a local Web Preview data URL with a real `Complete` button wired through the Web Preview IPC bridge to the existing finish/setup completion path.
+- `crates/web_preview/src/web_preview_view.rs`, `crates/web_preview_linux/src/web_preview_view.rs`, and `crates/web_preview_macos/src/web_preview_view.rs` carry an onboarding completion callback through onboarding preview instances and cloned preview items.
+
+CHANGED:
+- `crates/project_panel/src/project_panel.rs` caches folder media previews per worktree entry and renders them only for expanded non-sticky directories, preserving the normal tree rows and clearing cache state alongside existing folder-count invalidation.
+- Source guards now pin the local Web Preview onboarding bridge, no-project DX rail wrapping, right-dock stack controls, and bounded project-panel media preview behavior.
+
+PASSED:
+- `rustfmt --edition 2024 --check --config skip_children=true crates/onboarding/src/onboarding.rs crates/onboarding/src/dx_launch_onboarding.rs crates/web_preview/src/web_preview_view.rs crates/web_preview_linux/src/web_preview_view.rs crates/web_preview_macos/src/web_preview_view.rs crates/project_panel/src/project_panel.rs crates/project_panel/src/media_preview.rs crates/agent_ui/src/agent_panel.rs crates/workspace/src/dock.rs crates/workspace/src/workspace.rs crates/workspace/src/persistence/model.rs`
+- `node --test script\web-preview-platform-lifecycle.test.ts script\dx-launch-workspace-source.test.ts script\dx-workspace-ui-state-source.test.ts script\dx-project-panel-source.test.ts`
+
+NOTES:
+- Audio cards currently render an honest `Duration unavailable` label rather than probing media duration on the UI path; real duration extraction should be added as a background metadata task before claiming full audio-duration parity.
+- Skipped Cargo build/check/test/clippy, `just run`, just check/build/fmt/lint, local servers/apps, browser automation, and live editor/runtime proof by direct instruction.
+
+[2026-05-29] - Right Dock Panel Stack Controls
+
+CHANGED:
+- `crates/workspace/src/dock.rs` now supports an explicit right-dock panel stack of up to three real registered panel entries, rendered as equal-height regions while ordinary panel activation continues to clear the stack and preserve single-panel behavior.
+- Added right-click panel-button controls to add a panel to the right dock stack, remove it from the stack, or show only that panel; the controls call the real dock panel entries and focus/serialize through existing workspace paths.
+- `crates/workspace/src/persistence/model.rs` and `crates/workspace/src/workspace.rs` now carry stack panel names through `DockData`, and a small KVP-backed `dock_panel_stack` state mirrors the existing panel-size persistence pattern without widening the workspace SQL schema.
+
+PASSED:
+- `rustfmt --edition 2024 --check --config skip_children=true crates/workspace/src/dock.rs crates/workspace/src/workspace.rs crates/workspace/src/persistence/model.rs`
+- Line-anchored conflict-marker scan over the touched Rust files
+- `git diff --check -- crates/workspace/src/dock.rs crates/workspace/src/workspace.rs crates/workspace/src/persistence/model.rs`
+
+NOTES:
+- Skipped Cargo build/check/test/clippy, `just run`, just check/build/fmt/lint, local servers/apps, browser automation, and live editor/runtime proof by direct instruction.
+
 [2026-05-29] - Editor Project Panel Agent UI Stale State Hardening
 
 ADDED:

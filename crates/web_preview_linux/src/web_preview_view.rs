@@ -79,6 +79,8 @@ const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
 
+pub type OnboardingCompleteCallback = Rc<dyn Fn(&mut Window, &mut App)>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
     workspace_id: Option<WorkspaceId>,
@@ -235,6 +237,7 @@ pub struct WebPreviewView {
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
+    onboarding_complete: Option<OnboardingCompleteCallback>,
     event_pump_task: Option<Task<()>>,
     zoom_factor: f64,
     is_active_item: bool,
@@ -346,6 +349,7 @@ impl WebPreviewView {
                 workspace_context.clone(),
                 DEFAULT_WEB_PREVIEW_URL.to_string(),
                 None,
+                None,
                 window,
                 cx,
             )
@@ -356,6 +360,7 @@ impl WebPreviewView {
         workspace: WeakEntity<Workspace>,
         current_url: String,
         title: Option<SharedString>,
+        onboarding_complete: Option<OnboardingCompleteCallback>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -364,7 +369,15 @@ impl WebPreviewView {
             .map(|workspace| Self::workspace_context(workspace.read(cx), cx))
             .unwrap_or_else(Self::fallback_workspace_context);
 
-        Self::new_for_url(workspace, workspace_context, current_url, title, window, cx)
+        Self::new_for_url(
+            workspace,
+            workspace_context,
+            current_url,
+            title,
+            onboarding_complete,
+            window,
+            cx,
+        )
     }
 
     pub fn load_onboarding_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
@@ -376,6 +389,7 @@ impl WebPreviewView {
         workspace_context: PreviewWorkspaceContext,
         current_url: String,
         title: Option<SharedString>,
+        onboarding_complete: Option<OnboardingCompleteCallback>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -406,6 +420,7 @@ impl WebPreviewView {
             browser_events,
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
+            onboarding_complete,
             event_pump_task: None,
             zoom_factor: 1.0,
             is_active_item: false,
@@ -946,6 +961,11 @@ impl WebPreviewView {
             .ok_or_else(|| anyhow!("Browser bridge payload is missing kind"))?;
 
         match kind {
+            "onboarding-complete" => {
+                if let Some(complete) = self.onboarding_complete.clone() {
+                    complete(window, cx);
+                }
+            }
             "inspect-element" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let raw_rect = payload.get("rect").and_then(parse_browser_rect);
@@ -2135,6 +2155,7 @@ impl Item for WebPreviewView {
         let current_url = self.current_url_text(cx);
         let detected_extensions = self.detected_extensions.clone();
         let bookmarks = self.bookmarks.clone();
+        let onboarding_complete = self.onboarding_complete.clone();
 
         Task::ready(Some(cx.new(|cx| {
             let url_editor = cx.new(|cx| {
@@ -2164,6 +2185,7 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
+                onboarding_complete,
                 event_pump_task: None,
                 zoom_factor: self.zoom_factor,
                 is_active_item: false,

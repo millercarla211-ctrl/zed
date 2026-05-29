@@ -273,3 +273,130 @@ test("project panel display strings, sticky rows, and undo batches are bounded",
     message: "undo batches must be capped before sending to the manager task",
   });
 });
+
+test("project panel media preview is lazy, bounded, and preserves normal tree rows", () => {
+  const source = read("crates/project_panel/src/project_panel.rs");
+  const media = read("crates/project_panel/src/media_preview.rs");
+  const detailsForEntry = functionBody(source, "details_for_entry");
+  const renderEntry = functionBody(source, "render_entry");
+
+  assert.match(source, /mod media_preview;/);
+  assert.match(source, /folder_media_previews:\s*RefCell<HashMap<\(WorktreeId, ProjectEntryId\), Option<media_preview::FolderMediaPreview>>>/);
+  assert.match(source, /media_preview:\s*Option<media_preview::FolderMediaPreview>/);
+
+  assert.match(media, /pub\(crate\) const MAX_PROJECT_PANEL_MEDIA_CHILD_SCAN: usize = 512;/);
+  assert.match(media, /pub\(crate\) const MAX_PROJECT_PANEL_MEDIA_PREVIEW_ITEMS: usize = 12;/);
+  assert.match(media, /pub\(crate\) const MAX_PROJECT_PANEL_MEDIA_INLINE_CARDS: usize = 4;/);
+  assert.match(media, /pub\(crate\) enum MediaPreviewKind/);
+  assert.match(media, /Image/);
+  assert.match(media, /Video/);
+  assert.match(media, /Audio/);
+  assert.match(media, /fn video_preview_frame_path/);
+  assert.match(media, /fn media_stem_key/);
+  assert.match(media, /fn media_preview_card_tooltip_meta/);
+  assert.match(media, /video_frame_path:\s*Option<PathBuf>/);
+  assert.match(media, /audio_duration_label:\s*Option<String>/);
+  assert.match(
+    source,
+    /let preview = media_preview::build_folder_media_preview\(parent_abs_path, children\);[\s\S]*insert\(cache_key, preview\.clone\(\)\);[\s\S]*preview/,
+    "media preview cache must store both populated previews and no-media misses",
+  );
+
+  assertBefore({
+    body: detailsForEntry,
+    before: /entry\.kind\.is_dir\(\)\s*&&\s*is_expanded/,
+    after: /self\.folder_media_preview\(/,
+    message: "media previews must be built only after confirming an expanded directory",
+  });
+  const mediaPreviewBranch = detailsForEntry.match(
+    /let media_preview = if entry\.kind\.is_dir\(\) && is_expanded \{[\s\S]*?\n        \} else \{\n            None\n        \};/,
+  );
+  assert.ok(
+    mediaPreviewBranch,
+    "details_for_entry must isolate media probing inside the expanded-directory branch",
+  );
+  assert.match(mediaPreviewBranch[0], /self\.folder_media_preview\(/);
+  assert.doesNotMatch(
+    detailsForEntry.replace(mediaPreviewBranch[0], ""),
+    /self\.folder_media_preview\(/,
+    "details_for_entry must not probe media outside the expanded-directory branch",
+  );
+  assertBefore({
+    body: renderEntry,
+    before: /let media_preview = \(!is_sticky\)\s*\.then\(\|\| details\.media_preview\.clone\(\)\)\s*\.flatten\(\);/,
+    after: /media_preview::render_folder_media_preview/,
+    message: "render_entry must use the cached media preview instead of probing from render code",
+  });
+  assertBefore({
+    body: renderEntry,
+    before: /\.end_slot::<AnyElement>/,
+    after: /media_preview::render_folder_media_preview/,
+    message: "media previews must render inside the existing uniform-height row end slot",
+  });
+  assert.doesNotMatch(
+    renderEntry,
+    /\.when\(!is_sticky && kind\.is_dir\(\) && is_expanded[\s\S]*media_preview::render_folder_media_preview/,
+    "media previews must not add variable-height children under uniform_list rows",
+  );
+  assert.match(renderEntry, /block_mouse_except_scroll\(\)/);
+});
+
+test("project panel media preview renders direct image previews and video frames when available", () => {
+  const media = read("crates/project_panel/src/media_preview.rs");
+  const renderFolderMediaPreview = functionBody(media, "render_folder_media_preview");
+  const renderMediaPreviewCard = functionBody(media, "render_media_preview_card");
+  const buildFolderMediaPreview = functionBody(media, "build_folder_media_preview");
+
+  assertBefore({
+    body: buildFolderMediaPreview,
+    before: /children\.take\(MAX_PROJECT_PANEL_MEDIA_CHILD_SCAN \+ 1\)/,
+    after: /scanned_cap_hit/,
+    message: "media child scans must be capped before classification work",
+  });
+  assertBefore({
+    body: buildFolderMediaPreview,
+    before: /items\.len\(\)\s*<\s*MAX_PROJECT_PANEL_MEDIA_PREVIEW_ITEMS/,
+    after: /items\.push/,
+    message: "media preview items must be capped before render data collection",
+  });
+  assertBefore({
+    body: renderFolderMediaPreview,
+    before: /preview\s*\.items\s*\.iter\(\)/,
+    after: /take\(MAX_PROJECT_PANEL_MEDIA_INLINE_CARDS\)/,
+    message: "folder media preview must cap inline cards before render mapping",
+  });
+  assertBefore({
+    body: renderFolderMediaPreview,
+    before: /take\(MAX_PROJECT_PANEL_MEDIA_INLINE_CARDS\)/,
+    after: /render_media_preview_card/,
+    message: "folder media preview must render from bounded preview items",
+  });
+  assert.match(renderFolderMediaPreview, /\.h_6\(\)/);
+  assert.match(renderFolderMediaPreview, /\.overflow_hidden\(\)/);
+  assert.match(renderFolderMediaPreview, /Tooltip::with_meta/);
+  assert.match(
+    renderMediaPreviewCard,
+    /MediaPreviewKind::Image[\s\S]*img\(item\.absolute_path\.clone\(\)\)[\s\S]*object_fit\(ObjectFit::Cover\)/,
+    "image media cards must render direct visual previews from local paths",
+  );
+  assert.match(
+    renderMediaPreviewCard,
+    /MediaPreviewKind::Video[\s\S]*item\.video_frame_path\.as_ref\(\)[\s\S]*img\(frame_path\.clone\(\)\)[\s\S]*IconName::PlayOutlined/,
+    "video media cards must use representative frame images when available and keep a play affordance",
+  );
+  assert.match(
+    renderMediaPreviewCard,
+    /MediaPreviewKind::Video[\s\S]*Icon::new\(IconName::PlayOutlined\)/,
+    "video media cards need a lightweight fallback when no preview frame exists",
+  );
+  assert.match(
+    renderMediaPreviewCard,
+    /let tooltip_title = item\.name\.clone\(\);[\s\S]*MediaPreviewKind::Audio[\s\S]*Duration unavailable[\s\S]*Tooltip::with_meta\(tooltip_title\.clone\(\), None, tooltip_meta\.clone\(\), cx\)/,
+    "audio media cards must render an honest duration state and keep the filename in the tooltip",
+  );
+  assert.doesNotMatch(
+    media,
+    /path\.is_file\(\)|std::fs::metadata|fs::metadata/,
+    "media preview classification must stay snapshot-derived and avoid UI-path filesystem probes",
+  );
+});

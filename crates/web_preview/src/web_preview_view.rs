@@ -77,6 +77,8 @@ const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 #[cfg(target_os = "windows")]
 const MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES: u64 = 64 * 1024 * 1024;
 
+pub type OnboardingCompleteCallback = Rc<dyn Fn(&mut Window, &mut App)>;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PreviewWorkspaceContext {
     workspace_id: Option<WorkspaceId>,
@@ -712,6 +714,7 @@ pub struct WebPreviewView {
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
+    onboarding_complete: Option<OnboardingCompleteCallback>,
     latest_dx_studio_selection: Option<Value>,
     latest_dx_studio_edit_receipt: Option<Value>,
     latest_page_diagnostics: Option<Value>,
@@ -916,6 +919,7 @@ impl WebPreviewView {
                 initial_url,
                 None,
                 None,
+                None,
                 window,
                 cx,
             )
@@ -926,6 +930,7 @@ impl WebPreviewView {
         workspace: WeakEntity<Workspace>,
         current_url: String,
         title: Option<SharedString>,
+        onboarding_complete: Option<OnboardingCompleteCallback>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -939,6 +944,7 @@ impl WebPreviewView {
             workspace_context,
             current_url,
             title,
+            onboarding_complete,
             None,
             window,
             cx,
@@ -954,6 +960,7 @@ impl WebPreviewView {
         workspace_context: PreviewWorkspaceContext,
         current_url: String,
         title: Option<SharedString>,
+        onboarding_complete: Option<OnboardingCompleteCallback>,
         project_item: Option<Entity<WebPreviewFileItem>>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -990,6 +997,7 @@ impl WebPreviewView {
             browser_events,
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
+            onboarding_complete,
             latest_dx_studio_selection: None,
             latest_dx_studio_edit_receipt: None,
             latest_page_diagnostics: None,
@@ -30152,6 +30160,11 @@ impl WebPreviewView {
             .ok_or_else(|| anyhow!("Browser bridge payload is missing kind"))?;
 
         match kind {
+            "onboarding-complete" => {
+                if let Some(complete) = self.onboarding_complete.clone() {
+                    complete(window, cx);
+                }
+            }
             "inspect-element" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let raw_rect = payload.get("rect").and_then(parse_browser_rect);
@@ -34478,6 +34491,7 @@ impl WorkspaceProjectItem for WebPreviewView {
             workspace_context,
             preview_url,
             title,
+            None,
             Some(item),
             window,
             cx,
@@ -34627,6 +34641,7 @@ impl Item for WebPreviewView {
         let current_url = self.current_url_text(cx);
         let detected_extensions = self.detected_extensions.clone();
         let bookmarks = self.bookmarks.clone();
+        let onboarding_complete = self.onboarding_complete.clone();
 
         Task::ready(Some(cx.new(|cx| {
             let url_editor = cx.new(|cx| {
@@ -34661,6 +34676,7 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
+                onboarding_complete,
                 latest_dx_studio_selection: None,
                 latest_dx_studio_edit_receipt: None,
                 latest_page_diagnostics: None,

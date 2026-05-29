@@ -2203,6 +2203,7 @@ impl Workspace {
         let left_active_panel = left_dock
             .active_panel()
             .map(|panel| panel.persistent_name().to_string());
+        let left_stacked_panels = left_dock.stacked_panel_names();
         // `zoomed_position` is kept in sync with individual panel zoom state
         // by the dock code in `Dock::new` and `Dock::add_panel`.
         let left_dock_zoom = self.zoomed_position == Some(DockPosition::Left);
@@ -2212,6 +2213,7 @@ impl Workspace {
         let right_active_panel = right_dock
             .active_panel()
             .map(|panel| panel.persistent_name().to_string());
+        let right_stacked_panels = right_dock.stacked_panel_names();
         let right_dock_zoom = self.zoomed_position == Some(DockPosition::Right);
 
         let bottom_dock = self.bottom_dock.read(cx);
@@ -2219,6 +2221,7 @@ impl Workspace {
         let bottom_active_panel = bottom_dock
             .active_panel()
             .map(|panel| panel.persistent_name().to_string());
+        let bottom_stacked_panels = bottom_dock.stacked_panel_names();
         let bottom_dock_zoom = self.zoomed_position == Some(DockPosition::Bottom);
 
         DockStructure {
@@ -2226,16 +2229,19 @@ impl Workspace {
                 visible: left_visible,
                 active_panel: left_active_panel,
                 zoom: left_dock_zoom,
+                stacked_panels: left_stacked_panels,
             },
             right: DockData {
                 visible: right_visible,
                 active_panel: right_active_panel,
                 zoom: right_dock_zoom,
+                stacked_panels: right_stacked_panels,
             },
             bottom: DockData {
                 visible: bottom_visible,
                 active_panel: bottom_active_panel,
                 zoom: bottom_dock_zoom,
+                stacked_panels: bottom_stacked_panels,
             },
         }
     }
@@ -2380,6 +2386,38 @@ impl Workspace {
                     serde_json::to_string(&size_state)?,
                 )
                 .await
+        })
+        .detach_and_log_err(cx);
+    }
+
+    pub fn persist_dock_stack_state(
+        &self,
+        position: DockPosition,
+        panel_names: Vec<String>,
+        cx: &mut App,
+    ) {
+        let Some(workspace_id) = self
+            .database_id()
+            .map(|id| i64::from(id).to_string())
+            .or(self.session_id())
+        else {
+            return;
+        };
+
+        let kvp = db::kvp::KeyValueStore::global(cx);
+        let stack_key = format!("{workspace_id}:{}", position.label());
+        cx.background_spawn(async move {
+            let json = serde_json::to_string(&panel_names)?;
+            if json.len() > dock::MAX_PANEL_STACK_STATE_JSON_BYTES {
+                anyhow::bail!(
+                    "{} panel stack state KVP payload is too large ({} bytes; max {} bytes)",
+                    stack_key,
+                    json.len(),
+                    dock::MAX_PANEL_STACK_STATE_JSON_BYTES
+                );
+            }
+            let scope = kvp.scoped(dock::PANEL_STACK_STATE_KEY);
+            scope.write(stack_key, json).await
         })
         .detach_and_log_err(cx);
     }

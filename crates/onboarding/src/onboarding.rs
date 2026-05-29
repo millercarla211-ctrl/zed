@@ -13,7 +13,7 @@ use project::agent_server_store::AllAgentServersSettings;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::{SettingsStore, VsCodeSettingsSource};
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 use ui::{
     Divider, KeyBinding, ParentElement as _, StatefulInteractiveElement, Vector, VectorName,
     WithScrollbar as _, prelude::*, rems_from_px,
@@ -61,6 +61,141 @@ pub struct ImportCursorSettings {
 }
 
 pub const FIRST_OPEN: &str = "first_open";
+const WEB_PREVIEW_ONBOARDING_HTML: &str = r##"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onboarding</title>
+<style>
+  :root {
+    color-scheme: dark light;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #101214;
+    color: #f4f0e8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #101214 0%, #17201d 52%, #241a17 100%);
+  }
+  main {
+    width: min(100%, 720px);
+    padding: clamp(32px, 7vw, 72px);
+    display: grid;
+    gap: 28px;
+    justify-items: center;
+    text-align: center;
+  }
+  .mark {
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(244, 240, 232, 0.18);
+    border-radius: 8px;
+    background: rgba(244, 240, 232, 0.08);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+  h1 {
+    margin: 0;
+    max-width: 560px;
+    font-size: clamp(36px, 7vw, 72px);
+    line-height: 0.95;
+    font-weight: 760;
+    letter-spacing: 0;
+  }
+  button {
+    appearance: none;
+    border: 0;
+    border-radius: 8px;
+    padding: 14px 22px;
+    min-width: 136px;
+    background: #e7c06a;
+    color: #171411;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+    cursor: pointer;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  }
+  button:hover { background: #f1cd7d; }
+  button:focus-visible {
+    outline: 3px solid rgba(231, 192, 106, 0.38);
+    outline-offset: 4px;
+  }
+  .status {
+    min-height: 20px;
+    color: rgba(244, 240, 232, 0.72);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">DX</div>
+    <h1>Ready when you are.</h1>
+    <button id="complete" type="button">Complete</button>
+    <div id="status" class="status" aria-live="polite"></div>
+  </main>
+  <script>
+    (() => {
+      const button = document.getElementById("complete");
+      const status = document.getElementById("status");
+      const postComplete = () => {
+        const message = JSON.stringify({ kind: "onboarding-complete" });
+        try {
+          if (window.ipc && typeof window.ipc.postMessage === "function") {
+            window.ipc.postMessage(message);
+            return;
+          }
+          if (window.chrome?.webview && typeof window.chrome.webview.postMessage === "function") {
+            window.chrome.webview.postMessage(message);
+            return;
+          }
+        } catch (_error) {}
+        status.textContent = "Completion bridge unavailable.";
+      };
+      button.addEventListener("click", postComplete);
+    })();
+  </script>
+</body>
+</html>"##;
+
+fn web_preview_onboarding_url() -> String {
+    format!(
+        "data:text/html;charset=utf-8,{}",
+        percent_encode_data_url(WEB_PREVIEW_ONBOARDING_HTML)
+    )
+}
+
+fn percent_encode_data_url(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.as_bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(*byte as char);
+        } else {
+            encoded.push('%');
+            encoded.push(hex_digit(byte >> 4));
+            encoded.push(hex_digit(byte & 0x0f));
+        }
+    }
+    encoded
+}
+
+fn hex_digit(value: u8) -> char {
+    match value {
+        0..=9 => (b'0' + value) as char,
+        10..=15 => (b'A' + value - 10) as char,
+        _ => unreachable!("hex digit nibble must be in range"),
+    }
+}
 
 actions!(
     onboarding,
@@ -273,7 +408,8 @@ impl Onboarding {
             zed_agent = zed_agent_state,
             agents_installed = agents_installed,
         );
-        let dx_preview_targets = DxLaunchPreviewTargets::detect();
+        let dx_preview_targets =
+            DxLaunchPreviewTargets::local_web_preview_onboarding(web_preview_onboarding_url());
 
         cx.new(|cx| {
             cx.spawn(async move |this, cx| {
@@ -299,8 +435,7 @@ impl Onboarding {
     }
 
     fn on_finish(_: &Finish, _: &mut Window, cx: &mut App) {
-        telemetry::event!("Finish Setup");
-        go_to_welcome_page(cx);
+        finish_setup(cx);
     }
 
     fn handle_sign_in(&mut self, _: &SignIn, window: &mut Window, cx: &mut Context<Self>) {
@@ -316,7 +451,14 @@ impl Onboarding {
             })
             .detach();
     }
+}
 
+fn finish_setup(cx: &mut App) {
+    telemetry::event!("Finish Setup");
+    go_to_welcome_page(cx);
+}
+
+impl Onboarding {
     fn handle_open_account(_: &OpenAccount, _: &mut Window, cx: &mut App) {
         cx.open_url(&zed_urls::account_url(cx))
     }
@@ -372,11 +514,15 @@ impl Onboarding {
 
         let workspace = self.workspace.clone();
         let url = self.dx_preview_targets.primary.url.clone();
+        let complete_onboarding = Rc::new(|_window: &mut Window, cx: &mut App| {
+            finish_setup(cx);
+        });
         let preview = cx.new(|cx| {
             WebPreviewView::new_for_onboarding(
                 workspace,
                 url,
-                Some("DX Launch Preview".into()),
+                Some("Onboarding".into()),
+                Some(complete_onboarding),
                 window,
                 cx,
             )
@@ -852,26 +998,7 @@ impl Render for Onboarding {
                 window.focus_prev(cx);
                 cx.notify();
             }))
-            .vertical_scrollbar_for(&self.scroll_handle, window, cx)
-            .child(
-                div()
-                    .id("page-content")
-                    .size_full()
-                    .overflow_y_scroll()
-                    .child(
-                        v_flex()
-                            .min_w_0()
-                            .max_w(rems_from_px(1180.))
-                            .w_full()
-                            .mx_auto()
-                            .p_8()
-                            .gap_6()
-                            .child(self.render_dx_launch_hero(window, cx))
-                            .child(Divider::horizontal().color(ui::DividerColor::BorderVariant))
-                            .child(self.render_page(cx)),
-                    )
-                    .track_scroll(&self.scroll_handle),
-            )
+            .child(self.render_web_preview_canvas(window, cx))
     }
 }
 

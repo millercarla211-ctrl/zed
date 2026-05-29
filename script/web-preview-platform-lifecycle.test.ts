@@ -14,6 +14,11 @@ const platformViews = [
   ["Linux", "crates/web_preview_linux/src/web_preview_view.rs"],
 ];
 
+const desktopOnboardingPreviewViews = [
+  ["Windows", "crates/web_preview/src/web_preview_view.rs"],
+  ...platformViews,
+];
+
 const platformHostFiles = [
   "crates/web_preview_macos/src/macos_host.rs",
   "crates/web_preview_linux/src/x11_host.rs",
@@ -144,6 +149,38 @@ test("onboarding DX preview uses native Web Preview on macOS and Linux", () => {
   );
   assert.doesNotMatch(source, /Windows Web Preview runtime/);
 });
+
+test("onboarding uses a local Web Preview page with a real completion bridge", () => {
+  const source = read("crates/onboarding/src/onboarding.rs");
+
+  assert.match(source, /const WEB_PREVIEW_ONBOARDING_HTML: &str/);
+  assert.match(source, /JSON\.stringify\(\{ kind: "onboarding-complete" \}\)/);
+  assert.match(source, /DxLaunchPreviewTargets::local_web_preview_onboarding\(web_preview_onboarding_url\(\)\)/);
+  assert.match(source, /Some\(complete_onboarding\)/);
+  assert.match(source, /fn finish_setup\(cx: &mut App\)/);
+  assert.match(source, /\.child\(self\.render_web_preview_canvas\(window, cx\)\)/);
+
+  const renderStart = source.indexOf("impl Render for Onboarding");
+  assert.ok(renderStart >= 0, "expected Onboarding render impl");
+  const renderBody = source.slice(renderStart);
+  assert.doesNotMatch(
+    renderBody,
+    /render_dx_launch_hero\(window, cx\)/,
+    "first-run onboarding should render the Web Preview surface directly",
+  );
+});
+
+for (const [name, path] of desktopOnboardingPreviewViews) {
+  test(`${name} Web Preview exposes onboarding completion IPC`, () => {
+    const source = read(path);
+
+    assert.match(source, /pub type OnboardingCompleteCallback = Rc<dyn Fn\(&mut Window, &mut App\)>;/);
+    assert.match(source, /onboarding_complete: Option<OnboardingCompleteCallback>/);
+    assert.match(source, /"onboarding-complete" => \{/);
+    assert.match(source, /if let Some\(complete\) = self\.onboarding_complete\.clone\(\)/);
+    assert.match(source, /complete\(window, cx\);/);
+  });
+}
 
 for (const [name, path, cfg] of platformLibs) {
   test(`${name} web preview init registers actions and startup lifecycle`, () => {

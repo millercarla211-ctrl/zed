@@ -1,3 +1,4 @@
+mod media_preview;
 pub mod project_panel_settings;
 mod undo;
 mod utils;
@@ -211,6 +212,8 @@ pub struct ProjectPanel {
     hover_expand_task: Option<Task<()>>,
     previous_drag_position: Option<Point<Pixels>>,
     folder_file_counts: RefCell<HashMap<(WorktreeId, ProjectEntryId), usize>>,
+    folder_media_previews:
+        RefCell<HashMap<(WorktreeId, ProjectEntryId), Option<media_preview::FolderMediaPreview>>>,
     sticky_items_count: usize,
     last_reported_update: Instant,
     update_visible_entries_task: UpdateVisibleEntriesTask,
@@ -321,6 +324,7 @@ struct EntryDetails {
     filename: String,
     size: u64,
     folder_file_count: Option<usize>,
+    media_preview: Option<media_preview::FolderMediaPreview>,
     icon: Option<SharedString>,
     path: Arc<RelPath>,
     absolute_path: PathBuf,
@@ -719,6 +723,9 @@ impl ProjectPanel {
                         this.folder_file_counts
                             .borrow_mut()
                             .retain(|(worktree_id, _), _| *worktree_id != *id);
+                        this.folder_media_previews
+                            .borrow_mut()
+                            .retain(|(worktree_id, _), _| *worktree_id != *id);
                         this.state.expanded_dir_ids.remove(id);
                         this.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
@@ -727,6 +734,7 @@ impl ProjectPanel {
                     | project::Event::WorktreeAdded(_)
                     | project::Event::WorktreeOrderChanged => {
                         this.folder_file_counts.borrow_mut().clear();
+                        this.folder_media_previews.borrow_mut().clear();
                         this.update_visible_entries(None, false, false, window, cx);
                         cx.notify();
                     }
@@ -841,6 +849,7 @@ impl ProjectPanel {
                 if project_panel_settings != new_settings {
                     if project_panel_settings.hide_gitignore != new_settings.hide_gitignore {
                         this.folder_file_counts.borrow_mut().clear();
+                        this.folder_media_previews.borrow_mut().clear();
                         this.update_visible_entries(None, false, false, window, cx);
                     }
                     if project_panel_settings.hide_root != new_settings.hide_root {
@@ -848,6 +857,7 @@ impl ProjectPanel {
                     }
                     if project_panel_settings.hide_hidden != new_settings.hide_hidden {
                         this.folder_file_counts.borrow_mut().clear();
+                        this.folder_media_previews.borrow_mut().clear();
                         this.update_visible_entries(None, false, false, window, cx);
                     }
                     if project_panel_settings.sort_mode != new_settings.sort_mode {
@@ -891,6 +901,7 @@ impl ProjectPanel {
                 hover_expand_task: None,
                 previous_drag_position: None,
                 folder_file_counts: Default::default(),
+                folder_media_previews: Default::default(),
                 sticky_items_count: 0,
                 last_reported_update: Instant::now(),
                 state: State {
@@ -5580,6 +5591,9 @@ impl ProjectPanel {
 
         let kind = details.kind;
         let is_sticky = details.sticky.is_some();
+        let media_preview = (!is_sticky)
+            .then(|| details.media_preview.clone())
+            .flatten();
         let sticky_index = details.sticky.as_ref().map(|this| this.sticky_index);
         let settings = ProjectPanelSettings::get_global(cx);
         let show_editor = details.is_editing && !details.is_processing;
@@ -6084,6 +6098,12 @@ impl ProjectPanel {
                             .gap_1()
                             .flex_none()
                             .pr_3()
+                            .when_some(media_preview, |this, media_preview| {
+                                this.child(media_preview::render_folder_media_preview(
+                                    &media_preview,
+                                    cx,
+                                ))
+                            })
                             .when_some(diagnostic_count, |this, count| {
                                 this.when(count.error_count > 0, |this| {
                                     this.child(
@@ -6476,6 +6496,25 @@ impl ProjectPanel {
             )
     }
 
+    fn folder_media_preview<'a>(
+        &self,
+        worktree_id: WorktreeId,
+        entry_id: ProjectEntryId,
+        parent_abs_path: &Path,
+        children: impl Iterator<Item = &'a Entry>,
+    ) -> Option<media_preview::FolderMediaPreview> {
+        let cache_key = (worktree_id, entry_id);
+        if let Some(preview) = self.folder_media_previews.borrow().get(&cache_key).cloned() {
+            return preview;
+        }
+
+        let preview = media_preview::build_folder_media_preview(parent_abs_path, children);
+        self.folder_media_previews
+            .borrow_mut()
+            .insert(cache_key, preview.clone());
+        preview
+    }
+
     fn details_for_entry(
         &self,
         entry: &Entry,
@@ -6603,11 +6642,35 @@ impl ProjectPanel {
                 count
             }
         });
+        let media_preview = if entry.kind.is_dir() && is_expanded {
+            let settings = ProjectPanelSettings::get_global(cx);
+            self.project
+                .read(cx)
+                .worktree_for_id(worktree_id, cx)
+                .and_then(|worktree| {
+                    let snapshot = worktree.read(cx).snapshot();
+                    let children = snapshot
+                        .child_entries_with_options(
+                            &entry.path,
+                            ChildEntriesOptions {
+                                include_files: true,
+                                include_dirs: false,
+                                include_ignored: !settings.hide_gitignore,
+                            },
+                        )
+                        .filter(|child| !settings.hide_hidden || !child.is_hidden)
+                        .filter(|child| child.is_file());
+                    self.folder_media_preview(worktree_id, entry.id, &absolute_path, children)
+                })
+        } else {
+            None
+        };
 
         EntryDetails {
             filename,
             size: entry.size,
             folder_file_count,
+            media_preview,
             icon,
             path: entry.path.clone(),
             absolute_path,

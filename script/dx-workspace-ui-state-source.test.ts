@@ -134,18 +134,65 @@ test("dock panel activation checks target index before active-panel side effects
   const activatePanel = functionBody(dock, "activate_panel");
   assertBefore({
     body: activatePanel,
-    before: /self\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
+    before: /self\s*\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
     after: /active_panel\.panel\.set_active\(false, window, cx\)/,
     message:
       "activate_panel must verify the target panel exists before deactivating the current panel",
   });
   assertBefore({
     body: activatePanel,
-    before: /self\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
+    before: /self\s*\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
     after: "self.active_panel_index = Some(panel_ix);",
     message:
       "activate_panel must verify the target panel exists before storing the active index",
   });
+});
+
+test("right dock stack controls use real panel entries and preserve single-panel activation", () => {
+  assert.match(dock, /const MAX_STACKED_PANELS: usize = 3;/);
+  assert.match(dock, /stacked_panel_ids: Vec<EntityId>/);
+  assert.match(dock, /pub fn stack_panel\(/);
+  assert.match(dock, /pub fn unstack_panel\(/);
+  assert.match(dock, /pub fn show_single_panel\(/);
+
+  const activatePanel = functionBody(dock, "activate_panel");
+  assertBefore({
+    body: activatePanel,
+    before: /self\s*\.panel_entries\s*\.get\(\s*panel_ix\s*\)/,
+    after: /self\.stacked_panel_ids\.clear\(\)/,
+    message:
+      "ordinary activation must verify the target panel before clearing stack state",
+  });
+
+  const dockRender = functionBody(
+    dock.slice(dock.indexOf("impl Render for Dock")),
+    "render",
+  );
+  assert.match(dockRender, /let visible_panels = self\s*\.visible_entries\(\)/);
+  assert.match(dockRender, /\.when\(is_stacked, \|this\| this\.flex\(\)\.flex_col\(\)\)/);
+  assert.match(dockRender, /\.flex_1\(\)/);
+  assert.match(dockRender, /\.border_t_1\(\)/);
+  assert.match(dockRender, /dock\.activate_panel\(panel_ix, window, cx\);/);
+
+  const panelButtonsRender = functionBody(
+    dock.slice(dock.indexOf("impl Render for PanelButtons")),
+    "render",
+  );
+  for (const label of [
+    "Add to Right Dock Stack",
+    "Remove from Right Dock Stack",
+    "Show Only This Panel",
+  ]) {
+    assert.match(panelButtonsRender, new RegExp(label));
+  }
+  assert.match(panelButtonsRender, /dock\.stack_panel\(panel_id, window, cx\)/);
+  assert.match(panelButtonsRender, /dock\.unstack_panel\(panel_id, window, cx\)/);
+  assert.match(panelButtonsRender, /dock\.show_single_panel\(panel_id, window, cx\)/);
+
+  assert.match(workspace, /pub fn persist_dock_stack_state\(/);
+  assert.match(workspace, /dock::PANEL_STACK_STATE_KEY/);
+  assert.match(workspace, /MAX_PANEL_STACK_STATE_JSON_BYTES/);
+  assert.match(workspace, /stacked_panels: right_stacked_panels/);
 });
 
 test("item project-handle collections cap visited items before pushing handles", () => {

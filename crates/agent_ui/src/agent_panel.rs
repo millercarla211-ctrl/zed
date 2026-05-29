@@ -7185,7 +7185,8 @@ impl Render for AgentPanel {
             .children(self.render_new_user_onboarding(window, cx))
             .map(|parent| match self.visible_surface() {
                 VisibleSurface::Uninitialized if !self.has_open_project(cx) => {
-                    parent.child(self.render_no_project_state(cx))
+                    let no_project_state = self.render_no_project_state(cx).into_any_element();
+                    parent.child(self.render_dx_launch_workspace(no_project_state, window, cx))
                 }
                 VisibleSurface::Uninitialized => parent,
                 VisibleSurface::AgentThread(conversation_view) => parent

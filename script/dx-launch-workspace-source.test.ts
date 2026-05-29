@@ -56,6 +56,52 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   );
 });
 
+test("empty workspaces render the no-project Agent state inside DX launch chrome", () => {
+  const agentPanel = read("crates/agent_ui/src/agent_panel.rs");
+
+  assert.match(
+    agentPanel,
+    /VisibleSurface::Uninitialized if !self\.has_open_project\(cx\) => \{\s*let no_project_state = self\.render_no_project_state\(cx\)\.into_any_element\(\);\s*parent\.child\(self\.render_dx_launch_workspace\(no_project_state, window, cx\)\)\s*\}/s,
+  );
+  assert.match(
+    agentPanel,
+    /fn should_render_dx_launch_chrome\(&self, cx: &App\) -> bool \{\s*self\.manual_zoom_override\s*\.unwrap_or_else\(\|\| self\.zoomed \|\| self\.workspace_has_no_editor_file\(cx\)\)\s*\}/s,
+  );
+  assert.doesNotMatch(
+    agentPanel,
+    /VisibleSurface::Uninitialized if !self\.has_open_project\(cx\) => \{\s*parent\.child\(self\.render_no_project_state\(cx\)\)\s*\}/s,
+  );
+});
+
+test("collapsed workspace activity bar stays icon-only with hover details", () => {
+  const sidebar = read("crates/sidebar/src/sidebar.rs");
+  const activityBar = read("crates/sidebar/src/coding_activity_bar.rs");
+
+  assert.match(sidebar, /const CODING_ACTIVITY_BAR_WIDTH: Pixels = px\(48\.0\);/);
+  assert.match(activityBar, /\.id\("workspace-sidebar-activity-bar"\)/);
+  assert.match(activityBar, /\.overflow_hidden\(\)/);
+  assert.match(activityBar, /\.overflow_y_scroll\(\)/);
+  assert.doesNotMatch(activityBar, /Label::new|Button::new/);
+
+  const expectedActions = [
+    ["sidebar-activity-new-chat", "New Chat"],
+    ["sidebar-activity-search", "Search"],
+    ["sidebar-activity-agents", "Agents"],
+    ["sidebar-activity-sources", "Sources"],
+    ["sidebar-activity-plugins", "Plugins"],
+    ["sidebar-activity-automations", "Automations"],
+    ["sidebar-activity-background-tasks", "Background Tasks"],
+    ["sidebar-activity-settings", "Settings"],
+  ];
+
+  for (const [id, tooltip] of expectedActions) {
+    assert.match(sidebar, new RegExp(`"${id}"[\\s\\S]*?"${tooltip}"`));
+  }
+
+  assert.match(sidebar, /Tooltip::text\("Create Space or Add Project"\)/);
+  assert.match(sidebar, /Label::new\("Toggle Sidebar"\)/);
+});
+
 test("DX launch workspace delegates Launch Receipts rail rendering", () => {
   const parent = read("crates/agent_ui/src/dx_launch_workspace.rs");
   const launchReceipts = read("crates/agent_ui/src/dx_launch_workspace/launch_receipts.rs");
