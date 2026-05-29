@@ -10870,3 +10870,34 @@ NOTES:
 - Ran targeted `rustfmt --edition 2024 --check` on the touched DX Studio Rust files.
 - Ran `git diff --check`.
 - Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, commits, pushes, browser automation, and live WebView/runtime proof by direct instruction.
+
+[2026-05-29] - Zed PLAN Lane Orchestration Prompts
+
+ADDED:
+- Added `scripts/codex/claim-zed-plan-lane.ps1` to assign 6 worker lanes from `PLAN.md` task-group bullets and write `.sr` plus `.machine` lane state outside the repository.
+- Added `docs/superpowers/prompts/2026-05-29-zed-goal-mode-lane-worker.md` for Goal Mode lane workers using Superpowers and exactly 6 GPT-5.5 extra-high subagents inside each assigned lane.
+- Added `docs/superpowers/prompts/2026-05-29-zed-goal-mode-lane-manager.md` for manager agents coordinating the 6 lane workers.
+
+NOTES:
+- Smoke-tested the allocator with fake agent ids: it parsed 27 tasks, assigned lane 1 to tasks 1-5, assigned lane 2 to tasks 6-10, and kept the same fake agent on lane 1 when rerun.
+- Smoke-tested read-only inspection against a temporary state directory: it parsed 27 tasks, printed lane ranges 1-5, 6-10, 11-15, 16-19, 20-23, and 24-27, and showed no assignments.
+- Ran `git diff --check` on the new lane allocator and prompt files.
+- Skipped `just run`, Cargo commands, local servers, browser automation, and runtime proof because this was an orchestration-only setup.
+- Added read-only `-InspectOnly` and reset-only `-ResetOnly` paths so manager inspection/reset commands do not consume worker lanes.
+- Subagent 6 review note: the worker and manager prompts say each lane worker should use exactly 6 subagents inside its lane; this should be reconciled before reuse if the intended pass model is exactly 6 total subagents across lanes 1-6.
+
+[2026-05-29] - Empty Workspace DX Rail Wiring
+
+CHANGED:
+- Routed the Agent Panel no-project empty state through the existing DX launch workspace chrome so empty workspaces keep the real no-project open/clone path while showing the existing DX/Codex progress rail and honest missing/empty receipt states.
+- Extended the existing DX launch workspace source guard to pin that no-project wrapping and to preserve the collapsed workspace activity bar as real icon-only actions with hover details.
+
+PASSED:
+- `node --test .\script\dx-launch-workspace-source.test.ts` (16/16 passing)
+- Line-anchored conflict-marker scan over touched source/test files
+- `git diff --check -- crates/agent_ui/src/agent_panel.rs script/dx-launch-workspace-source.test.ts`
+
+NOTES:
+- Skipped `just run`, Cargo commands, just check/build/fmt/lint, local servers/apps, browser automation, and live editor/runtime proof by direct instruction.
+- Subagent 6 review note: the shared onboarding call and Windows/macOS/Linux WebPreview constructors now all carry the onboarding completion callback after parallel edits; compile/runtime proof is still intentionally unrun.
+- Subagent 6 review note: project-panel media preview and right-dock stack controls now have source files and real call sites; remaining risk is runtime validation and background audio/video metadata quality, not missing wiring.

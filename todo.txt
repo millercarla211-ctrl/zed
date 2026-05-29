@@ -1284,6 +1284,8 @@ COMPLETED:
 - Parsed dx-check quick-fix `risk_level`, `requires_user_approval`, and `writes_receipts` into the native launch rail, deriving safe defaults for older receipts and rendering the operator risk context beside each fix.
 - Passed targeted `rustfmt --check` for `crates/agent_ui/src/dx_check_panel.rs` and `crates/agent_ui/src/dx_launch_workspace.rs`.
 - Targeted `cargo test -p agent_ui dx_check_panel --lib` timed out twice on the busy workspace after Cargo/rustc eventually went idle; exact next action is rerun that fixture during a quiet Cargo window and visually confirm the rail text.
+- Added Zed PLAN lane orchestration helpers: `scripts/codex/claim-zed-plan-lane.ps1`, worker Goal Mode prompt, and manager Goal Mode prompt. The allocator parses 27 implementation bullets from `PLAN.md`, splits them across 6 lanes, stores live state outside the repo, keeps repeated agent runs on the same lane, and supports read-only manager inspection/reset without consuming worker lanes.
+- Routed empty-workspace Agent Panel no-project rendering through the existing DX launch workspace chrome, preserving the real open/clone empty-state path while showing the existing DX/Codex rail. Added source guards for that no-project wiring and for icon-only activity-bar actions with hover details.
 
 BLOCKED:
 - None
