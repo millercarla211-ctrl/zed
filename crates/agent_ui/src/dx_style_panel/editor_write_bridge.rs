@@ -12,7 +12,10 @@ pub(super) struct StyleEditorWriteBridgeSnapshot {
     pub(super) summary: String,
     pub(super) reason: String,
     pub(super) preflight_schema: String,
+    pub(super) preflight_schema_version: u64,
+    pub(super) preflight_scope: String,
     pub(super) preflight_fixture_path: String,
+    pub(super) can_mutate_source: bool,
     pub(super) required_receipts: Vec<String>,
     pub(super) required_editor_guards: Vec<String>,
     pub(super) required_native_handlers: Vec<String>,
@@ -28,7 +31,10 @@ impl StyleEditorWriteBridgeSnapshot {
             "summary": self.summary,
             "reason": self.reason,
             "preflight_schema": self.preflight_schema,
+            "preflight_schema_version": self.preflight_schema_version,
+            "preflight_scope": self.preflight_scope,
             "preflight_fixture_path": self.preflight_fixture_path,
+            "can_mutate_source": self.can_mutate_source,
             "required_receipts": self.required_receipts,
             "required_editor_guards": self.required_editor_guards,
             "required_native_handlers": self.required_native_handlers,
@@ -66,12 +72,15 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
         ),
         reason: concat!(
             "dx.style.grouped-class-editor-write-bridge-preflight is source-owned but not enabled. ",
-            "Editor source writes require trusted source spans, fresh dry-run receipts, ",
-            "explicit user apply, and runtime validation before Apply can mutate files."
+            "Editor source writes require trusted source spans, same-session editor identity, ",
+            "cursor-scoped dry-run edit review, explicit user apply, and runtime validation before Apply can mutate files."
         )
         .to_string(),
         preflight_schema: GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_SCHEMA.to_string(),
+        preflight_schema_version: preflight.schema_version,
+        preflight_scope: preflight.scope,
         preflight_fixture_path: preflight_path.display().to_string(),
+        can_mutate_source: preflight.can_mutate_source,
         required_receipts: preflight.required_receipts,
         required_editor_guards: preflight.required_editor_guards,
         required_native_handlers: preflight.required_native_handlers,
@@ -82,7 +91,10 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
 }
 
 struct EditorWriteBridgePreflight {
+    schema_version: u64,
+    scope: String,
     state: String,
+    can_mutate_source: bool,
     required_receipts: Vec<String>,
     required_editor_guards: Vec<String>,
     required_native_handlers: Vec<String>,
@@ -96,11 +108,24 @@ fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {
         return None;
     }
     Some(EditorWriteBridgePreflight {
+        schema_version: value
+            .get("schema_version")
+            .and_then(Value::as_u64)
+            .unwrap_or(1),
+        scope: value
+            .get("scope")
+            .and_then(Value::as_str)
+            .unwrap_or("preflight requirements for trusted grouped-class editor source writes")
+            .to_string(),
         state: value
             .get("status")
             .and_then(Value::as_str)
             .unwrap_or("not_enabled")
             .to_string(),
+        can_mutate_source: value
+            .get("can_mutate_source")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         required_receipts: string_list(&value, "required_receipts"),
         required_editor_guards: string_list(&value, "required_editor_guards"),
         required_native_handlers: string_list(&value, "required_native_handlers"),
@@ -117,17 +142,34 @@ fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {
 
 fn fallback_preflight() -> EditorWriteBridgePreflight {
     EditorWriteBridgePreflight {
+        schema_version: 1,
+        scope: "preflight requirements for trusted grouped-class editor source writes".to_string(),
         state: "not_enabled".to_string(),
+        can_mutate_source: false,
         required_receipts: vec![
             "dx.style.grouped-class-dry-run-receipt".to_string(),
             "dx.style.grouped-class-source-digest".to_string(),
+            "dx.style.grouped-class-source-apply-contract".to_string(),
+            "zed.web_preview.dx_style_source_apply_receipt.v1".to_string(),
+            "zed.web_preview.dx_style.active_editor_source_revalidation".to_string(),
         ],
         required_editor_guards: vec![
+            "active context schema match".to_string(),
             "active source path match".to_string(),
-            "active cursor token span match".to_string(),
+            "request source span matches active source span".to_string(),
+            "active source length match".to_string(),
             "active source digest match".to_string(),
+            "trusted Web Preview source-apply session".to_string(),
+            "session-bound source identity".to_string(),
+            "native active editor source revalidation".to_string(),
+            "same-session native editor identity".to_string(),
+            "trusted grouped-class dry-run receipt".to_string(),
+            "cursor-scoped dry-run structured edit preview".to_string(),
+            "reverse CSS delta preview provenance match".to_string(),
+            "CSS declaration dry-run receipt for CSS contexts".to_string(),
+            "editor write bridge can_apply".to_string(),
             "explicit user apply action".to_string(),
-            "bounded edit preview review".to_string(),
+            "authorized runtime validation".to_string(),
         ],
         required_native_handlers: vec!["window.__DX_STYLE_SOURCE_APPLY__".to_string()],
         required_native_handler_capabilities: vec![

@@ -913,6 +913,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           receipt_schema: sourceApplyReceiptSchema,
           mutation_enabled: sourceApplyMutationEnabled,
           source_apply_session: sourceApplySessionReviewPacket(),
+          editor_write_bridge: editorWriteBridgeReviewPacket(applyGate),
           review_receipt_fields: sourceApplyReviewReceiptFields,
           css_declaration_dry_run_contract: {
             schema: cssDeclarationDryRunSchema,
@@ -986,6 +987,68 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         token_byte_length: tokenByteLength,
         within_contract_limit: !sourceApplyMaxSessionTokenBytes
           || tokenByteLength <= sourceApplyMaxSessionTokenBytes
+      };
+    }
+
+    function editorWriteBridgeReviewPacket(applyGate) {
+      const bridge = applyGate?.editor_write_bridge || null;
+      if (!bridge) {
+        return {
+          present: false,
+          state: "missing",
+          can_apply: false,
+          can_mutate_source: false,
+          preflight_schema: null,
+          preflight_schema_version: null,
+          preflight_scope: null,
+          preflight_fixture_path: null,
+          summary: null,
+          reason: "editor write bridge preflight is missing",
+          runtime_validation_required: true,
+          native_handler_state: sourceApplyHandlerState(),
+          required_receipt_count: 0,
+          required_guard_count: 0,
+          required_editor_guard_count: 0,
+          required_native_handler_count: 0,
+          required_handler_capability_count: 0,
+          required_native_handler_capability_count: 0,
+          required_receipts: [],
+          required_editor_guards: [],
+          required_native_handlers: [],
+          required_native_handler_capabilities: []
+        };
+      }
+      const requiredReceipts = Array.isArray(bridge.required_receipts) ? bridge.required_receipts : [];
+      const requiredGuards = Array.isArray(bridge.required_editor_guards) ? bridge.required_editor_guards : [];
+      const requiredHandlers = Array.isArray(bridge.required_native_handlers) ? bridge.required_native_handlers : [];
+      const requiredCapabilities = Array.isArray(bridge.required_native_handler_capabilities)
+        ? bridge.required_native_handler_capabilities
+        : [];
+      return {
+        present: true,
+        state: bridge.state || "not_enabled",
+        can_apply: bridge.can_apply === true,
+        can_mutate_source: bridge.can_mutate_source === true,
+        preflight_schema: bridge.preflight_schema || null,
+        preflight_schema_version: Number.isInteger(bridge.preflight_schema_version)
+          ? bridge.preflight_schema_version
+          : null,
+        preflight_scope: bridge.preflight_scope || null,
+        preflight_fixture_path: bridge.preflight_fixture_path || null,
+        summary: bridge.summary || null,
+        reason: bridge.reason || null,
+        runtime_validation_required: bridge.runtime_validation_required !== false,
+        native_handler_state: sourceApplyHandlerState(),
+        required_receipt_count: requiredReceipts.length,
+        required_guard_count: requiredGuards.length,
+        required_editor_guard_count: requiredGuards.length,
+        required_native_handler_count: requiredHandlers.length,
+        required_handler_capability_count: requiredCapabilities.length,
+        required_native_handler_capability_count: requiredCapabilities.length,
+        required_receipts: requiredReceipts,
+        required_editor_guards: requiredGuards,
+        required_native_handlers: requiredHandlers,
+        required_native_handler_capabilities: requiredCapabilities
       };
     }
 

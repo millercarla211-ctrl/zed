@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Editor Write Bridge Preflight Alignment
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-editor-write-bridge-preflight-plan.md` records the source-only plan for aligning the future editor writer checklist with the review evidence Zed already validates.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and its preflight fixture now require the same source/session/native-editor/dry-run/runtime guards that Zed source-apply review already depends on, while keeping `can_mutate_source=false`.
+- `crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs` now mirrors the tightened fallback checklist and exposes source-owned schema version, scope, and `can_mutate_source` evidence while keeping `can_apply=false`.
+- Web Preview copied review packets now include a whitelisted editor write-bridge evidence block with preflight state, mutation-disabled state, checklist counts, required receipts/guards/handlers, and native handler state.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document this as source-only preflight alignment rather than source mutation.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run. The honest source-only score remains 89/100 until authorized runtime proof and a mutation-capable editor write bridge exist.
+
 [2026-05-31] - DX Style Dry-Run Edit Review Evidence
 
 ADDED:

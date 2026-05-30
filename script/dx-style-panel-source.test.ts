@@ -103,6 +103,44 @@ const dxStyleRoot = () => {
 
 const readStyle = (path: string) => read(join(dxStyleRoot(), path));
 
+const expectedEditorWriteBridgeReceipts = [
+  "dx.style.grouped-class-dry-run-receipt",
+  "dx.style.grouped-class-source-digest",
+  "dx.style.grouped-class-source-apply-contract",
+  "zed.web_preview.dx_style_source_apply_receipt.v1",
+  "zed.web_preview.dx_style.active_editor_source_revalidation",
+];
+
+const expectedEditorWriteBridgeGuards = [
+  "active context schema match",
+  "active source path match",
+  "request source span matches active source span",
+  "active source length match",
+  "active source digest match",
+  "trusted Web Preview source-apply session",
+  "session-bound source identity",
+  "native active editor source revalidation",
+  "same-session native editor identity",
+  "trusted grouped-class dry-run receipt",
+  "cursor-scoped dry-run structured edit preview",
+  "reverse CSS delta preview provenance match",
+  "CSS declaration dry-run receipt for CSS contexts",
+  "editor write bridge can_apply",
+  "explicit user apply action",
+  "authorized runtime validation",
+];
+
+const expectedEditorWriteBridgeHandlers = ["window.__DX_STYLE_SOURCE_APPLY__"];
+const expectedEditorWriteBridgeCapabilities = ["can_review_request", "can_mutate_source"];
+
+const rustStringVec = (source: string, field: string) => {
+  const match = source.match(new RegExp(`${field}: vec!\\[([\\s\\S]*?)\\],`));
+  assert.ok(match, `${field} should be a Rust vec`);
+  return [...match[1].matchAll(/"([^"]+)"(?:\.to_string\(\))?/g)].map(
+    (item) => item[1],
+  );
+};
+
 const collectRecipeTriples = (source: string, idField: string) => {
   const pattern = new RegExp(
     `${idField}: "([^"]+)",[\\s\\S]*?class_template: "([^"]+)",[\\s\\S]*?css_template: "([^"]+)"`,
@@ -347,6 +385,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /can_mutate_source: false/);
   assert.match(editorWriteBridgePreflight, /runtime_validation_required: true/);
   assert.match(editorWriteBridgePreflight, /active source digest match/);
+  assert.match(editorWriteBridgePreflight, /same-session native editor identity/);
+  assert.match(editorWriteBridgePreflight, /cursor-scoped dry-run structured edit preview/);
+  assert.match(editorWriteBridgePreflight, /authorized runtime validation/);
   assert.match(editorWriteBridgePreflight, /required_native_handlers/);
   assert.match(editorWriteBridgePreflight, /required_native_handler_capabilities/);
   assert.match(editorWriteBridgePreflight, /window\.__DX_STYLE_SOURCE_APPLY__/);
@@ -355,12 +396,32 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     editorWriteBridgeFixture.schema,
     "dx.style.grouped-class-editor-write-bridge-preflight",
   );
+  assert.equal(editorWriteBridgeFixture.schema_version, 1);
+  assert.equal(
+    editorWriteBridgeFixture.scope,
+    "preflight requirements for trusted grouped-class editor source writes",
+  );
   assert.equal(editorWriteBridgeFixture.can_mutate_source, false);
+  assert.equal(editorWriteBridgeFixture.status, "not_enabled");
   assert.equal(editorWriteBridgeFixture.runtime_validation_required, true);
-  assert.ok(
-    editorWriteBridgeFixture.required_editor_guards.includes(
-      "active source digest match",
-    ),
+  assert.deepEqual(editorWriteBridgeFixture.required_receipts, expectedEditorWriteBridgeReceipts);
+  assert.deepEqual(editorWriteBridgeFixture.required_editor_guards, expectedEditorWriteBridgeGuards);
+  assert.deepEqual(editorWriteBridgeFixture.required_native_handlers, expectedEditorWriteBridgeHandlers);
+  assert.deepEqual(
+    editorWriteBridgeFixture.required_native_handler_capabilities,
+    expectedEditorWriteBridgeCapabilities,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridgePreflight, "required_receipts"),
+    expectedEditorWriteBridgeReceipts,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridgePreflight, "required_editor_guards"),
+    expectedEditorWriteBridgeGuards,
+  );
+  assert.doesNotMatch(
+    editorWriteBridgePreflight,
+    /bounded edit preview review/,
   );
   assert.ok(
     editorWriteBridgeFixture.required_native_handlers.includes(
@@ -2041,10 +2102,25 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /function dryRunReviewPacket\(applyGate\)/);
   assert.match(surfaceScript, /dry_run_review: dryRunReviewPacket\(applyGate\)/);
   assert.match(surfaceScript, /source_apply_session: sourceApplySessionReviewPacket\(\)/);
+  assert.match(surfaceScript, /editor_write_bridge: editorWriteBridgeReviewPacket\(applyGate\)/);
   assert.match(surfaceScript, /function sourceApplySessionReviewPacket\(\)/);
   assert.match(surfaceScript, /token_present: typeof sourceApplySessionToken === "string"/);
   assert.match(surfaceScript, /token_byte_length: tokenByteLength/);
   assert.match(surfaceScript, /within_contract_limit:/);
+  assert.match(surfaceScript, /function editorWriteBridgeReviewPacket\(applyGate\)/);
+  assert.match(surfaceScript, /present: true/);
+  assert.match(surfaceScript, /can_mutate_source: bridge\.can_mutate_source === true/);
+  assert.match(surfaceScript, /preflight_schema_version: Number\.isInteger\(bridge\.preflight_schema_version\)/);
+  assert.match(surfaceScript, /preflight_scope: bridge\.preflight_scope \|\| null/);
+  assert.match(surfaceScript, /summary: bridge\.summary \|\| null/);
+  assert.match(surfaceScript, /native_handler_state: sourceApplyHandlerState\(\)/);
+  assert.match(surfaceScript, /required_receipt_count: requiredReceipts\.length/);
+  assert.match(surfaceScript, /required_guard_count: requiredGuards\.length/);
+  assert.match(surfaceScript, /required_editor_guard_count: requiredGuards\.length/);
+  assert.match(surfaceScript, /required_native_handler_count: requiredHandlers\.length/);
+  assert.match(surfaceScript, /required_handler_capability_count: requiredCapabilities\.length/);
+  assert.match(surfaceScript, /required_native_handler_capability_count: requiredCapabilities\.length/);
+  assert.match(surfaceScript, /runtime_validation_required: bridge\.runtime_validation_required !== false/);
   assert.match(surfaceScript, /function dryRunStructuredEditPreviews\(applyGate\)/);
   assert.match(surfaceScript, /structured_edit_preview_count: structuredEditPreviews\.length/);
   assert.match(surfaceScript, /structured_edit_previews: structuredEditPreviews/);
@@ -2542,6 +2618,9 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(receiptReview, /dry_run_preview_ready/);
   assert.match(editorWriteBridge, /StyleEditorWriteBridgeSnapshot/);
   assert.match(editorWriteBridge, /state: "not_enabled"/);
+  assert.match(editorWriteBridge, /preflight_schema_version/);
+  assert.match(editorWriteBridge, /preflight_scope/);
+  assert.match(editorWriteBridge, /can_mutate_source/);
   assert.match(editorWriteBridge, /summary: format!/);
   assert.match(editorWriteBridge, /preflight_fixture_path/);
   assert.match(editorWriteBridge, /read_preflight_fixture/);
@@ -2552,11 +2631,32 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /required_editor_guards/);
   assert.match(editorWriteBridge, /required_native_handlers/);
   assert.match(editorWriteBridge, /required_native_handler_capabilities/);
+  assert.match(editorWriteBridge, /same-session native editor identity/);
+  assert.match(editorWriteBridge, /cursor-scoped dry-run structured edit preview/);
+  assert.match(editorWriteBridge, /authorized runtime validation/);
+  assert.match(editorWriteBridge, /zed\.web_preview\.dx_style_source_apply_receipt\.v1/);
+  assert.deepEqual(
+    rustStringVec(editorWriteBridge, "required_receipts"),
+    expectedEditorWriteBridgeReceipts,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridge, "required_editor_guards"),
+    expectedEditorWriteBridgeGuards,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridge, "required_native_handlers"),
+    expectedEditorWriteBridgeHandlers,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridge, "required_native_handler_capabilities"),
+    expectedEditorWriteBridgeCapabilities,
+  );
   assert.match(editorWriteBridge, /window\.__DX_STYLE_SOURCE_APPLY__/);
   assert.match(editorWriteBridge, /can_mutate_source/);
   assert.match(editorWriteBridge, /can_apply: false/);
   assert.match(editorWriteBridge, /grouped-class-editor-write-bridge-preflight/);
   assert.match(editorWriteBridge, /runtime validation/);
+  assert.doesNotMatch(editorWriteBridge, /bounded edit preview review/);
   assert.doesNotMatch(applyGate, /Command::new|spawn|powershell|cmd \/c/);
   assert.doesNotMatch(editorWriteBridge, /Command::new|spawn|powershell|cmd \/c/);
   assert.match(activeContext, /disabled_until_trusted_grouped_class_source_span_and_dry_run_receipt/);
