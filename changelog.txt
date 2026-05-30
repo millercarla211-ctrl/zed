@@ -11622,3 +11622,19 @@ PASSED:
 NOTES:
 - The first guard run caught that `grid-template-rows` uses the same repeat-count strategy with `grid-rows-*`; the guard now covers both row and column target families.
 - Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.
+
+[2026-05-31] - DX Style Web Preview Replacement Payload Diagnostics
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now reads reverse-delta replacement payload caps from the source-owned contract and reports malformed or oversized replacement utilities before native IPC.
+- The Web Preview reverse CSS delta contract review now shows the replacement payload limit and any replacement payload diagnostics beside contract/provenance diagnostics.
+- Copied Web Preview review packets and source-apply requests now include `reverse_css_delta_replacement_payload_diagnostics` for handoff and native-review traceability.
+- `script\dx-style-panel-source.test.ts` now guards the Web Preview limit ingestion, blocker codes, copied review-packet field, and visible replacement payload diagnostics.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_generator_surface\script.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+
+NOTES:
+- Native source mutation remains disabled; this slice improves Web Preview/native review trust before any mutation-capable bridge is enabled.
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.

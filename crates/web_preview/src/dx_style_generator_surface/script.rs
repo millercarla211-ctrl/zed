@@ -95,6 +95,11 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const reverseCssDeltaExistingUtilityRequiredPropertySet = new Set(
       reverseCssDeltaExistingUtilityRequiredProperties.map((property) => String(property || "").toLowerCase())
     );
+    const reverseCssDeltaPayloadLimits = {
+      replacementUtilities: contractNumberLimit(reverseCssDeltaContract, "max_replacement_utilities"),
+      replacementUtilityBytes: contractNumberLimit(reverseCssDeltaContract, "max_replacement_utility_bytes"),
+      replacementSourceDeclarationBytes: contractNumberLimit(reverseCssDeltaContract, "max_replacement_source_declaration_bytes")
+    };
     const reverseCssDeltaSupportedProvenanceFields = new Set([
       "group_status",
       "group_alias",
@@ -431,9 +436,13 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       );
     }
 
-    function contractByteLimit(field) {
-      const value = Number(sourceApplyContract[field]);
+    function contractNumberLimit(contract, field) {
+      const value = Number(contract?.[field]);
       return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    function contractByteLimit(field) {
+      return contractNumberLimit(sourceApplyContract, field);
     }
 
     function utf8ByteLength(value) {
@@ -497,6 +506,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && previewAnatomy.some((part) => exceedsContractLimit(part, sourceApplyByteLimits.previewAnatomyPart))) {
         diagnostics.push("preview_anatomy_part_exceeds_contract_limit");
       }
+      diagnostics.push(
+        ...reverseCssDeltaReplacementPayloadDiagnostics(reverseCssDeltaPreview(output))
+      );
       const sourceSpanBytes = sourceSpanByteLength(context);
       if (Number.isInteger(sourceApplyByteLimits.sourceSpan)
         && Number.isInteger(sourceSpanBytes)
@@ -534,6 +546,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       }
       if (!reverseCssDeltaRequiredProvenanceFields.length) {
         diagnostics.push("reverse_css_delta_contract_missing_required_provenance_fields");
+      }
+      if (!Number.isInteger(reverseCssDeltaPayloadLimits.replacementUtilities)) {
+        diagnostics.push("reverse_css_delta_contract_missing_replacement_utility_count_limit");
+      }
+      if (!Number.isInteger(reverseCssDeltaPayloadLimits.replacementUtilityBytes)) {
+        diagnostics.push("reverse_css_delta_contract_missing_replacement_utility_byte_limit");
+      }
+      if (!Number.isInteger(reverseCssDeltaPayloadLimits.replacementSourceDeclarationBytes)) {
+        diagnostics.push("reverse_css_delta_contract_missing_replacement_source_declaration_limit");
       }
       for (const field of reverseCssDeltaRequiredProvenanceFields) {
         if (!reverseCssDeltaSupportedProvenanceFields.has(field)) {
@@ -585,6 +606,49 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         diagnostics.push("reverse_css_delta_preview_missing_reverse_map_provenance");
       }
       return diagnostics;
+    }
+
+    function reverseCssDeltaReplacementPayloadDiagnostics(preview) {
+      const diagnostics = [];
+      if (preview?.status !== "ready_for_review") return diagnostics;
+      if (exceedsContractLimit(preview.target_utility || "", reverseCssDeltaPayloadLimits.replacementUtilityBytes)) {
+        diagnostics.push("reverse_css_delta_target_utility_exceeds_contract_limit");
+      }
+      if (!Array.isArray(preview.replacement_utilities)) {
+        diagnostics.push("reverse_css_delta_replacement_utilities_missing");
+        return diagnostics;
+      }
+      if (Number.isInteger(reverseCssDeltaPayloadLimits.replacementUtilities)
+        && preview.replacement_utilities.length > reverseCssDeltaPayloadLimits.replacementUtilities) {
+        diagnostics.push("reverse_css_delta_replacement_utility_count_exceeds_contract_limit");
+      }
+      for (const utility of preview.replacement_utilities) {
+        if (typeof utility !== "string") {
+          diagnostics.push("reverse_css_delta_replacement_utility_non_string");
+          continue;
+        }
+        if (!utility.length) {
+          diagnostics.push("reverse_css_delta_replacement_utility_empty");
+          continue;
+        }
+        if (exceedsContractLimit(utility, reverseCssDeltaPayloadLimits.replacementUtilityBytes)) {
+          diagnostics.push("reverse_css_delta_replacement_utility_exceeds_contract_limit");
+        }
+      }
+      const groupAlias = zedStyleContext?.group_context?.alias || preview.group_alias || "";
+      if (groupAlias) {
+        const expectedSourceDeclaration = `@${groupAlias}(${preview.replacement_utilities.join(" ")})`;
+        if (exceedsContractLimit(expectedSourceDeclaration, reverseCssDeltaPayloadLimits.replacementSourceDeclarationBytes)) {
+          diagnostics.push("reverse_css_delta_expected_source_declaration_exceeds_contract_limit");
+        }
+      }
+      if (exceedsContractLimit(
+        preview.replacement_source_declaration || "",
+        reverseCssDeltaPayloadLimits.replacementSourceDeclarationBytes
+      )) {
+        diagnostics.push("reverse_css_delta_replacement_source_declaration_exceeds_contract_limit");
+      }
+      return [...new Set(diagnostics)];
     }
 
     function sourceApplyContractHasGuard(guard) {
@@ -1176,6 +1240,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
 
     function sourceApplyRequest(output) {
       const cssDeclarationPreview = cssDeclarationDryRunPreview(output, zedStyleContext);
+      const reverseDeltaPreview = reverseCssDeltaPreview(output);
       return {
         generator: state.generator,
         source_path: zedStyleContext?.source_path || null,
@@ -1195,7 +1260,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         css_declaration_dry_run_preview: cssDeclarationPreview,
         css_declaration_dry_run_preview_diagnostics: cssDeclarationDryRunContextPreviewDiagnostics(cssDeclarationPreview),
         reverse_css_delta_contract: reverseCssDeltaContract,
-        reverse_css_delta_preview: reverseCssDeltaPreview(output)
+        reverse_css_delta_preview: reverseDeltaPreview,
+        reverse_css_delta_replacement_payload_diagnostics:
+          reverseCssDeltaReplacementPayloadDiagnostics(reverseDeltaPreview)
       };
     }
 
@@ -1240,6 +1307,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const cssDeclarationDiagnostics = cssDeclarationDryRunContextDiagnostics(zedStyleContext);
       const cssDeclarationPreview = cssDeclarationDryRunPreview(output, zedStyleContext);
       const cssDeclarationPreviewDiagnostics = cssDeclarationDryRunContextPreviewDiagnostics(cssDeclarationPreview);
+      const reverseDeltaPreview = reverseCssDeltaPreview(output);
       return {
         schema: "zed.web_preview.dx_style_generator_review_packet.v1",
         generator: state.generator,
@@ -1307,7 +1375,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           css_declaration_dry_run_preview_diagnostics: cssDeclarationPreviewDiagnostics,
           dry_run_review: dryRunReviewPacket(applyGate)
         },
-        reverse_css_delta_preview: reverseCssDeltaPreview(output),
+        reverse_css_delta_preview: reverseDeltaPreview,
+        reverse_css_delta_replacement_payload_diagnostics:
+          reverseCssDeltaReplacementPayloadDiagnostics(reverseDeltaPreview),
         metadata: metadataDiagnostics
       };
     }
@@ -1782,8 +1852,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         deltaPreview,
         zedStyleContext?.group_context || null
       );
+      const replacementPayloadDiagnostics = reverseCssDeltaReplacementPayloadDiagnostics(deltaPreview);
       const previewDiagnostics = previewProvenanceDiagnostics.length
         ? `<ul>${previewProvenanceDiagnostics.map((diagnostic) => `<li>${escapeHtml(diagnostic)}</li>`).join("")}</ul>`
+        : "";
+      const replacementDiagnostics = replacementPayloadDiagnostics.length
+        ? `<ul>${replacementPayloadDiagnostics.map((diagnostic) => `<li>${escapeHtml(diagnostic)}</li>`).join("")}</ul>`
         : "";
       const preview = reverseCssDeltaExample
         ? `<span>Example: ${escapeHtml(reverseCssDeltaExample.property || "unknown")} -> ${escapeHtml(reverseCssDeltaExample.target_utility || "not mapped")}</span>`
@@ -1806,6 +1880,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Registry receipt</dt><dd>${escapeHtml(deltaPreview?.group_registry_receipt || "not available")}</dd>
           <dt>Reverse map</dt><dd>${escapeHtml(deltaPreview?.reverse_css_map_status || "not available")}</dd>
           <dt>Replacement policy</dt><dd>${deltaPreview?.replacement_existing_utility_required ? "existing utility required" : "append allowed"}${deltaPreview?.replacement_existing_utility_found ? ", existing utility found" : ""}</dd>
+          <dt>Replacement limit</dt><dd>${reverseCssDeltaPayloadLimits.replacementUtilities || "unknown"} utilities, ${reverseCssDeltaPayloadLimits.replacementUtilityBytes || "unknown"} bytes each</dd>
         </dl>
         ${livePreview}
         ${deltaPreview?.replacement_source_declaration ? `<span>${escapeHtml(deltaPreview.replacement_source_declaration)}</span>` : ""}
@@ -1816,6 +1891,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         ${provenanceFields ? `<span>Required preview provenance</span>${provenanceFields}` : ""}
         ${contractDiagnostics ? `<span>Contract diagnostics</span>${contractDiagnostics}` : ""}
         ${previewDiagnostics ? `<span>Preview provenance diagnostics</span>${previewDiagnostics}` : ""}
+        ${replacementDiagnostics ? `<span>Replacement payload diagnostics</span>${replacementDiagnostics}` : ""}
       `;
     }
 
@@ -1888,6 +1964,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         reverseDeltaPreview,
         zedStyleContext?.group_context || null
       );
+      const reverseDeltaReplacementPayloadDiagnostics =
+        reverseCssDeltaReplacementPayloadDiagnostics(reverseDeltaPreview);
       const applyReady = sourceApplyReady(applyGate, metadataAligned, zedStyleContext, output);
       const applyBlocker = sourceApplyBlocker(applyGate, metadataAligned, zedStyleContext, output);
       const groupContext = zedStyleContext?.group_context || null;
@@ -2004,10 +2082,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `reverse_css_delta_required_provenance_fields: ${reverseCssDeltaRequiredProvenanceFields.length}`,
         `reverse_css_delta_fallback_review_properties: ${reverseCssDeltaFallbackReviewProperties.length}`,
         `reverse_css_delta_existing_utility_required_properties: ${reverseCssDeltaExistingUtilityRequiredProperties.length}`,
+        `reverse_css_delta_max_replacement_utilities: ${reverseCssDeltaPayloadLimits.replacementUtilities || "unknown"}`,
+        `reverse_css_delta_max_replacement_utility_bytes: ${reverseCssDeltaPayloadLimits.replacementUtilityBytes || "unknown"}`,
+        `reverse_css_delta_max_replacement_source_declaration_bytes: ${reverseCssDeltaPayloadLimits.replacementSourceDeclarationBytes || "unknown"}`,
         `reverse_css_delta_contract_diagnostics: ${reverseDeltaContractDiagnostics.length}`,
         ...reverseDeltaContractDiagnostics.map((diagnostic) => `reverse_css_delta_contract_diagnostic: ${diagnostic}`),
         `reverse_css_delta_preview_provenance_diagnostics: ${reverseDeltaPreviewProvenanceDiagnostics.length}`,
         ...reverseDeltaPreviewProvenanceDiagnostics.map((diagnostic) => `reverse_css_delta_preview_provenance_diagnostic: ${diagnostic}`),
+        `reverse_css_delta_replacement_payload_diagnostics: ${reverseDeltaReplacementPayloadDiagnostics.length}`,
+        ...reverseDeltaReplacementPayloadDiagnostics.map((diagnostic) => `reverse_css_delta_replacement_payload_diagnostic: ${diagnostic}`),
         reverseCssDeltaExample?.target_utility ? `reverse_css_delta_example_target: ${reverseCssDeltaExample.target_utility}` : null,
         `reverse_css_delta_live_status: ${reverseDeltaPreview.status || "not_available"}`,
         reverseDeltaPreview.target_utility ? `reverse_css_delta_live_target: ${reverseDeltaPreview.target_utility}` : null,
