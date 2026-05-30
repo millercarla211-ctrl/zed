@@ -219,6 +219,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons
             .push("source-apply contract is missing dry-run edit review receipt field".to_string());
     }
+    if !string_array_contains(contract, "/review_receipt_fields", "source_write_readiness") {
+        reasons.push(
+            "source-apply contract is missing source-write readiness receipt field".to_string(),
+        );
+    }
     for field in [
         "css_declaration_dry_run_contract",
         "css_declaration_dry_run_diagnostics",
@@ -875,6 +880,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push("Web Preview cannot declare native mutation capability".to_string());
     }
     reasons.push("native source writer capability is review-only".to_string());
+    let source_write_readiness_evidence = source_write_readiness(
+        contract_source_mutation_enabled,
+        apply_gate,
+        editor_write_bridge,
+        &dry_run_edit_review_evidence,
+        native_revalidation_status,
+        reasons.len(),
+        web_preview_declared_mutation_capability,
+        can_mutate_source,
+    );
 
     let status = if can_review_request {
         "reviewed_with_blockers"
@@ -1023,6 +1038,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "receipt_mismatch": apply_gate.get("receipt_mismatch").cloned(),
         },
         "dry_run_edit_review": dry_run_edit_review_evidence,
+        "source_write_readiness": source_write_readiness_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
             "can_review_request": can_review_request,
@@ -1054,6 +1070,117 @@ pub(crate) fn source_apply_session_refused_receipt(payload: &Value, reason: &str
             "token_present": payload.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
             "request_token_present": request.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
         },
+        "source_write_readiness": source_write_readiness_refused(reason),
+    })
+}
+
+fn source_write_readiness(
+    contract_source_mutation_enabled: Option<bool>,
+    apply_gate: &Value,
+    editor_write_bridge: &Value,
+    dry_run_edit_review: &Value,
+    native_revalidation_status: Option<&str>,
+    native_review_reason_count: usize,
+    web_preview_declared_mutation_capability: bool,
+    native_can_mutate_source: bool,
+) -> Value {
+    let apply_gate_ready =
+        apply_gate.get("can_enable_apply").and_then(Value::as_bool) == Some(true);
+    let trusted_dry_run_receipt_present = apply_gate
+        .get("trusted_dry_run_receipt_present")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let receipt_match = apply_gate.get("receipt_match").and_then(Value::as_str);
+    let receipt_path_present = apply_gate
+        .get("receipt_path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| !path.is_empty());
+    let editor_write_bridge_can_apply = editor_write_bridge
+        .get("can_apply")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let editor_write_bridge_can_mutate_source = editor_write_bridge
+        .get("can_mutate_source")
+        .and_then(Value::as_bool);
+    let runtime_validation_required = editor_write_bridge
+        .get("runtime_validation_required")
+        .and_then(Value::as_bool);
+    let dry_run_edit_review_status = dry_run_edit_review.get("status").and_then(Value::as_str);
+
+    let mut missing_requirements = Vec::new();
+    if contract_source_mutation_enabled != Some(true) {
+        missing_requirements.push("source_mutation_contract_disabled");
+    }
+    if !apply_gate_ready {
+        missing_requirements.push("apply_gate_not_ready");
+    }
+    if !trusted_dry_run_receipt_present {
+        missing_requirements.push("trusted_dry_run_receipt_missing");
+    }
+    if receipt_match != Some("active_source_matched") {
+        missing_requirements.push("active_source_receipt_match_missing");
+    }
+    if !receipt_path_present {
+        missing_requirements.push("receipt_path_missing");
+    }
+    if dry_run_edit_review_status != Some("matched") {
+        missing_requirements.push("cursor_scoped_dry_run_edit_review_missing");
+    }
+    if native_revalidation_status != Some("matched") {
+        missing_requirements.push("native_active_editor_source_revalidation_missing");
+    }
+    if native_review_reason_count > 0 {
+        missing_requirements.push("native_review_reasons_present");
+    }
+    if !editor_write_bridge_can_apply {
+        missing_requirements.push("editor_write_bridge_not_ready");
+    }
+    if editor_write_bridge_can_mutate_source != Some(true) {
+        missing_requirements.push("mutation_capable_editor_write_bridge_missing");
+    }
+    if !web_preview_declared_mutation_capability {
+        missing_requirements.push("web_preview_mutation_capability_missing");
+    }
+    if !native_can_mutate_source {
+        missing_requirements.push("native_writer_can_mutate_false");
+    }
+    if runtime_validation_required == Some(true) {
+        missing_requirements.push("runtime_webview_build_proof_missing");
+    }
+
+    let safe_to_mutate = missing_requirements.is_empty();
+    json!({
+        "status": if safe_to_mutate { "ready" } else { "not_ready" },
+        "safe_to_mutate": safe_to_mutate,
+        "mutation_ready": safe_to_mutate,
+        "source_mutation_enabled": contract_source_mutation_enabled,
+        "apply_gate_ready": apply_gate_ready,
+        "trusted_dry_run_receipt_present": trusted_dry_run_receipt_present,
+        "receipt_match": receipt_match,
+        "receipt_path_present": receipt_path_present,
+        "dry_run_edit_review_status": dry_run_edit_review_status,
+        "native_revalidation_status": native_revalidation_status,
+        "native_review_reason_count": native_review_reason_count,
+        "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
+        "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,
+        "editor_write_bridge_state": editor_write_bridge.get("state").and_then(Value::as_str),
+        "runtime_validation_required": runtime_validation_required,
+        "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
+        "native_can_mutate_source": native_can_mutate_source,
+        "missing_requirements": missing_requirements,
+    })
+}
+
+fn source_write_readiness_refused(reason: &str) -> Value {
+    json!({
+        "status": "refused_untrusted_session",
+        "safe_to_mutate": false,
+        "mutation_ready": false,
+        "missing_requirements": [
+            "trusted_web_preview_source_apply_session_missing",
+            "source_apply_session_refused",
+        ],
+        "reason": reason,
     })
 }
 

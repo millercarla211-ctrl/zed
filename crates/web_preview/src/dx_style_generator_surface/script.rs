@@ -914,6 +914,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           mutation_enabled: sourceApplyMutationEnabled,
           source_apply_session: sourceApplySessionReviewPacket(),
           editor_write_bridge: editorWriteBridgeReviewPacket(applyGate),
+          source_write_readiness: sourceWriteReadinessPacket(applyGate, output),
           review_receipt_fields: sourceApplyReviewReceiptFields,
           css_declaration_dry_run_contract: {
             schema: cssDeclarationDryRunSchema,
@@ -1049,6 +1050,89 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         required_editor_guards: requiredGuards,
         required_native_handlers: requiredHandlers,
         required_native_handler_capabilities: requiredCapabilities
+      };
+    }
+
+    function sourceApplyMutationCapabilityDeclared() {
+      const handler = typeof window.__DX_STYLE_SOURCE_APPLY__ === "function"
+        ? window.__DX_STYLE_SOURCE_APPLY__
+        : null;
+      return handler?.can_mutate_source === true;
+    }
+
+    function sourceWriteReadinessPacket(applyGate, output) {
+      const context = zedStyleContext || null;
+      const metadataAligned = metadataDiagnostics.status === "aligned";
+      const bridge = editorWriteBridgeReviewPacket(applyGate);
+      const session = sourceApplySessionReviewPacket();
+      const dryRun = dryRunReviewPacket(applyGate);
+      const handlerState = sourceApplyHandlerState();
+      const webPreviewDeclaredMutationCapability = sourceApplyMutationCapabilityDeclared();
+      const reviewBlocker = sourceApplyReviewBlocker(metadataAligned, context, output);
+      const mutationBlocker = sourceApplyBlocker(applyGate, metadataAligned, context, output);
+      const missingRequirements = [];
+      if (!sourceApplyMutationEnabled) missingRequirements.push("source_mutation_contract_disabled");
+      if (!metadataAligned) missingRequirements.push("metadata_alignment_missing");
+      if (!context) missingRequirements.push("active_style_context_missing");
+      if (context && !contextSchemaSupported(context)) missingRequirements.push("active_context_schema_unsupported");
+      if (context && !contextKindSupported(context, sourceApplyMutationContextKinds)) {
+        missingRequirements.push("mutation_context_kind_unsupported");
+      }
+      if (!applyGate?.can_enable_apply) missingRequirements.push("apply_gate_not_ready");
+      if (applyGate?.trusted_dry_run_receipt_present !== true) {
+        missingRequirements.push("trusted_dry_run_receipt_missing");
+      }
+      if (applyGate?.receipt_match !== "active_source_matched") {
+        missingRequirements.push("active_source_receipt_match_missing");
+      }
+      if (!applyGate?.receipt_path) missingRequirements.push("receipt_path_missing");
+      if (!dryRun.structured_edit_preview_count) {
+        missingRequirements.push("cursor_scoped_dry_run_edit_review_missing");
+      }
+      missingRequirements.push("native_active_editor_source_revalidation_missing");
+      if (bridge.can_apply !== true) missingRequirements.push("editor_write_bridge_not_ready");
+      if (bridge.can_mutate_source !== true) {
+        missingRequirements.push("mutation_capable_editor_write_bridge_missing");
+      }
+      if (!webPreviewDeclaredMutationCapability) {
+        missingRequirements.push("web_preview_mutation_capability_missing");
+      }
+      if (handlerState !== "ready") missingRequirements.push("native_writer_can_mutate_false");
+      if (bridge.runtime_validation_required === true) {
+        missingRequirements.push("runtime_webview_build_proof_missing");
+      }
+      const safeToMutate = missingRequirements.length === 0 && mutationBlocker === "ready";
+      return {
+        schema: "zed.web_preview.dx_style.source_write_readiness.v1",
+        status: safeToMutate ? "ready" : "not_ready",
+        safe_to_mutate: safeToMutate,
+        mutation_ready: safeToMutate,
+        source_mutation_enabled: sourceApplyMutationEnabled,
+        review_ready: reviewBlocker === "ready",
+        review_blocker: reviewBlocker,
+        mutation_blocker: mutationBlocker,
+        source_context_present: !!context,
+        source_context_schema_supported: context ? contextSchemaSupported(context) : false,
+        source_context_kind: context?.context_kind || null,
+        source_span_present: Number.isInteger(context?.source_span?.start_byte)
+          && Number.isInteger(context?.source_span?.end_byte),
+        source_span_valid: context ? sourceSpanReady(context) : false,
+        source_digest_valid: context ? sourceDigestReady(context) : false,
+        source_length_present: Number.isInteger(context?.source_len_bytes),
+        session_token_present: session.token_present,
+        session_token_within_contract_limit: session.within_contract_limit,
+        dry_run_receipt_present: dryRun.trusted_receipt_present,
+        dry_run_receipt_match: dryRun.receipt_match,
+        dry_run_structured_edit_preview_count: dryRun.structured_edit_preview_count,
+        native_revalidation_status: "not_performed_in_web_preview",
+        editor_write_bridge_state: bridge.state,
+        editor_write_bridge_summary: bridge.summary,
+        editor_write_bridge_can_apply: bridge.can_apply,
+        editor_write_bridge_can_mutate_source: bridge.can_mutate_source,
+        runtime_validation_required: bridge.runtime_validation_required,
+        web_preview_declared_mutation_capability: webPreviewDeclaredMutationCapability,
+        native_handler_state: handlerState,
+        missing_requirements: missingRequirements
       };
     }
 
@@ -1200,6 +1284,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
     function renderSourceApplyContractReview(output) {
       const reverseCssDeltaReview = renderReverseCssDeltaContractReview(output);
       const cssDryRunReview = renderCssDeclarationDryRunContractReview();
+      const sourceWriteReadiness = sourceWriteReadinessPacket(zedStyleContext?.apply_gate || null, output);
       const handlerCapabilities = sourceApplyRequiredHandlerCapabilities.length
         ? sourceApplyRequiredHandlerCapabilities.map((capability) => `<li>${escapeHtml(capability)}</li>`).join("")
         : "";
@@ -1216,6 +1301,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const diagnostics = payloadDiagnostics.length
         ? `<span>Payload diagnostics</span><ul>${payloadDiagnostics.map((diagnostic) => `<li>${escapeHtml(diagnostic)}</li>`).join("")}</ul>`
         : `<span>Payload diagnostics: within source-owned contract limits</span>`;
+      const readinessGaps = sourceWriteReadiness.missing_requirements.length
+        ? sourceWriteReadiness.missing_requirements.map((requirement) => `<li>${escapeHtml(requirement)}</li>`).join("")
+        : "";
       return `
         ${reverseCssDeltaReview}
         ${cssDryRunReview}
@@ -1234,7 +1322,11 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Replacement max</dt><dd>${sourceApplyByteLimits.dryRunReplacementText || "unknown"} bytes</dd>
           <dt>Preview kind max</dt><dd>${sourceApplyByteLimits.previewKind || "unknown"} bytes</dd>
           <dt>Preview anatomy max</dt><dd>${sourceApplyByteLimits.previewAnatomyParts || "unknown"} part(s)</dd>
+          <dt>Write readiness</dt><dd>${escapeHtml(sourceWriteReadiness.status)}</dd>
+          <dt>Write blocker</dt><dd>${escapeHtml(sourceWriteReadiness.mutation_blocker)}</dd>
+          <dt>Write safe</dt><dd>${sourceWriteReadiness.safe_to_mutate ? "yes" : "no"}</dd>
         </dl>
+        ${readinessGaps ? `<span>Write gaps</span><ul>${readinessGaps}</ul>` : ""}
         ${diagnostics}
         ${reviewKinds ? `<span>Review context kinds</span><ul>${reviewKinds}</ul>` : ""}
         ${mutationKinds ? `<span>Mutation context kinds</span><ul>${mutationKinds}</ul>` : ""}

@@ -46,7 +46,7 @@ const parseableDxStyleGeneratorScript = (source: string) => {
         "review_context_kinds":["class_token","class_list","css_declaration"],
         "mutation_context_kinds_when_enabled":["class_token"],
         "required_editor_guards":["trusted Web Preview source-apply session","cursor-scoped dry-run structured edit preview"],
-        "review_receipt_fields":["source_apply_session","dry_run_edit_review"],
+        "review_receipt_fields":["source_apply_session","dry_run_edit_review","source_write_readiness"],
         "max_source_apply_session_token_bytes":256,
         "max_dry_run_edit_previews":3,
         "max_dry_run_replacement_text_bytes":4096
@@ -462,6 +462,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(sourceApplyContract, /review_receipt_fields/);
   assert.match(sourceApplyContract, /dry_run_review/);
   assert.match(sourceApplyContract, /dry_run_edit_review/);
+  assert.match(sourceApplyContract, /source_write_readiness/);
   assert.match(sourceApplyContract, /context_kind/);
   assert.match(sourceApplyContract, /css_source_edit_safety/);
   assert.match(sourceApplyContract, /mutation_ready/);
@@ -550,6 +551,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   );
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_edit_review"));
+  assert.ok(sourceApplyFixture.review_receipt_fields.includes("source_write_readiness"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("context_kind"));
   assert.ok(
     sourceApplyFixture.review_receipt_fields.includes("css_source_edit_safety"),
@@ -1436,6 +1438,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source-apply contract is missing native active editor source revalidation receipt field/);
   assert.match(sourceApply, /source-apply contract is missing cursor-scoped dry-run edit preview guard/);
   assert.match(sourceApply, /source-apply contract is missing dry-run edit review receipt field/);
+  assert.match(sourceApply, /source-apply contract is missing source-write readiness receipt field/);
   assert.match(sourceApply, /native active editor source revalidation schema is missing or invalid/);
   assert.match(sourceApply, /native active editor source revalidation did not match active source/);
   assert.match(sourceApply, /native active editor source revalidation path does not match request source_path/);
@@ -1463,6 +1466,19 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"max_dry_run_replacement_text_bytes"/);
   assert.match(sourceApply, /let dry_run_edit_review_evidence = dry_run_edit_review/);
   assert.match(sourceApply, /"dry_run_edit_review": dry_run_edit_review_evidence/);
+  assert.match(sourceApply, /"source_write_readiness": source_write_readiness_evidence/);
+  assert.match(sourceApply, /fn source_write_readiness/);
+  assert.match(sourceApply, /"mutation_ready": safe_to_mutate/);
+  assert.match(sourceApply, /source_mutation_contract_disabled/);
+  assert.match(sourceApply, /cursor_scoped_dry_run_edit_review_missing/);
+  assert.match(sourceApply, /native_active_editor_source_revalidation_missing/);
+  assert.match(sourceApply, /native_review_reasons_present/);
+  assert.match(sourceApply, /editor_write_bridge_not_ready/);
+  assert.match(sourceApply, /mutation_capable_editor_write_bridge_missing/);
+  assert.match(sourceApply, /native_writer_can_mutate_false/);
+  assert.match(sourceApply, /runtime_webview_build_proof_missing/);
+  assert.match(sourceApply, /source_write_readiness_refused/);
+  assert.match(sourceApply, /refused_untrusted_session/);
   assert.match(sourceApply, /fn dry_run_edit_review/);
   assert.match(sourceApply, /fn dry_run_edit_preview_for_source_span/);
   assert.match(sourceApply, /fn review_source_paths_match/);
@@ -1543,6 +1559,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.equal(styleSourceApplyFixture.source_mutation_enabled, false);
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("dry_run_edit_review"));
+  assert.ok(
+    styleSourceApplyFixture.review_receipt_fields.includes("source_write_readiness"),
+  );
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("source_apply_session"));
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("context_kind"));
   assert.ok(
@@ -2103,6 +2122,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /dry_run_review: dryRunReviewPacket\(applyGate\)/);
   assert.match(surfaceScript, /source_apply_session: sourceApplySessionReviewPacket\(\)/);
   assert.match(surfaceScript, /editor_write_bridge: editorWriteBridgeReviewPacket\(applyGate\)/);
+  assert.match(surfaceScript, /source_write_readiness: sourceWriteReadinessPacket\(applyGate, output\)/);
   assert.match(surfaceScript, /function sourceApplySessionReviewPacket\(\)/);
   assert.match(surfaceScript, /token_present: typeof sourceApplySessionToken === "string"/);
   assert.match(surfaceScript, /token_byte_length: tokenByteLength/);
@@ -2121,6 +2141,19 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /required_handler_capability_count: requiredCapabilities\.length/);
   assert.match(surfaceScript, /required_native_handler_capability_count: requiredCapabilities\.length/);
   assert.match(surfaceScript, /runtime_validation_required: bridge\.runtime_validation_required !== false/);
+  assert.match(surfaceScript, /function sourceWriteReadinessPacket\(applyGate, output\)/);
+  assert.match(surfaceScript, /schema: "zed\.web_preview\.dx_style\.source_write_readiness\.v1"/);
+  assert.match(surfaceScript, /safe_to_mutate: safeToMutate/);
+  assert.match(surfaceScript, /mutation_ready: safeToMutate/);
+  assert.match(surfaceScript, /source_mutation_contract_disabled/);
+  assert.match(surfaceScript, /cursor_scoped_dry_run_edit_review_missing/);
+  assert.match(surfaceScript, /native_active_editor_source_revalidation_missing/);
+  assert.match(surfaceScript, /editor_write_bridge_not_ready/);
+  assert.match(surfaceScript, /mutation_capable_editor_write_bridge_missing/);
+  assert.match(surfaceScript, /native_writer_can_mutate_false/);
+  assert.match(surfaceScript, /runtime_webview_build_proof_missing/);
+  assert.match(surfaceScript, /session_token_present: session\.token_present/);
+  assert.doesNotMatch(surfaceScript, /source_write_readiness:[\s\S]{0,1200}token: sourceApplySessionToken/);
   assert.match(surfaceScript, /function dryRunStructuredEditPreviews\(applyGate\)/);
   assert.match(surfaceScript, /structured_edit_preview_count: structuredEditPreviews\.length/);
   assert.match(surfaceScript, /structured_edit_previews: structuredEditPreviews/);
@@ -2328,6 +2361,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /const sourceApplyReviewReceiptFields = Array\.isArray\(sourceApplyContract\.review_receipt_fields\)/);
   assert.match(surfaceScript, /Review context kinds/);
   assert.match(surfaceScript, /Mutation context kinds/);
+  assert.match(surfaceScript, /Write readiness/);
+  assert.match(surfaceScript, /Write blocker/);
+  assert.match(surfaceScript, /Write gaps/);
   assert.match(surfaceScript, /Review receipt fields/);
   assert.match(surfaceScript, /const sourceDigestPrefix = "fnv1a64:"/);
   assert.match(surfaceScript, /function sourceDigestReady\(context\)/);

@@ -57,6 +57,7 @@
     "reverse_css_delta_preview",
     "apply_gate",
     "dry_run_edit_review",
+    "source_write_readiness",
     "native_active_editor_source_revalidation",
     "native_handler"
   ],
