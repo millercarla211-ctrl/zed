@@ -706,6 +706,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /transition-duration/);
   assert.match(groupReverseCssDelta, /transition-delay/);
   assert.match(groupReverseCssDelta, /transition-timing-function/);
+  assert.match(groupReverseCssDelta, /clip-path/);
+  assert.match(groupReverseCssDelta, /mask-image/);
   assert.match(groupReverseCssDelta, /box-shadow/);
   assert.match(groupReverseCssDelta, /backdrop-filter/);
   assert.match(groupReverseCssDelta, /padding-inline/);
@@ -792,6 +794,22 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       (entry) =>
         entry.property === "border-radius" &&
         entry.utility_prefix === "rounded-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "clip-path" &&
+        entry.utility_prefix === "clip-path-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "mask-image" &&
+        entry.utility_prefix === "mask-image-" &&
         entry.value_strategy === "arbitrary_bracket_value",
     ),
   );
