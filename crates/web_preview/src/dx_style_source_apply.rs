@@ -250,6 +250,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     ) {
         reasons.push("source-apply contract is missing reverse-delta provenance guard".to_string());
     }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "reverse CSS delta replacement policy match",
+    ) {
+        reasons.push(
+            "source-apply contract is missing reverse-delta replacement policy guard".to_string(),
+        );
+    }
     validate_contract_u64(
         contract,
         "max_source_path_bytes",

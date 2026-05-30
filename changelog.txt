@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Source-Owned Replacement Policy Guard
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-source-owned-replacement-policy-guard-plan.md` records the source-only plan for promoting replacement policy into DX Style contracts.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now require `reverse CSS delta replacement policy match`.
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now require the same guard before future editor writes can be considered.
+- Zed's embedded source-apply contract mirror is synced, `crates/web_preview/src/dx_style_source_apply.rs` refuses contracts missing the guard, and `crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs` fallback preflight carries the guard.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the source-owned replacement-policy checkpoint.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Native Reverse Delta Policy Guard
 
 ADDED:

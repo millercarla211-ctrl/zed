@@ -124,6 +124,7 @@ const expectedEditorWriteBridgeGuards = [
   "trusted grouped-class dry-run receipt",
   "cursor-scoped dry-run structured edit preview",
   "reverse CSS delta preview provenance match",
+  "reverse CSS delta replacement policy match",
   "CSS declaration dry-run receipt for CSS contexts",
   "editor write bridge can_apply",
   "explicit user apply action",
@@ -391,6 +392,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /active source digest match/);
   assert.match(editorWriteBridgePreflight, /same-session native editor identity/);
   assert.match(editorWriteBridgePreflight, /cursor-scoped dry-run structured edit preview/);
+  assert.match(editorWriteBridgePreflight, /reverse CSS delta replacement policy match/);
   assert.match(editorWriteBridgePreflight, /authorized runtime validation/);
   assert.match(editorWriteBridgePreflight, /required_native_handlers/);
   assert.match(editorWriteBridgePreflight, /required_native_handler_capabilities/);
@@ -475,6 +477,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(sourceApplyContract, /generated CSS declaration delta validation/);
   assert.match(sourceApplyContract, /CSS declaration dry-run receipt for CSS contexts/);
   assert.match(sourceApplyContract, /reverse CSS delta preview provenance match/);
+  assert.match(sourceApplyContract, /reverse CSS delta replacement policy match/);
   assert.match(sourceApplyContract, /cursor-scoped dry-run structured edit preview/);
   assert.match(sourceApplyContract, /trusted grouped-class dry-run receipt/);
   assert.match(
@@ -1723,6 +1726,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source-apply contract is missing declaration-delta guard/);
   assert.match(sourceApply, /source-apply contract is missing CSS declaration dry-run guard/);
   assert.match(sourceApply, /source-apply contract is missing reverse-delta provenance guard/);
+  assert.match(sourceApply, /source-apply contract is missing reverse-delta replacement policy guard/);
   assert.match(sourceApply, /missing DX Style reverse CSS delta contract schema/);
   assert.match(sourceApply, /reverse CSS delta contract is not review-only/);
   assert.match(sourceApply, /reverse CSS delta contract is missing provenance guard/);

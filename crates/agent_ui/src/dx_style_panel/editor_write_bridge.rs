@@ -166,6 +166,7 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "trusted grouped-class dry-run receipt".to_string(),
             "cursor-scoped dry-run structured edit preview".to_string(),
             "reverse CSS delta preview provenance match".to_string(),
+            "reverse CSS delta replacement policy match".to_string(),
             "CSS declaration dry-run receipt for CSS contexts".to_string(),
             "editor write bridge can_apply".to_string(),
             "explicit user apply action".to_string(),

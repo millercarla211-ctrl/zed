@@ -36,6 +36,7 @@
     "source-owned preview output metadata",
     "CSS declaration dry-run receipt for CSS contexts",
     "reverse CSS delta preview provenance match",
+    "reverse CSS delta replacement policy match",
     "trusted grouped-class dry-run receipt",
     "cursor-scoped dry-run structured edit preview",
     "editor write bridge can_apply",
