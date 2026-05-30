@@ -11604,3 +11604,21 @@ NOTES:
 - Kept the architecture as GPUI native shell plus Web Preview generator canvas.
 - Ran `node --test script/dx-style-panel-source.test.ts script/dx-launch-workspace-source.test.ts script/dx-handoff-source-guard-registry.test.ts`.
 - Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.
+
+[2026-05-31] - DX Style Reverse Delta Payload Bounds
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_reverse_css_delta.rs` and `G:\Dx\style\fixtures\grouped-class-reverse-css-delta-contract.json` now declare source-owned caps for reverse-delta replacement utility count, per-utility byte size, and replacement source declaration byte size.
+- `crates\web_preview\src\dx_style_generator_surface\reverse-css-delta-contract.generated.json` now mirrors those source-owned reverse-delta caps for Zed's embedded Web Preview fallback.
+- `crates\web_preview\src\dx_style_source_apply.rs` now validates the reverse-delta cap contract and refuses malformed, oversized, or non-array replacement utility payloads before comparing replacement source declarations.
+- `script\dx-style-panel-source.test.ts` now validates reverse-delta fixture mapping shape by value strategy, including both `grid-cols-*` and `grid-rows-*` repeat-count targets.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs`
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_reverse_css_delta.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+
+NOTES:
+- The first guard run caught that `grid-template-rows` uses the same repeat-count strategy with `grid-rows-*`; the guard now covers both row and column target families.
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.

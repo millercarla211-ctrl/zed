@@ -33,6 +33,9 @@ const MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096;
 const MAX_CSS_DECLARATION_DRY_RUN_DIAGNOSTICS: usize = 8;
 const MAX_CSS_DECLARATION_DRY_RUN_DIAGNOSTIC_BYTES: usize = 160;
 const CSS_DECLARATION_DRY_RUN_MAX_DECLARATION_BYTES: usize = 4096;
+const MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES: usize = 256;
+const MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES: usize = 1024;
+const MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096;
 const SOURCE_DIGEST_PREFIX: &str = "fnv1a64:";
 
 pub(crate) fn active_source_digest(source: &str) -> String {
@@ -357,6 +360,27 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             ));
         }
     }
+    validate_named_contract_u64(
+        reverse_css_delta_contract,
+        "reverse CSS delta contract",
+        "max_replacement_utilities",
+        MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES as u64,
+        &mut reasons,
+    );
+    validate_named_contract_u64(
+        reverse_css_delta_contract,
+        "reverse CSS delta contract",
+        "max_replacement_utility_bytes",
+        MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES as u64,
+        &mut reasons,
+    );
+    validate_named_contract_u64(
+        reverse_css_delta_contract,
+        "reverse CSS delta contract",
+        "max_replacement_source_declaration_bytes",
+        MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES as u64,
+        &mut reasons,
+    );
     let reverse_css_delta_provenance_reason_start = reasons.len();
     validate_reverse_delta_preview_provenance(
         reverse_css_delta_preview,
@@ -1050,6 +1074,9 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "fallback_review_properties": reverse_css_delta_fallback_review_properties,
             "existing_utility_required_property_count": reverse_css_delta_existing_utility_required_properties.len(),
             "existing_utility_required_properties": reverse_css_delta_existing_utility_required_properties,
+            "max_replacement_utilities": MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES,
+            "max_replacement_utility_bytes": MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES,
+            "max_replacement_source_declaration_bytes": MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES,
             "example_target_utility": reverse_css_delta_contract.pointer("/example_preview/target_utility").and_then(Value::as_str),
         },
         "reverse_css_delta_preview": {
@@ -1535,39 +1562,24 @@ fn validate_reverse_delta_preview_replacement_policy(
     }
 
     let target_utility = preview.get("target_utility").and_then(Value::as_str);
-    let replacement_utilities = preview
-        .get("replacement_utilities")
-        .and_then(Value::as_array);
-    let replacement_utility_strings = replacement_utilities.and_then(|replacement_utilities| {
-        replacement_utilities
+    if target_utility.is_some_and(|target_utility| {
+        target_utility.len() > MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES
+    }) {
+        reasons.push(format!(
+            "ready reverse CSS delta preview target utility exceeds {MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES} bytes"
+        ));
+    }
+    let replacement_utility_strings = collect_reverse_delta_replacement_utilities(preview, reasons);
+    if let Some(target_utility) = target_utility
+        && let Some(replacement_utility_strings) = replacement_utility_strings.as_ref()
+        && !replacement_utility_strings
             .iter()
-            .all(|utility| utility.as_str().is_some())
-            .then(|| {
-                replacement_utilities
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .collect::<Vec<_>>()
-            })
-    });
-    if let Some(replacement_utilities) = replacement_utilities {
-        if replacement_utilities
-            .iter()
-            .any(|utility| utility.as_str().is_none())
-        {
-            reasons.push(
-                "ready reverse CSS delta preview has non-string replacement utilities".to_string(),
-            );
-        }
-        if let Some(target_utility) = target_utility
-            && !replacement_utilities
-                .iter()
-                .any(|utility| utility.as_str() == Some(target_utility))
-        {
-            reasons.push(
-                "ready reverse CSS delta preview replacement utilities do not contain target utility"
-                    .to_string(),
-            );
-        }
+            .any(|utility| *utility == target_utility)
+    {
+        reasons.push(
+            "ready reverse CSS delta preview replacement utilities do not contain target utility"
+                .to_string(),
+        );
     }
 
     validate_reverse_delta_target_utility_contract(preview, contract, reasons);
@@ -1576,6 +1588,15 @@ fn validate_reverse_delta_preview_replacement_policy(
         && !group_alias.is_empty()
         && let Some(replacement_utility_strings) = replacement_utility_strings.as_ref()
     {
+        let expected_source_declaration_len =
+            reverse_delta_source_declaration_len(group_alias, replacement_utility_strings);
+        if expected_source_declaration_len > MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES
+        {
+            reasons.push(format!(
+                "ready reverse CSS delta preview replacement source declaration exceeds {MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES} bytes"
+            ));
+            return;
+        }
         let expected_source_declaration = format!(
             "@{}({})",
             group_alias,
@@ -1585,6 +1606,14 @@ fn validate_reverse_delta_preview_replacement_policy(
             .get("replacement_source_declaration")
             .and_then(Value::as_str)
         {
+            Some(source_declaration)
+                if source_declaration.len()
+                    > MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES =>
+            {
+                reasons.push(format!(
+                    "ready reverse CSS delta preview replacement source declaration exceeds {MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES} bytes"
+                ));
+            }
             Some(source_declaration) if source_declaration == expected_source_declaration => {}
             Some(_) => reasons.push(
                 "ready reverse CSS delta preview source declaration does not match replacement utilities"
@@ -1625,7 +1654,7 @@ fn validate_reverse_delta_preview_replacement_policy(
         );
     }
 
-    let replacement_utility_count = replacement_utilities.map_or(0, Vec::len);
+    let replacement_utility_count = replacement_utility_strings.as_ref().map_or(0, Vec::len);
     let Some(group_utility_count) = group_context.get("utility_count").and_then(Value::as_u64)
     else {
         reasons.push(
@@ -1639,6 +1668,58 @@ fn validate_reverse_delta_preview_replacement_policy(
                 .to_string(),
         );
     }
+}
+
+fn collect_reverse_delta_replacement_utilities<'a>(
+    preview: &'a Value,
+    reasons: &mut Vec<String>,
+) -> Option<Vec<&'a str>> {
+    let Some(value) = preview.get("replacement_utilities") else {
+        return None;
+    };
+    let Some(values) = value.as_array() else {
+        reasons.push(
+            "ready reverse CSS delta preview replacement utilities are not an array".to_string(),
+        );
+        return None;
+    };
+    if values.len() > MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES {
+        reasons.push(format!(
+            "ready reverse CSS delta preview replacement utility count exceeds {MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES}"
+        ));
+        return None;
+    }
+
+    let mut utilities = Vec::with_capacity(values.len());
+    for value in values {
+        let Some(utility) = value.as_str() else {
+            reasons.push(
+                "ready reverse CSS delta preview has non-string replacement utilities".to_string(),
+            );
+            continue;
+        };
+        if utility.is_empty() {
+            reasons.push(
+                "ready reverse CSS delta preview contains an empty replacement utility".to_string(),
+            );
+            continue;
+        }
+        if utility.len() > MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES {
+            reasons.push(format!(
+                "ready reverse CSS delta preview replacement utility exceeds {MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES} bytes"
+            ));
+            continue;
+        }
+        utilities.push(utility);
+    }
+
+    Some(utilities)
+}
+
+fn reverse_delta_source_declaration_len(group_alias: &str, utilities: &[&str]) -> usize {
+    let utilities_len = utilities.iter().map(|utility| utility.len()).sum::<usize>();
+    let separator_len = utilities.len().saturating_sub(1);
+    3 + group_alias.len() + utilities_len + separator_len
 }
 
 fn validate_reverse_delta_target_utility_contract(

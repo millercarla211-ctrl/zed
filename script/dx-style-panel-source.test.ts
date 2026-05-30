@@ -149,6 +149,69 @@ const expectedReverseDeltaValueStrategies = [
   "arbitrary_css_property_value",
 ];
 
+const assertReverseDeltaMappingShape = (entry) => {
+  assert.equal(typeof entry.property, "string");
+  assert.ok(entry.property.length > 0, "reverse-delta property should be non-empty");
+  assert.equal(typeof entry.utility_prefix, "string");
+  assert.equal(typeof entry.token_prefix, "string");
+  const valueStrategy = entry.value_strategy || "design_token_suffix";
+  assert.ok(
+    expectedReverseDeltaValueStrategies.includes(valueStrategy),
+    `unsupported reverse-delta value strategy: ${valueStrategy}`,
+  );
+
+  switch (valueStrategy) {
+    case "design_token_suffix":
+      assert.ok(entry.utility_prefix.length > 0);
+      assert.ok(entry.token_prefix.length > 0);
+      break;
+    case "arbitrary_bracket_value":
+    case "drop_shadow_function":
+    case "backdrop_blur_function":
+      assert.ok(entry.utility_prefix.length > 0);
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "margin_token_suffix":
+      assert.match(entry.utility_prefix, /^m[xytbrl]?-/);
+      assert.ok(entry.token_prefix.length > 0);
+      break;
+    case "display_keyword":
+      assert.equal(entry.utility_prefix, "");
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "arbitrary_css_property_value":
+      assert.equal(entry.utility_prefix, `[${entry.property}:`);
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "align_items_keyword":
+      assert.equal(entry.utility_prefix, "items-");
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "justify_content_keyword":
+      assert.equal(entry.utility_prefix, "justify-");
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "align_content_keyword":
+      assert.equal(entry.utility_prefix, "content-");
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "grid_track_repeat_count":
+      assert.ok(["grid-cols-", "grid-rows-"].includes(entry.utility_prefix));
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "transition_property_value":
+      assert.equal(entry.utility_prefix, "transition-");
+      assert.equal(entry.token_prefix, "");
+      break;
+    case "transition_timing_function_value":
+      assert.equal(entry.utility_prefix, "ease-");
+      assert.equal(entry.token_prefix, "");
+      break;
+    default:
+      assert.fail(`unhandled reverse-delta value strategy: ${valueStrategy}`);
+  }
+};
+
 const rustStringVec = (source: string, field: string) => {
   const match = source.match(new RegExp(`${field}: vec!\\[([\\s\\S]*?)\\],`));
   assert.ok(match, `${field} should be a Rust vec`);
@@ -677,6 +740,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /GROUPED_CLASS_REVERSE_CSS_DELTA_SCHEMA/);
   assert.match(groupReverseCssDelta, /dx\.style\.grouped-class-reverse-css-delta-contract/);
   assert.match(groupReverseCssDelta, /GROUPED_CLASS_REVERSE_CSS_DELTA_SOURCE_MUTATION_ENABLED: bool = false/);
+  assert.match(groupReverseCssDelta, /GROUPED_CLASS_REVERSE_CSS_DELTA_MAX_REPLACEMENT_UTILITIES: usize = 256/);
+  assert.match(groupReverseCssDelta, /GROUPED_CLASS_REVERSE_CSS_DELTA_MAX_REPLACEMENT_UTILITY_BYTES: usize = 1024/);
+  assert.match(groupReverseCssDelta, /GROUPED_CLASS_REVERSE_CSS_DELTA_MAX_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096/);
   assert.match(groupReverseCssDelta, /generated CSS declaration delta validation/);
   assert.match(groupReverseCssDelta, /reverse CSS map receipt match/);
   assert.match(groupReverseCssDelta, /reverse CSS delta preview provenance match/);
@@ -758,6 +824,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.equal(groupReverseCssDeltaFixture.source_mutation_enabled, false);
   assert.equal(groupReverseCssDeltaFixture.editor_write_bridge_required, true);
   assert.equal(groupReverseCssDeltaFixture.reverse_css_map_required, true);
+  assert.equal(groupReverseCssDeltaFixture.max_replacement_utilities, 256);
+  assert.equal(groupReverseCssDeltaFixture.max_replacement_utility_bytes, 1024);
+  assert.equal(groupReverseCssDeltaFixture.max_replacement_source_declaration_bytes, 4096);
   assert.ok(
     groupReverseCssDeltaFixture.required_editor_guards.includes(
       "reverse CSS delta preview provenance match",
@@ -796,6 +865,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     )].sort(),
     [...expectedReverseDeltaValueStrategies].sort(),
   );
+  for (const entry of groupReverseCssDeltaFixture.supported_properties) {
+    assertReverseDeltaMappingShape(entry);
+  }
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "padding-inline" && entry.utility_prefix === "px-",
@@ -1019,6 +1091,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       (entry) =>
         entry.property === "grid-template-columns" &&
         entry.utility_prefix === "grid-cols-" &&
+        entry.value_strategy === "grid_track_repeat_count",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "grid-template-rows" &&
+        entry.utility_prefix === "grid-rows-" &&
         entry.value_strategy === "grid_track_repeat_count",
     ),
   );
@@ -1739,6 +1819,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /MAX_SOURCE_DIGEST_BYTES: usize = 128/);
   assert.match(sourceApply, /MAX_CONTEXT_KIND_BYTES: usize = 64/);
   assert.match(sourceApply, /MAX_CSS_SOURCE_EDIT_SAFETY_BYTES: usize = 128/);
+  assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES: usize = 256/);
+  assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES: usize = 1024/);
+  assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096/);
   assert.match(sourceApply, /SOURCE_DIGEST_PREFIX: &str = "fnv1a64:"/);
   assert.match(sourceApply, /DX_STYLE_REVERSE_CSS_DELTA_REPLACEMENT_POLICY_GUARD/);
   assert.match(sourceApply, /source_apply_review_receipt/);
@@ -1769,6 +1852,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /reverse CSS delta contract is missing existing-utility policy for/);
   assert.match(sourceApply, /validate_reverse_delta_preview_provenance/);
   assert.match(sourceApply, /validate_reverse_delta_preview_replacement_policy/);
+  assert.match(sourceApply, /collect_reverse_delta_replacement_utilities/);
+  assert.match(sourceApply, /reverse_delta_source_declaration_len/);
   assert.match(sourceApply, /validate_reverse_delta_target_utility_contract/);
   assert.match(sourceApply, /target_utility_matches_reverse_delta_mapping/);
   assert.match(sourceApply, /is_arbitrary_bracket_target/);
@@ -1786,6 +1871,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /does not match active group context/);
   assert.match(sourceApply, /ready reverse CSS delta preview lacks reverse CSS map provenance/);
   assert.match(sourceApply, /ready reverse CSS delta preview has non-string replacement utilities/);
+  assert.match(sourceApply, /ready reverse CSS delta preview replacement utilities are not an array/);
+  assert.match(sourceApply, /ready reverse CSS delta preview replacement utility count exceeds/);
+  assert.match(sourceApply, /ready reverse CSS delta preview replacement utility exceeds/);
+  assert.match(sourceApply, /ready reverse CSS delta preview target utility exceeds/);
+  assert.match(sourceApply, /ready reverse CSS delta preview replacement source declaration exceeds/);
   assert.match(sourceApply, /ready reverse CSS delta preview replacement utilities do not contain target utility/);
   assert.match(sourceApply, /ready reverse CSS delta preview property is not supported by contract/);
   assert.match(sourceApply, /ready reverse CSS delta preview target utility does not match contract mapping/);
@@ -1815,6 +1905,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"required_provenance_field_count"/);
   assert.match(sourceApply, /"fallback_review_property_count"/);
   assert.match(sourceApply, /"existing_utility_required_property_count"/);
+  assert.match(sourceApply, /"max_replacement_utilities"/);
+  assert.match(sourceApply, /"max_replacement_utility_bytes"/);
+  assert.match(sourceApply, /"max_replacement_source_declaration_bytes"/);
   assert.match(sourceApply, /"example_target_utility"/);
   assert.match(sourceApply, /"reverse_css_delta_preview":/);
   assert.match(sourceApply, /"provenance_matches_context"/);

@@ -7,6 +7,9 @@
   "editor_write_bridge_required": true,
   "reverse_css_map_required": true,
   "source_apply_contract_required": true,
+  "max_replacement_utilities": 256,
+  "max_replacement_utility_bytes": 1024,
+  "max_replacement_source_declaration_bytes": 4096,
   "supported_properties": [
     {
       "property": "background-color",

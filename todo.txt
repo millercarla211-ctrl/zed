@@ -1365,6 +1365,7 @@ COMPLETED:
 - Added DX Style Web Preview catalog metadata ingestion so generator labels/categories and cursor token hints come from source-owned DX Style fixtures or Zed's embedded generated fallback instead of a Zed-owned hard-coded catalog.
 - Extracted a shared bounded Web Preview fixture loader for DX Style catalog, control, and recipe metadata ingestion.
 - Added a DX Style source-side mirror sync/check helper for the Zed embedded visual-generator catalog, control, and recipe fixture fallbacks.
+- Added source-owned reverse CSS delta replacement payload caps in `G:\Dx\style`, mirrored them into Zed, and made native source-apply review reject oversized or malformed replacement utility arrays before source declaration comparison.
 
 BLOCKED:
 - None
