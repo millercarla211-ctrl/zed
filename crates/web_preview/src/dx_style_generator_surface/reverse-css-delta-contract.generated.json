@@ -399,6 +399,12 @@
       "value_strategy": "arbitrary_bracket_value"
     },
     {
+      "property": "animation",
+      "utility_prefix": "animate-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
       "property": "box-shadow",
       "utility_prefix": "shadow-",
       "token_prefix": "",

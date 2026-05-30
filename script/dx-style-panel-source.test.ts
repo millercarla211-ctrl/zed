@@ -709,6 +709,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /transition-duration/);
   assert.match(groupReverseCssDelta, /transition-delay/);
   assert.match(groupReverseCssDelta, /transition-timing-function/);
+  assert.match(groupReverseCssDelta, /animation/);
   assert.match(groupReverseCssDelta, /clip-path/);
   assert.match(groupReverseCssDelta, /mask-image/);
   assert.match(groupReverseCssDelta, /transform/);
@@ -887,6 +888,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
         entry.property === "transition-timing-function" &&
         entry.utility_prefix === "ease-" &&
         entry.value_strategy === "transition_timing_function_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "animation" &&
+        entry.utility_prefix === "animate-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
     ),
   );
   assert.ok(
