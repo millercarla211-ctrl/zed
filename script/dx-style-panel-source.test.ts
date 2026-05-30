@@ -677,6 +677,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /TransitionTimingFunctionValue/);
   assert.match(groupReverseCssDelta, /arbitrary_bracket_token/);
   assert.match(groupReverseCssDelta, /target_utility_from_token/);
+  assert.match(groupReverseCssDelta, /is_background_image_utility/);
   assert.match(groupReverseCssDelta, /display_token_from_value/);
   assert.match(groupReverseCssDelta, /align_items_token_from_value/);
   assert.match(groupReverseCssDelta, /justify_content_token_from_value/);
@@ -691,6 +692,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /is_transition_property_utility/);
   assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
+  assert.match(groupReverseCssDelta, /background-image/);
   assert.match(groupReverseCssDelta, /outline-color/);
   assert.match(groupReverseCssDelta, /accent-color/);
   assert.match(groupReverseCssDelta, /caret-color/);
@@ -730,6 +732,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "padding-inline" && entry.utility_prefix === "px-",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "background-image" &&
+        entry.utility_prefix === "bg-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
     ),
   );
   assert.ok(
@@ -2351,6 +2361,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /tokenFromReverseDeltaValue\(declaration\.value, mapping\)/);
   assert.match(surfaceScript, /function replacementUtilitiesForDelta/);
   assert.match(surfaceScript, /function isBorderColorUtility/);
+  assert.match(surfaceScript, /function isBackgroundImageUtility\(utility\)/);
+  assert.match(surfaceScript, /property === "background-image"/);
   assert.match(surfaceScript, /no_group_utilities/);
   assert.match(surfaceScript, /unsupported_declaration/);
   assert.match(surfaceScript, /contextSchemaSupported\(context\)/);

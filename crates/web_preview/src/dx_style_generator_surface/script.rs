@@ -836,9 +836,14 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       return `[${text.split(/\s+/).join("_")}]`;
     }
 
-    function utilityMatchesReverseDeltaFamily(utility, utilityPrefix) {
+    function utilityMatchesReverseDeltaFamily(utility, mapping) {
       const text = String(utility || "");
+      const utilityPrefix = String(mapping?.utility_prefix || "");
+      const property = String(mapping?.property || "").toLowerCase();
       if (!utilityPrefix) return isDisplayUtility(text);
+      if (property === "background-image" && utilityPrefix === "bg-") {
+        return isBackgroundImageUtility(text);
+      }
       if (utilityPrefix === "gap-") return isBaseGapUtility(text);
       if (utilityPrefix === "border-") return isBorderColorUtility(text);
       if (utilityPrefix === "outline-") return isOutlineColorUtility(text);
@@ -893,6 +898,20 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       return !["solid", "dashed", "dotted", "double", "hidden", "none"].includes(suffix);
     }
 
+    function isBackgroundImageUtility(utility) {
+      const text = String(utility || "");
+      if (!text.startsWith("bg-")) return false;
+      const suffix = text.replace(/^bg-/, "");
+      return isArbitraryOrCssVariableToken(suffix)
+        || suffix === "none"
+        || suffix.startsWith("linear-")
+        || suffix.startsWith("radial-")
+        || suffix.startsWith("conic-")
+        || suffix.startsWith("gradient-to-")
+        || suffix.startsWith("image-")
+        || suffix.startsWith("url-");
+    }
+
     function isShadowEffectUtility(utility) {
       if (["shadow", "shadow-sm", "shadow-md", "shadow-lg", "shadow-xl", "shadow-2xl", "shadow-inner", "shadow-none"].includes(utility)) {
         return true;
@@ -938,10 +957,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         || (suffix.startsWith("(--") && suffix.endsWith(")"));
     }
 
-    function replacementUtilitiesForDelta(utilities, utilityPrefix, targetUtility) {
+    function replacementUtilitiesForDelta(utilities, mapping, targetUtility) {
       let replaced = false;
       const next = utilities.map((utility) => {
-        if (!replaced && utilityMatchesReverseDeltaFamily(utility, utilityPrefix)) {
+        if (!replaced && utilityMatchesReverseDeltaFamily(utility, mapping)) {
           replaced = true;
           return targetUtility;
         }
@@ -999,7 +1018,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           const targetUtility = targetUtilityFromReverseDelta(mapping, token);
           const replacementUtilities = replacementUtilitiesForDelta(
             utilities,
-            mapping.utility_prefix,
+            mapping,
             targetUtility
           );
           const preview = {
