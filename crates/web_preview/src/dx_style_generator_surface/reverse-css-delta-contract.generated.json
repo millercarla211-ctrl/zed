@@ -327,6 +327,42 @@
       "value_strategy": "arbitrary_bracket_value"
     },
     {
+      "property": "transition-property",
+      "utility_prefix": "transition-",
+      "token_prefix": "",
+      "value_strategy": "transition_property_value"
+    },
+    {
+      "property": "transition-property",
+      "utility_prefix": "transition-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "transition-duration",
+      "utility_prefix": "duration-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "transition-delay",
+      "utility_prefix": "delay-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "transition-timing-function",
+      "utility_prefix": "ease-",
+      "token_prefix": "",
+      "value_strategy": "transition_timing_function_value"
+    },
+    {
+      "property": "transition-timing-function",
+      "utility_prefix": "ease-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
       "property": "box-shadow",
       "utility_prefix": "shadow-",
       "token_prefix": "",

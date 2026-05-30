@@ -673,6 +673,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /JustifyContentKeyword/);
   assert.match(groupReverseCssDelta, /AlignContentKeyword/);
   assert.match(groupReverseCssDelta, /GridTrackRepeatCount/);
+  assert.match(groupReverseCssDelta, /TransitionPropertyValue/);
+  assert.match(groupReverseCssDelta, /TransitionTimingFunctionValue/);
   assert.match(groupReverseCssDelta, /arbitrary_bracket_token/);
   assert.match(groupReverseCssDelta, /target_utility_from_token/);
   assert.match(groupReverseCssDelta, /display_token_from_value/);
@@ -680,10 +682,13 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /justify_content_token_from_value/);
   assert.match(groupReverseCssDelta, /align_content_token_from_value/);
   assert.match(groupReverseCssDelta, /grid_track_repeat_count_token/);
+  assert.match(groupReverseCssDelta, /transition_property_token_from_value/);
+  assert.match(groupReverseCssDelta, /transition_timing_function_token_from_value/);
   assert.match(groupReverseCssDelta, /is_display_utility/);
   assert.match(groupReverseCssDelta, /is_margin_utility/);
   assert.match(groupReverseCssDelta, /is_base_gap_utility/);
   assert.match(groupReverseCssDelta, /is_outline_color_utility/);
+  assert.match(groupReverseCssDelta, /is_transition_property_utility/);
   assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
   assert.match(groupReverseCssDelta, /outline-color/);
@@ -695,6 +700,10 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /align-items/);
   assert.match(groupReverseCssDelta, /align-content/);
   assert.match(groupReverseCssDelta, /grid-template-columns/);
+  assert.match(groupReverseCssDelta, /transition-property/);
+  assert.match(groupReverseCssDelta, /transition-duration/);
+  assert.match(groupReverseCssDelta, /transition-delay/);
+  assert.match(groupReverseCssDelta, /transition-timing-function/);
   assert.match(groupReverseCssDelta, /box-shadow/);
   assert.match(groupReverseCssDelta, /backdrop-filter/);
   assert.match(groupReverseCssDelta, /padding-inline/);
@@ -798,6 +807,30 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
         entry.property === "width" &&
         entry.utility_prefix === "w-" &&
         entry.value_strategy === "design_token_suffix",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "transition-property" &&
+        entry.utility_prefix === "transition-" &&
+        entry.value_strategy === "transition_property_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "transition-duration" &&
+        entry.utility_prefix === "duration-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "transition-timing-function" &&
+        entry.utility_prefix === "ease-" &&
+        entry.value_strategy === "transition_timing_function_value",
     ),
   );
   assert.ok(
@@ -2198,19 +2231,26 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /justify_content_keyword/);
   assert.match(surfaceScript, /align_content_keyword/);
   assert.match(surfaceScript, /grid_track_repeat_count/);
+  assert.match(surfaceScript, /transition_property_value/);
+  assert.match(surfaceScript, /transition_timing_function_value/);
   assert.match(surfaceScript, /function targetUtilityFromReverseDelta\(mapping, token\)/);
   assert.match(surfaceScript, /function displayReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function alignItemsReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function justifyContentReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function alignContentReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function gridTrackRepeatCountToken\(value\)/);
+  assert.match(surfaceScript, /function transitionPropertyReverseDeltaToken\(value\)/);
+  assert.match(surfaceScript, /function transitionTimingFunctionReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function arbitraryReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function isDisplayUtility\(utility\)/);
   assert.match(surfaceScript, /function isMarginUtility\(utility, utilityPrefix\)/);
   assert.match(surfaceScript, /function isBaseGapUtility\(utility\)/);
   assert.match(surfaceScript, /function isOutlineColorUtility\(utility\)/);
-  assert.match(surfaceScript, /let fallbackDisplayPreview = null/);
-  assert.match(surfaceScript, /if \(fallbackDisplayPreview\) return fallbackDisplayPreview/);
+  assert.match(surfaceScript, /function isTransitionPropertyUtility\(utility\)/);
+  assert.match(surfaceScript, /function isFallbackReverseDeltaMapping\(mapping\)/);
+  assert.match(surfaceScript, /property === "transition-property"/);
+  assert.match(surfaceScript, /let fallbackStrategyPreview = null/);
+  assert.match(surfaceScript, /if \(fallbackStrategyPreview\) return fallbackStrategyPreview/);
   assert.match(surfaceScript, /function isShadowEffectUtility\(utility\)/);
   assert.match(surfaceScript, /function isTextShadowEffectUtility\(utility\)/);
   assert.match(surfaceScript, /function isDropShadowEffectUtility\(utility\)/);

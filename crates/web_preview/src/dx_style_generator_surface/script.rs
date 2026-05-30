@@ -720,6 +720,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (strategy === "justify_content_keyword") return justifyContentReverseDeltaToken(text);
       if (strategy === "align_content_keyword") return alignContentReverseDeltaToken(text);
       if (strategy === "grid_track_repeat_count") return gridTrackRepeatCountToken(text);
+      if (strategy === "transition_property_value") return transitionPropertyReverseDeltaToken(text);
+      if (strategy === "transition_timing_function_value") return transitionTimingFunctionReverseDeltaToken(text);
       const prefix = String(mapping?.token_prefix || "");
       if (!prefix || !text.startsWith(prefix) || !text.endsWith(")")) return null;
       const token = text.slice(prefix.length, -1).trim();
@@ -806,6 +808,28 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       return match[1];
     }
 
+    function transitionPropertyReverseDeltaToken(value) {
+      switch (String(value || "").trim()) {
+        case "none": return "none";
+        case "all": return "all";
+        case "color, background-color, border-color, text-decoration-color, fill, stroke": return "colors";
+        case "opacity": return "opacity";
+        case "box-shadow": return "shadow";
+        case "transform": return "transform";
+        default: return null;
+      }
+    }
+
+    function transitionTimingFunctionReverseDeltaToken(value) {
+      switch (String(value || "").trim()) {
+        case "linear": return "linear";
+        case "cubic-bezier(0.4, 0, 1, 1)": return "in";
+        case "cubic-bezier(0, 0, 0.2, 1)": return "out";
+        case "cubic-bezier(0.4, 0, 0.2, 1)": return "in-out";
+        default: return null;
+      }
+    }
+
     function arbitraryReverseDeltaToken(value) {
       const text = String(value || "").trim();
       if (!text || text.length > 256 || /[\[\];\n\r]/.test(text)) return null;
@@ -821,6 +845,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (utilityPrefix === "shadow-") return isShadowEffectUtility(text);
       if (utilityPrefix === "text-shadow-") return isTextShadowEffectUtility(text);
       if (utilityPrefix === "drop-shadow-") return isDropShadowEffectUtility(text);
+      if (utilityPrefix === "transition-") return isTransitionPropertyUtility(text);
       if (isMarginUtilityPrefix(utilityPrefix)) return isMarginUtility(text, utilityPrefix);
       return text.startsWith(utilityPrefix);
     }
@@ -892,6 +917,22 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       return utility.startsWith("drop-shadow-") && isArbitraryOrCssVariableToken(suffix);
     }
 
+    function isTransitionPropertyUtility(utility) {
+      if ([
+        "transition",
+        "transition-none",
+        "transition-all",
+        "transition-colors",
+        "transition-opacity",
+        "transition-shadow",
+        "transition-transform"
+      ].includes(utility)) {
+        return true;
+      }
+      const suffix = utility.replace(/^transition-/, "");
+      return utility.startsWith("transition-") && isArbitraryOrCssVariableToken(suffix);
+    }
+
     function isArbitraryOrCssVariableToken(suffix) {
       return (suffix.startsWith("[") && suffix.endsWith("]"))
         || (suffix.startsWith("(--") && suffix.endsWith(")"));
@@ -908,6 +949,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       });
       if (!replaced) next.push(targetUtility);
       return next;
+    }
+
+    function isFallbackReverseDeltaMapping(mapping) {
+      const strategy = String(mapping?.value_strategy || "");
+      const property = String(mapping?.property || "").toLowerCase();
+      return strategy === "display_keyword" || property === "transition-property";
     }
 
     function reverseCssDeltaPreviewProvenance(group) {
@@ -936,7 +983,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         return { ...provenance, status: "no_generated_declarations", reason: "Current generator output has no simple CSS declarations to review." };
       }
       let firstUnsupportedValue = null;
-      let fallbackDisplayPreview = null;
+      let fallbackStrategyPreview = null;
       for (const declaration of declarations) {
         const mappings = reverseCssDeltaSupportedProperties.filter((entry) =>
           String(entry.property || "").toLowerCase() === declaration.property.toLowerCase()
@@ -967,8 +1014,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
               : null,
             reason: "Generated declaration can be reviewed against source-owned grouped atomics."
           };
-          if (String(mapping.value_strategy || "") === "display_keyword") {
-            fallbackDisplayPreview ||= preview;
+          if (isFallbackReverseDeltaMapping(mapping)) {
+            fallbackStrategyPreview ||= preview;
             continue;
           }
           return preview;
@@ -984,7 +1031,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           continue;
         }
       }
-      if (fallbackDisplayPreview) return fallbackDisplayPreview;
+      if (fallbackStrategyPreview) return fallbackStrategyPreview;
       if (firstUnsupportedValue) return firstUnsupportedValue;
       return { ...provenance, status: "unsupported_declaration", reason: "Current generator output has no declaration covered by the reverse CSS delta contract." };
     }
