@@ -844,6 +844,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (property === "background-image" && utilityPrefix === "bg-") {
         return isBackgroundImageUtility(text);
       }
+      if (property === "transform" && utilityPrefix === "transform-") {
+        return isTransformUtility(text);
+      }
       if (utilityPrefix === "gap-") return isBaseGapUtility(text);
       if (utilityPrefix === "border-") return isBorderColorUtility(text);
       if (utilityPrefix === "outline-") return isOutlineColorUtility(text);
@@ -910,6 +913,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         || suffix.startsWith("gradient-to-")
         || suffix.startsWith("image-")
         || suffix.startsWith("url-");
+    }
+
+    function isTransformUtility(utility) {
+      const text = String(utility || "");
+      if (["transform", "transform-gpu", "transform-cpu", "transform-3d", "transform-flat"].includes(text)) {
+        return true;
+      }
+      const suffix = text.replace(/^transform-/, "");
+      return text.startsWith("transform-") && isArbitraryOrCssVariableToken(suffix);
     }
 
     function isShadowEffectUtility(utility) {

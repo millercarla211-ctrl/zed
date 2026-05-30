@@ -75,6 +75,12 @@
       "value_strategy": "arbitrary_bracket_value"
     },
     {
+      "property": "transform",
+      "utility_prefix": "transform-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
       "property": "display",
       "utility_prefix": "",
       "token_prefix": "",
