@@ -136,6 +136,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if !string_array_contains(
         contract,
         "/required_editor_guards",
+        "session-bound source identity",
+    ) {
+        reasons.push(
+            "source-apply contract is missing session-bound source identity guard".to_string(),
+        );
+    }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
         "native active editor source revalidation",
     ) {
         reasons.push(
@@ -470,6 +479,60 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push(
             "native active editor source revalidation span does not match request source_span"
                 .to_string(),
+        );
+    }
+    let native_session_source = native_active_editor_source_revalidation
+        .get("session_source")
+        .unwrap_or(&Value::Null);
+    if native_revalidation_status == Some("matched") && !native_session_source.is_object() {
+        reasons.push(
+            "native active editor source revalidation is missing session-bound source identity"
+                .to_string(),
+        );
+    }
+    let native_session_source_path = native_session_source
+        .get("source_path")
+        .and_then(Value::as_str);
+    if native_revalidation_status == Some("matched") && native_session_source_path != source_path {
+        reasons.push(
+            "session-bound source identity path does not match request source_path".to_string(),
+        );
+    }
+    let native_session_source_digest = native_session_source
+        .get("source_digest")
+        .and_then(Value::as_str);
+    if native_revalidation_status == Some("matched")
+        && request_source_digest.is_some()
+        && native_session_source_digest != request_source_digest
+    {
+        reasons.push(
+            "session-bound source identity digest does not match request source_digest".to_string(),
+        );
+    }
+    let native_session_source_len = native_session_source
+        .get("source_len_bytes")
+        .and_then(Value::as_u64);
+    if native_revalidation_status == Some("matched")
+        && context_source_len.is_some()
+        && native_session_source_len != context_source_len
+    {
+        reasons.push(
+            "session-bound source identity length does not match context source_len_bytes"
+                .to_string(),
+        );
+    }
+    let native_session_source_span = source_span_at(
+        native_session_source,
+        "/source_span",
+        "session-bound source identity source_span",
+        &mut reasons,
+    );
+    if native_revalidation_status == Some("matched")
+        && request_span.is_some()
+        && native_session_source_span != request_span
+    {
+        reasons.push(
+            "session-bound source identity span does not match request source_span".to_string(),
         );
     }
 

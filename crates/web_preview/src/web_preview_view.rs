@@ -79,6 +79,13 @@ const MAX_WEB_PREVIEW_IPC_MESSAGE_BYTES: usize = 1024 * 1024;
 const MAX_DEFERRED_WEB_PREVIEW_IPC_MESSAGES: usize = 256;
 const MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES: usize = 8 * 1024 * 1024;
 const MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES: usize = 256 * 1024;
+const MAX_DX_STYLE_SOURCE_APPLY_SESSION_SOURCE_PATH_BYTES: usize = 4096;
+const MAX_DX_STYLE_SOURCE_APPLY_SESSION_SOURCE_DIGEST_BYTES: usize = 128;
+const MAX_DX_STYLE_SOURCE_APPLY_SESSION_CONTEXT_KIND_BYTES: usize = 64;
+const MAX_DX_STYLE_SOURCE_APPLY_SESSION_WORKSPACE_ROOT_BYTES: usize = 4096;
+const MAX_DX_STYLE_SOURCE_APPLY_SESSION_SOURCE_SPAN_BYTES: u64 = 16 * 1024;
+const DX_STYLE_SOURCE_APPLY_ACTIVE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
+const DX_STYLE_SOURCE_DIGEST_PREFIX: &str = "fnv1a64:";
 const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 #[cfg(target_os = "windows")]
 const MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES: u64 = 64 * 1024 * 1024;
@@ -92,6 +99,33 @@ struct PreviewWorkspaceContext {
     root_name: SharedString,
     preview_key: SharedString,
     profile_dir: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+struct DxStyleSourceApplySessionSourceIdentity {
+    source_path: String,
+    source_digest: String,
+    source_len_bytes: u64,
+    source_span_start: u64,
+    source_span_end: u64,
+    workspace_root: Option<String>,
+    context_kind: Option<String>,
+}
+
+impl DxStyleSourceApplySessionSourceIdentity {
+    fn to_json(&self) -> Value {
+        serde_json::json!({
+            "source_path": self.source_path.clone(),
+            "source_digest": self.source_digest.clone(),
+            "source_len_bytes": self.source_len_bytes,
+            "source_span": {
+                "start_byte": self.source_span_start,
+                "end_byte": self.source_span_end,
+            },
+            "workspace_root": self.workspace_root.clone(),
+            "context_kind": self.context_kind.clone(),
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -721,6 +755,7 @@ pub struct WebPreviewView {
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
     dx_style_source_apply_session_token: Option<SharedString>,
+    dx_style_source_apply_session_source_identity: Option<DxStyleSourceApplySessionSourceIdentity>,
     dx_style_source_apply_session_sequence: u64,
     onboarding_complete: Option<OnboardingCompleteCallback>,
     latest_dx_studio_selection: Option<Value>,
@@ -1092,6 +1127,7 @@ impl WebPreviewView {
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
             dx_style_source_apply_session_token: None,
+            dx_style_source_apply_session_source_identity: None,
             dx_style_source_apply_session_sequence: 0,
             onboarding_complete,
             latest_dx_studio_selection: None,
@@ -1436,6 +1472,7 @@ impl WebPreviewView {
 
         self.active_url = url.to_string().into();
         self.dx_style_source_apply_session_token = None;
+        self.dx_style_source_apply_session_source_identity = None;
         self.page_title = None;
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
@@ -1445,7 +1482,7 @@ impl WebPreviewView {
     }
 
     fn load_requested_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.load_requested_url_with_source_apply_session(url, None, window, cx);
+        self.load_requested_url_with_source_apply_session(url, None, None, window, cx);
     }
 
     fn load_dx_style_generator_url(
@@ -1455,17 +1492,28 @@ impl WebPreviewView {
         cx: &mut Context<Self>,
     ) {
         let session_token = self.next_dx_style_source_apply_session_token();
+        let session_source_identity =
+            dx_style_source_apply_session_source_identity_from_context_json(source_context_json);
         let url = dx_style_generator_url_with_context_and_source_apply_session(
             source_context_json,
             &session_token,
         );
-        self.load_requested_url_with_source_apply_session(&url, Some(session_token), window, cx);
+        self.load_requested_url_with_source_apply_session(
+            &url,
+            Some(session_token),
+            session_source_identity,
+            window,
+            cx,
+        );
     }
 
     fn load_requested_url_with_source_apply_session(
         &mut self,
         url: &str,
         dx_style_source_apply_session_token: Option<String>,
+        dx_style_source_apply_session_source_identity: Option<
+            DxStyleSourceApplySessionSourceIdentity,
+        >,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1484,6 +1532,12 @@ impl WebPreviewView {
         self.active_url = display_url.into();
         self.dx_style_source_apply_session_token =
             dx_style_source_apply_session_token.map(SharedString::from);
+        self.dx_style_source_apply_session_source_identity =
+            if self.dx_style_source_apply_session_token.is_some() {
+                dx_style_source_apply_session_source_identity
+            } else {
+                None
+            };
         self.page_title = None;
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
@@ -30217,6 +30271,7 @@ impl WebPreviewView {
                         && previous_url.as_str() != display_url
                     {
                         self.dx_style_source_apply_session_token = None;
+                        self.dx_style_source_apply_session_source_identity = None;
                     }
                     self.active_url = display_url.into();
                     let editor_text = self.current_url_text(cx);
@@ -30452,12 +30507,18 @@ impl WebPreviewView {
                     .and_then(Value::as_str)
             });
         let request_source_len = request
-            .pointer("/context/source_len_bytes")
-            .and_then(Value::as_u64);
+            .get("source_len_bytes")
+            .and_then(Value::as_u64)
+            .or_else(|| {
+                request
+                    .pointer("/context/source_len_bytes")
+                    .and_then(Value::as_u64)
+            });
         let request_source_span = request
             .get("source_span")
             .or_else(|| request.pointer("/context/source_span"))
             .and_then(source_span_from_json);
+        let session_source_identity = self.dx_style_source_apply_session_source_identity.as_ref();
 
         let Some(request_source_path) = request_source_path else {
             return dx_style_active_editor_source_revalidation_blocked(
@@ -30467,6 +30528,7 @@ impl WebPreviewView {
                     request_source_digest,
                     request_source_len,
                     request_source_span,
+                    session_source_identity,
                     ..Default::default()
                 },
             );
@@ -30479,10 +30541,97 @@ impl WebPreviewView {
                     request_source_path: Some(request_source_path),
                     request_source_digest,
                     request_source_len,
+                    session_source_identity,
                     ..Default::default()
                 },
             );
         };
+        let Some(session_source_identity) = session_source_identity else {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "session_source_identity_missing",
+                "DX Style source apply cannot revalidate source because the trusted generator session has no source identity",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len,
+                    request_source_span: Some(request_source_span),
+                    ..Default::default()
+                },
+            );
+        };
+        let Some(request_source_len) = request_source_len else {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "request_source_length_missing",
+                "DX Style source apply request is missing source_len_bytes",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
+        };
+        if !dx_style_source_paths_match(request_source_path, &session_source_identity.source_path) {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "session_source_path_mismatch",
+                "DX Style source apply request source_path does not match the trusted generator session source",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len: Some(request_source_len),
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
+        }
+        if request_source_span.0 != session_source_identity.source_span_start
+            || request_source_span.1 != session_source_identity.source_span_end
+        {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "session_source_span_mismatch",
+                "DX Style source apply request source_span does not match the trusted generator session source",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len: Some(request_source_len),
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
+        }
+        if request_source_len != session_source_identity.source_len_bytes {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "session_source_length_mismatch",
+                "DX Style source apply request source_len_bytes does not match the trusted generator session source",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len: Some(request_source_len),
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
+        }
+        if let Some(request_source_digest) = request_source_digest
+            && request_source_digest != session_source_identity.source_digest
+        {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "session_source_digest_mismatch",
+                "DX Style source apply request source_digest does not match the trusted generator session source",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest: Some(request_source_digest),
+                    request_source_len: Some(request_source_len),
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
+        }
 
         let Some(workspace) = self.workspace.upgrade() else {
             return dx_style_active_editor_source_revalidation_blocked(
@@ -30491,8 +30640,9 @@ impl WebPreviewView {
                 DxStyleActiveEditorSourceRevalidationEvidence {
                     request_source_path: Some(request_source_path),
                     request_source_digest,
-                    request_source_len,
+                    request_source_len: Some(request_source_len),
                     request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
                     ..Default::default()
                 },
             );
@@ -30511,8 +30661,9 @@ impl WebPreviewView {
                 DxStyleActiveEditorSourceRevalidationEvidence {
                     request_source_path: Some(request_source_path),
                     request_source_digest,
-                    request_source_len,
+                    request_source_len: Some(request_source_len),
                     request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
                     ..Default::default()
                 },
             );
@@ -30531,7 +30682,10 @@ impl WebPreviewView {
             else {
                 continue;
             };
-            if !dx_style_source_paths_match(&editor_source_path, request_source_path) {
+            if !dx_style_source_paths_match(
+                &editor_source_path,
+                &session_source_identity.source_path,
+            ) {
                 continue;
             }
             if editor.buffer_kind(cx) != ItemBufferKind::Singleton {
@@ -30548,9 +30702,10 @@ impl WebPreviewView {
                         request_source_path: Some(request_source_path),
                         editor_source_path: Some(editor_source_path.as_str()),
                         request_source_digest,
-                        request_source_len,
+                        request_source_len: Some(request_source_len),
                         editor_source_len: Some(source_len as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
@@ -30564,16 +30719,15 @@ impl WebPreviewView {
                         request_source_path: Some(request_source_path),
                         editor_source_path: Some(editor_source_path.as_str()),
                         request_source_digest,
-                        request_source_len,
+                        request_source_len: Some(request_source_len),
                         editor_source_len: Some(source.len() as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
             }
-            if let Some(request_source_len) = request_source_len
-                && request_source_len != source.len() as u64
-            {
+            if request_source_len != source.len() as u64 {
                 return dx_style_active_editor_source_revalidation_blocked(
                     "source_length_mismatch",
                     "DX Style source apply request source_len_bytes does not match the live editor source",
@@ -30584,6 +30738,7 @@ impl WebPreviewView {
                         request_source_len: Some(request_source_len),
                         editor_source_len: Some(source.len() as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
@@ -30596,9 +30751,10 @@ impl WebPreviewView {
                         request_source_path: Some(request_source_path),
                         editor_source_path: Some(editor_source_path.as_str()),
                         request_source_digest,
-                        request_source_len,
+                        request_source_len: Some(request_source_len),
                         editor_source_len: Some(source.len() as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
@@ -30611,9 +30767,10 @@ impl WebPreviewView {
                         request_source_path: Some(request_source_path),
                         editor_source_path: Some(editor_source_path.as_str()),
                         request_source_digest,
-                        request_source_len,
+                        request_source_len: Some(request_source_len),
                         editor_source_len: Some(source.len() as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
@@ -30628,9 +30785,10 @@ impl WebPreviewView {
                         request_source_path: Some(request_source_path),
                         editor_source_path: Some(editor_source_path.as_str()),
                         editor_source_digest: Some(source_digest.as_str()),
-                        request_source_len,
+                        request_source_len: Some(request_source_len),
                         editor_source_len: Some(source.len() as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
@@ -30644,9 +30802,10 @@ impl WebPreviewView {
                         editor_source_path: Some(editor_source_path.as_str()),
                         request_source_digest: Some(request_source_digest),
                         editor_source_digest: Some(source_digest.as_str()),
-                        request_source_len,
+                        request_source_len: Some(request_source_len),
                         editor_source_len: Some(source.len() as u64),
                         request_source_span: Some(request_source_span),
+                        session_source_identity: Some(session_source_identity),
                         ..Default::default()
                     },
                 );
@@ -30663,6 +30822,7 @@ impl WebPreviewView {
                     "start_byte": request_source_span.0,
                     "end_byte": request_source_span.1,
                 },
+                "session_source": session_source_identity.to_json(),
                 "request": {
                     "source_path": request_source_path,
                     "source_digest": request_source_digest,
@@ -30690,8 +30850,9 @@ impl WebPreviewView {
             DxStyleActiveEditorSourceRevalidationEvidence {
                 request_source_path: Some(request_source_path),
                 request_source_digest,
-                request_source_len,
+                request_source_len: Some(request_source_len),
                 request_source_span: Some(request_source_span),
+                session_source_identity: Some(session_source_identity),
                 ..Default::default()
             },
         )
@@ -30904,6 +31065,7 @@ impl WebPreviewView {
                 };
                 if consume_session_token {
                     self.dx_style_source_apply_session_token = None;
+                    self.dx_style_source_apply_session_source_identity = None;
                 }
                 let status = receipt
                     .get("status")
@@ -35281,6 +35443,7 @@ impl Item for WebPreviewView {
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
                 dx_style_source_apply_session_token: None,
+                dx_style_source_apply_session_source_identity: None,
                 dx_style_source_apply_session_sequence,
                 onboarding_complete,
                 latest_dx_studio_selection: None,
@@ -37557,10 +37720,135 @@ fn source_span_from_json(value: &Value) -> Option<(u64, u64)> {
     Some((start, end))
 }
 
+fn dx_style_source_apply_session_source_identity_from_context_json(
+    source_context_json: Option<&str>,
+) -> Option<DxStyleSourceApplySessionSourceIdentity> {
+    let source_context = source_context_json?;
+    if source_context.is_empty()
+        || source_context.len() > MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES
+    {
+        return None;
+    }
+    let context = serde_json::from_str::<Value>(source_context).ok()?;
+    if context.get("schema").and_then(Value::as_str)? != DX_STYLE_SOURCE_APPLY_ACTIVE_CONTEXT_SCHEMA
+    {
+        return None;
+    }
+    let source_path = dx_style_required_bounded_session_source_string(
+        &context,
+        "source_path",
+        MAX_DX_STYLE_SOURCE_APPLY_SESSION_SOURCE_PATH_BYTES,
+    )?;
+    let source_digest = dx_style_required_bounded_session_source_string(
+        &context,
+        "source_digest",
+        MAX_DX_STYLE_SOURCE_APPLY_SESSION_SOURCE_DIGEST_BYTES,
+    )?;
+    if !dx_style_is_complete_source_digest(source_digest) {
+        return None;
+    }
+    let source_len_bytes = context.get("source_len_bytes").and_then(Value::as_u64)?;
+    if source_len_bytes > MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES as u64 {
+        return None;
+    }
+    let (source_span_start, source_span_end) = source_span_from_json(context.get("source_span")?)?;
+    if source_span_start > source_span_end
+        || source_span_end > source_len_bytes
+        || source_span_end.saturating_sub(source_span_start)
+            > MAX_DX_STYLE_SOURCE_APPLY_SESSION_SOURCE_SPAN_BYTES
+    {
+        return None;
+    }
+    let workspace_root = dx_style_optional_bounded_session_source_string(
+        &context,
+        "workspace_root",
+        MAX_DX_STYLE_SOURCE_APPLY_SESSION_WORKSPACE_ROOT_BYTES,
+    )?;
+    if let Some(workspace_root) = workspace_root
+        && !dx_style_source_path_is_under_workspace_root(source_path, workspace_root)
+    {
+        return None;
+    }
+    let context_kind = dx_style_optional_bounded_session_source_string(
+        &context,
+        "context_kind",
+        MAX_DX_STYLE_SOURCE_APPLY_SESSION_CONTEXT_KIND_BYTES,
+    )?;
+
+    Some(DxStyleSourceApplySessionSourceIdentity {
+        source_path: source_path.to_string(),
+        source_digest: source_digest.to_string(),
+        source_len_bytes,
+        source_span_start,
+        source_span_end,
+        workspace_root: workspace_root.map(str::to_string),
+        context_kind: context_kind.map(str::to_string),
+    })
+}
+
+fn dx_style_required_bounded_session_source_string<'a>(
+    context: &'a Value,
+    field: &str,
+    max_bytes: usize,
+) -> Option<&'a str> {
+    let value = context.get(field).and_then(Value::as_str)?;
+    if value.is_empty() || value.len() > max_bytes {
+        return None;
+    }
+    Some(value)
+}
+
+fn dx_style_optional_bounded_session_source_string<'a>(
+    context: &'a Value,
+    field: &str,
+    max_bytes: usize,
+) -> Option<Option<&'a str>> {
+    let Some(value) = context.get(field) else {
+        return Some(None);
+    };
+    if value.is_null() {
+        return Some(None);
+    }
+    let value = value.as_str()?;
+    if value.is_empty() || value.len() > max_bytes {
+        return None;
+    }
+    Some(Some(value))
+}
+
+fn dx_style_is_complete_source_digest(value: &str) -> bool {
+    let Some(digest) = value.strip_prefix(DX_STYLE_SOURCE_DIGEST_PREFIX) else {
+        return false;
+    };
+    digest.len() == 16 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn dx_style_source_path_is_under_workspace_root(source_path: &str, workspace_root: &str) -> bool {
+    let source_path = dx_style_normalized_path_for_prefix_check(source_path);
+    let workspace_root = dx_style_normalized_path_for_prefix_check(workspace_root);
+    source_path == workspace_root
+        || source_path
+            .strip_prefix(&workspace_root)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn dx_style_normalized_path_for_prefix_check(path: &str) -> String {
+    let mut normalized = path.trim().replace('\\', "/");
+    while normalized.ends_with('/') && normalized.len() > 1 {
+        normalized.pop();
+    }
+    if cfg!(target_os = "windows") {
+        normalized.to_ascii_lowercase()
+    } else {
+        normalized
+    }
+}
+
 #[derive(Default)]
 struct DxStyleActiveEditorSourceRevalidationEvidence<'a> {
     request_source_path: Option<&'a str>,
     editor_source_path: Option<&'a str>,
+    session_source_identity: Option<&'a DxStyleSourceApplySessionSourceIdentity>,
     request_source_digest: Option<&'a str>,
     editor_source_digest: Option<&'a str>,
     request_source_len: Option<u64>,
@@ -37585,6 +37873,7 @@ fn dx_style_active_editor_source_revalidation_blocked(
             "start_byte": start,
             "end_byte": end,
         })),
+        "session_source": evidence.session_source_identity.map(DxStyleSourceApplySessionSourceIdentity::to_json),
         "request": {
             "source_path": evidence.request_source_path,
             "source_digest": evidence.request_source_digest,

@@ -28,6 +28,7 @@
     "request source path matches active source path",
     "request source span matches active source span",
     "active source digest match",
+    "session-bound source identity",
     "native active editor source revalidation",
     "visual-generator metadata alignment",
     "reverse CSS map receipt match",

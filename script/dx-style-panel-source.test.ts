@@ -435,6 +435,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     ),
   );
   assert.ok(
+    sourceApplyFixture.required_editor_guards.includes(
+      "session-bound source identity",
+    ),
+  );
+  assert.ok(
     sourceApplyFixture.review_context_kinds.includes("css_declaration"),
   );
   assert.ok(
@@ -1093,8 +1098,13 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     webPreviewView.indexOf("let url = dx_style_generator_url_with_context_and_source_apply_session") <
       webPreviewView.indexOf(
-        "load_requested_url_with_source_apply_session(&url, Some(session_token)",
+        "self.load_requested_url_with_source_apply_session(",
+        webPreviewView.indexOf("let url = dx_style_generator_url_with_context_and_source_apply_session"),
       ),
+  );
+  assert.match(
+    webPreviewView,
+    /self\.load_requested_url_with_source_apply_session\(\s*&url,\s*Some\(session_token\),\s*session_source_identity,\s*window,\s*cx,\s*\)/,
   );
   assert.match(
     webPreviewView,
@@ -1123,8 +1133,28 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /source_apply_review_receipt/);
   assert.match(webPreviewView, /source_apply_session_refused_receipt/);
   assert.match(webPreviewView, /MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES: usize = 256 \* 1024/);
+  assert.match(webPreviewView, /struct DxStyleSourceApplySessionSourceIdentity/);
+  assert.match(webPreviewView, /dx_style_source_apply_session_source_identity: Option<DxStyleSourceApplySessionSourceIdentity>/);
+  assert.match(webPreviewView, /fn dx_style_source_apply_session_source_identity_from_context_json/);
+  assert.match(webPreviewView, /dx_style_source_apply_session_source_identity_from_context_json\(source_context_json\)/);
+  assert.match(webPreviewView, /DX_STYLE_SOURCE_APPLY_ACTIVE_CONTEXT_SCHEMA/);
+  assert.match(webPreviewView, /DX_STYLE_SOURCE_DIGEST_PREFIX/);
+  assert.match(webPreviewView, /fn dx_style_required_bounded_session_source_string/);
+  assert.match(webPreviewView, /fn dx_style_optional_bounded_session_source_string/);
+  assert.match(webPreviewView, /fn dx_style_is_complete_source_digest/);
+  assert.match(webPreviewView, /fn dx_style_source_path_is_under_workspace_root/);
+  assert.match(webPreviewView, /source_span_start > source_span_end/);
+  assert.match(webPreviewView, /source_span_end > source_len_bytes/);
+  assert.match(webPreviewView, /self\.dx_style_source_apply_session_source_identity = None/);
   assert.match(webPreviewView, /fn dx_style_payload_with_active_editor_source_revalidation/);
   assert.match(webPreviewView, /fn dx_style_active_editor_source_revalidation/);
+  assert.match(webPreviewView, /session_source_identity_missing/);
+  assert.match(webPreviewView, /request_source_length_missing/);
+  assert.match(webPreviewView, /session_source_path_mismatch/);
+  assert.match(webPreviewView, /session_source_span_mismatch/);
+  assert.match(webPreviewView, /session_source_length_mismatch/);
+  assert.match(webPreviewView, /session_source_digest_mismatch/);
+  assert.match(webPreviewView, /"session_source": session_source_identity\.to_json\(\)/);
   assert.match(webPreviewView, /workspace\.items_of_type::<Editor>\(cx\)/);
   assert.match(webPreviewView, /editor\.active_project_path\(cx\)/);
   assert.match(webPreviewView, /editor\.buffer\(\)\.read\(cx\)\.len\(cx\)\.0/);
@@ -1151,6 +1181,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApplyArm, /source_apply_review_receipt[\s\S]*true/);
   assert.match(sourceApplyArm, /if consume_session_token/);
   assert.match(sourceApplyArm, /self\.dx_style_source_apply_session_token = None/);
+  assert.match(sourceApplyArm, /self\.dx_style_source_apply_session_source_identity = None/);
   assert.ok(
     sourceApplyArm.indexOf("crate::dx_style_source_apply::source_apply_session_refused_receipt") <
       sourceApplyArm.indexOf("self.dx_style_source_apply_session_token = None"),
@@ -1203,6 +1234,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source-apply contract is missing trusted session kind/);
   assert.match(sourceApply, /source-apply contract is missing trusted session guard/);
   assert.match(sourceApply, /source-apply contract is missing source-apply session receipt field/);
+  assert.match(sourceApply, /source-apply contract is missing session-bound source identity guard/);
   assert.match(sourceApply, /max_source_apply_session_token_bytes/);
   assert.match(sourceApply, /ACTIVE_STYLE_CONTEXT_SCHEMA/);
   assert.match(sourceApply, /MAX_SOURCE_PATH_BYTES: usize = 4096/);
@@ -1308,12 +1340,18 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /native active editor source revalidation path does not match request source_path/);
   assert.match(sourceApply, /native active editor source revalidation digest does not match request source_digest/);
   assert.match(sourceApply, /native active editor source revalidation span does not match request source_span/);
+  assert.match(sourceApply, /native active editor source revalidation is missing session-bound source identity/);
+  assert.match(sourceApply, /session-bound source identity path does not match request source_path/);
+  assert.match(sourceApply, /session-bound source identity digest does not match request source_digest/);
+  assert.match(sourceApply, /session-bound source identity length does not match context source_len_bytes/);
+  assert.match(sourceApply, /session-bound source identity span does not match request source_span/);
   assert.match(sourceApply, /"native_active_editor_source_revalidation": native_active_editor_source_revalidation/);
   assert.doesNotMatch(
     sourceApply,
     new RegExp("native active editor source revalidation is not yet " + "performed"),
   );
   assert.match(sourceApply, /"source_digest": request_source_digest/);
+  assert.match(surfaceScript, /source_len_bytes: zedStyleContext\?\.source_len_bytes \|\| null/);
   assert.match(sourceApply, /context kind is not listed in the source-apply review contract/);
   assert.match(sourceApply, /CSS declaration context is missing source edit safety/);
   assert.match(sourceApply, /missing DX Style CSS declaration dry-run contract schema/);
@@ -1423,6 +1461,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     styleSourceApplyFixture.required_editor_guards.includes(
       "active source digest match",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.required_editor_guards.includes(
+      "session-bound source identity",
     ),
   );
   assert.ok(

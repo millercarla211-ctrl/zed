@@ -781,6 +781,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         source_path: zedStyleContext?.source_path || null,
         source_span: zedStyleContext?.source_span || null,
         source_digest: zedStyleContext?.source_digest || null,
+        source_len_bytes: zedStyleContext?.source_len_bytes || null,
         source_apply_session: {
           kind: sourceApplySessionKind,
           token: sourceApplySessionToken

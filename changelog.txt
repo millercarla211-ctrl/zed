@@ -1,3 +1,18 @@
+[2026-05-31] - DX Style Session-Bound Source Identity
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-session-bound-source-identity-plan.md` records the step-back plan, honest score, implementation boundary, source-only checks, and remaining runtime proof gap.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now stores a bounded DX Style session source identity beside the trusted Web Preview source-apply session token, rejects malformed identity up front, clears it with the token, and requires request/session/live editor path, span, length, and digest agreement before matched native review.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now includes the active source length in source-apply review requests so native revalidation can compare request, session, and live editor identity.
+- `crates/web_preview/src/dx_style_source_apply.rs` now validates the nested `native_active_editor_source_revalidation.session_source` block against request source identity before preserving a matched review receipt.
+- DX Style's source-owned source-apply contract and Zed's embedded mirror now list the `session-bound source identity` guard.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the session-bound source identity checkpoint.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run. True 100/100 production readiness still requires the governed runtime proof window and a mutation-capable editor write bridge.
+
 [2026-05-31] - DX Style Active Editor Source Revalidation
 
 ADDED:
