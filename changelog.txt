@@ -1,3 +1,15 @@
+[2026-05-31] - DX Style Reverse Delta Strategy Drift Guard
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-reverse-delta-strategy-drift-guard-plan.md` records the source-only plan for reverse-delta strategy drift guarding.
+
+CHANGED:
+- `script/dx-style-panel-source.test.ts` now derives the complete DX Style reverse-delta `value_strategy` set from the source-owned fixture and asserts Web Preview plus native source-apply review mention every strategy.
+- `DX.md` and `todo.txt` now document the strategy drift guard.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Strategy-Aware Target Utility Validation
 
 ADDED:

@@ -133,6 +133,21 @@ const expectedEditorWriteBridgeGuards = [
 
 const expectedEditorWriteBridgeHandlers = ["window.__DX_STYLE_SOURCE_APPLY__"];
 const expectedEditorWriteBridgeCapabilities = ["can_review_request", "can_mutate_source"];
+const expectedReverseDeltaValueStrategies = [
+  "design_token_suffix",
+  "arbitrary_bracket_value",
+  "margin_token_suffix",
+  "display_keyword",
+  "drop_shadow_function",
+  "backdrop_blur_function",
+  "align_items_keyword",
+  "justify_content_keyword",
+  "align_content_keyword",
+  "grid_track_repeat_count",
+  "transition_property_value",
+  "transition_timing_function_value",
+  "arbitrary_css_property_value",
+];
 
 const rustStringVec = (source: string, field: string) => {
   const match = source.match(new RegExp(`${field}: vec!\\[([\\s\\S]*?)\\],`));
@@ -773,6 +788,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     "container-type",
     "container-name",
   ]);
+  assert.deepEqual(
+    [...new Set(
+      groupReverseCssDeltaFixture.supported_properties.map(
+        (entry) => entry.value_strategy || "design_token_suffix",
+      ),
+    )].sort(),
+    [...expectedReverseDeltaValueStrategies].sort(),
+  );
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "padding-inline" && entry.utility_prefix === "px-",
@@ -1500,6 +1523,13 @@ test("Web Preview owns the DX Style generator surface action", () => {
     webPreviewView.indexOf("fn next_dx_style_source_apply_session_token"),
     webPreviewView.indexOf("#[allow(dead_code)]", webPreviewView.indexOf("fn next_dx_style_source_apply_session_token")),
   );
+  const reverseDeltaFixtureStrategies = [
+    ...new Set(
+      styleReverseCssDeltaFixture.supported_properties.map(
+        (entry) => entry.value_strategy || "design_token_suffix",
+      ),
+    ),
+  ].sort();
 
   assert.match(actions, /pub mod dx_style/);
   assert.match(actions, /TogglePanel/);
@@ -2241,6 +2271,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.deepEqual(surfaceGeneratedCssDeclarationDryRunContract, styleCssDeclarationDryRunFixture);
   assert.deepEqual(surfaceGeneratedGroupContextContract, styleGroupContextFixture);
   assert.deepEqual(surfaceGeneratedReverseCssDeltaContract, styleReverseCssDeltaFixture);
+  assert.deepEqual(
+    reverseDeltaFixtureStrategies,
+    [...expectedReverseDeltaValueStrategies].sort(),
+  );
+  for (const strategy of expectedReverseDeltaValueStrategies) {
+    assert.match(surfaceScript, new RegExp(strategy));
+    assert.match(sourceApply, new RegExp(`"${strategy}"`));
+  }
   assert.match(surfaceScript, /DX_STYLE_GENERATOR_SCRIPT/);
   assert.match(surfaceScript, /dx_style_source_apply_session_constants_script/);
   assert.match(surfaceScript, /dx_style_source_apply_session_handler_script/);
