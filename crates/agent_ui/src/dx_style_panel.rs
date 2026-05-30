@@ -160,6 +160,12 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
         .join("src")
         .join("dx_style_generator_surface")
         .join("script.rs");
+    let dx_style_source_apply_session_script_path = zed_root
+        .join("crates")
+        .join("web_preview")
+        .join("src")
+        .join("dx_style_generator_surface")
+        .join("source_apply_session_script.rs");
     let dx_style_source_apply_path = zed_root
         .join("crates")
         .join("web_preview")
@@ -188,6 +194,8 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
     let source_apply_contract_fixture_text = read_text_limited(&source_apply_contract_fixture_path);
     let dx_style_generator_surface_text = read_text_limited(&dx_style_generator_surface_path);
     let dx_style_generator_script_text = read_text_limited(&dx_style_generator_script_path);
+    let dx_style_source_apply_session_script_text =
+        read_text_limited(&dx_style_source_apply_session_script_path);
     let dx_style_source_apply_text = read_text_limited(&dx_style_source_apply_path);
     let visual_generator_count = plan_text
         .as_deref()
@@ -302,8 +310,15 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .map(|text| {
                 text.contains("renderCssDeclarationDryRunContractReview")
                     && text.contains("Review source")
-                    && text.contains("sourceApplySessionToken")
                     && text.contains("Apply gated")
+            })
+            .unwrap_or_default()
+        && dx_style_source_apply_session_script_text
+            .as_deref()
+            .map(|text| {
+                text.contains("sourceApplySessionToken")
+                    && text.contains("source_apply_session")
+                    && text.contains("window.__DX_STYLE_SOURCE_APPLY__")
             })
             .unwrap_or_default()
         && dx_style_source_apply_text

@@ -1,3 +1,17 @@
+[2026-05-30] - DX Style Source Apply Session Script Split
+
+ADDED:
+- `crates/web_preview/src/dx_style_generator_surface/source_apply_session_script.rs` owns the Web Preview browser constants and IPC handler for trusted DX Style source-apply sessions.
+- `docs/superpowers/plans/2026-05-30-dx-style-source-apply-session-script-split-plan.md` records the behavior-preserving maintainability split plan.
+
+CHANGED:
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now composes the generator browser script from a focused source-apply session snippet instead of keeping the trust handler buried in the main raw string.
+- `crates/agent_ui/src/dx_style_panel.rs` now includes the focused session-script module in the Style sidebar readiness gate.
+- `script/dx-style-panel-source.test.ts` now parses the composed browser script across the split modules.
+
+NOTES:
+- This is a source-only maintainability slice. No `just run`, Cargo command, build, server, browser automation, or live WebView validation was run.
+
 [2026-05-30] - DX Style Web Preview Source Apply Session Trust
 
 ADDED:

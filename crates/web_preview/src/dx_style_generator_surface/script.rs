@@ -1,3 +1,7 @@
+use super::source_apply_session_script::{
+    dx_style_source_apply_session_constants_script, dx_style_source_apply_session_handler_script,
+};
+
 const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYLE_GENERATOR_CATALOG_JSON__;
     const catalog = Array.isArray(catalogPayload) ? catalogPayload : catalogPayload.entries || [];
     const controls = __DX_STYLE_GENERATOR_CONTROLS_JSON__;
@@ -36,9 +40,7 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
     const sourceApplyContractSource = sourceApplyContract.__source || "embedded:dx-style-source-apply-contract-fixture";
     const sourceApplyIpcKind = sourceApplyContract.ipc_kind || "dx-style-source-apply";
     const sourceApplyReceiptSchema = sourceApplyContract.receipt_schema || "unknown";
-    const sourceApplySessionKind = sourceApplyContract.source_apply_session_kind || "unknown";
-    const sourceApplySessionToken = __DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__;
-    const sourceApplyMaxSessionTokenBytes = Number(sourceApplyContract.max_source_apply_session_token_bytes || 0);
+__DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__
     const sourceApplyMutationEnabled = sourceApplyContract.source_mutation_enabled === true;
     const sourceApplyRequiredHandlerCapabilities = Array.isArray(sourceApplyContract.required_native_handler_capabilities)
       ? sourceApplyContract.required_native_handler_capabilities
@@ -557,51 +559,7 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
       return diagnostics;
     }
 
-    function sourceApplyHandler() {
-      const handler = typeof window.__DX_STYLE_SOURCE_APPLY__ === "function"
-        ? window.__DX_STYLE_SOURCE_APPLY__
-        : null;
-      return handler?.can_mutate_source === true ? handler : null;
-    }
-
-    function sourceApplyReviewHandler() {
-      const handler = typeof window.__DX_STYLE_SOURCE_APPLY__ === "function"
-        ? window.__DX_STYLE_SOURCE_APPLY__
-        : null;
-      return handler?.can_review_request === true ? handler : null;
-    }
-
-    function sourceApplyHandlerState() {
-      const handler = typeof window.__DX_STYLE_SOURCE_APPLY__ === "function"
-        ? window.__DX_STYLE_SOURCE_APPLY__
-        : null;
-      if (!handler) return "not_enabled";
-      if (handler.can_mutate_source === true) return "ready";
-      if (handler.can_review_request === true) return "review_only";
-      return "unknown";
-    }
-
-    function installSourceApplyHandler() {
-      if (typeof window.__DX_STYLE_SOURCE_APPLY__ === "function") return;
-      if (typeof window.ipc?.postMessage !== "function") return;
-      const handler = (request) => {
-        window.ipc.postMessage(JSON.stringify({
-          kind: sourceApplyIpcKind,
-          request,
-          source_apply_session: {
-            kind: sourceApplySessionKind,
-            token: sourceApplySessionToken
-          },
-          handler_capability: {
-            can_review_request: true,
-            can_mutate_source: false
-          }
-        }));
-      };
-      Object.defineProperty(handler, "can_review_request", { value: true });
-      Object.defineProperty(handler, "can_mutate_source", { value: false });
-      Object.defineProperty(window, "__DX_STYLE_SOURCE_APPLY__", { value: handler });
-    }
+__DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
 
     function contextSchemaSupported(context) {
       return context?.schema === expectedContextSchema;
@@ -1730,6 +1688,14 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
     render();
 "##;
 
-pub(super) fn dx_style_generator_script() -> &'static str {
+pub(super) fn dx_style_generator_script() -> String {
     DX_STYLE_GENERATOR_SCRIPT
+        .replace(
+            "__DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__",
+            dx_style_source_apply_session_constants_script(),
+        )
+        .replace(
+            "__DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__",
+            dx_style_source_apply_session_handler_script(),
+        )
 }

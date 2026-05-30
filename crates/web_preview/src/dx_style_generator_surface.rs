@@ -7,6 +7,7 @@ mod recipes;
 mod reverse_css_delta_contract;
 mod script;
 mod source_apply_contract;
+mod source_apply_session_script;
 mod style;
 
 use catalog::dx_style_generator_catalog_json;
