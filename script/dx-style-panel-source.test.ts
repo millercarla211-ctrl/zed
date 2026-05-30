@@ -1750,6 +1750,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /ready reverse CSS delta preview lacks reverse CSS map provenance/);
   assert.match(sourceApply, /ready reverse CSS delta preview has non-string replacement utilities/);
   assert.match(sourceApply, /ready reverse CSS delta preview replacement utilities do not contain target utility/);
+  assert.match(sourceApply, /ready reverse CSS delta preview source declaration does not match replacement utilities/);
+  assert.match(sourceApply, /ready reverse CSS delta preview has no replacement source declaration/);
   assert.match(sourceApply, /ready reverse CSS delta preview is missing required replacement policy evidence/);
   assert.match(sourceApply, /ready reverse CSS delta preview did not prove same-family source utility replacement/);
   assert.match(sourceApply, /ready reverse CSS delta preview changes utility count for replacement-only property/);
@@ -2441,6 +2443,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /function reverseCssDeltaReplacementPolicyDiagnostics\(preview, group\)/);
   assert.match(surfaceScript, /reverse_css_delta_replacement_existing_utility_missing/);
   assert.match(surfaceScript, /reverse_css_delta_replacement_utilities_missing/);
+  assert.match(surfaceScript, /reverse_css_delta_replacement_source_declaration_missing/);
+  assert.match(surfaceScript, /reverse_css_delta_replacement_source_declaration_mismatch/);
   assert.match(surfaceScript, /reverse_css_delta_replacement_utility_count_changed/);
   assert.match(surfaceScript, /source_apply_contract_missing_replacement_policy_guard/);
   assert.match(surfaceScript, /replacementExistingUtilityRequired && !replacement\.replaced/);

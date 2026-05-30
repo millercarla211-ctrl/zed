@@ -1536,6 +1536,17 @@ fn validate_reverse_delta_preview_replacement_policy(
     let replacement_utilities = preview
         .get("replacement_utilities")
         .and_then(Value::as_array);
+    let replacement_utility_strings = replacement_utilities.and_then(|replacement_utilities| {
+        replacement_utilities
+            .iter()
+            .all(|utility| utility.as_str().is_some())
+            .then(|| {
+                replacement_utilities
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+            })
+    });
     if let Some(replacement_utilities) = replacement_utilities {
         if replacement_utilities
             .iter()
@@ -1554,6 +1565,30 @@ fn validate_reverse_delta_preview_replacement_policy(
                 "ready reverse CSS delta preview replacement utilities do not contain target utility"
                     .to_string(),
             );
+        }
+    }
+
+    if let Some(group_alias) = group_context.get("alias").and_then(Value::as_str)
+        && !group_alias.is_empty()
+        && let Some(replacement_utility_strings) = replacement_utility_strings.as_ref()
+    {
+        let expected_source_declaration = format!(
+            "@{}({})",
+            group_alias,
+            replacement_utility_strings.join(" ")
+        );
+        match preview
+            .get("replacement_source_declaration")
+            .and_then(Value::as_str)
+        {
+            Some(source_declaration) if source_declaration == expected_source_declaration => {}
+            Some(_) => reasons.push(
+                "ready reverse CSS delta preview source declaration does not match replacement utilities"
+                    .to_string(),
+            ),
+            None => reasons.push(
+                "ready reverse CSS delta preview has no replacement source declaration".to_string(),
+            ),
         }
     }
 

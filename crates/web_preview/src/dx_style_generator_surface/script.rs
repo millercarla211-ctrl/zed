@@ -594,6 +594,14 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     function reverseCssDeltaReplacementPolicyDiagnostics(preview, group) {
       const diagnostics = [];
       if (preview?.status !== "ready_for_review") return diagnostics;
+      if (group?.alias && Array.isArray(preview.replacement_utilities)) {
+        const expectedSourceDeclaration = `@${group.alias}(${preview.replacement_utilities.join(" ")})`;
+        if (!preview.replacement_source_declaration) {
+          diagnostics.push("reverse_css_delta_replacement_source_declaration_missing");
+        } else if (preview.replacement_source_declaration !== expectedSourceDeclaration) {
+          diagnostics.push("reverse_css_delta_replacement_source_declaration_mismatch");
+        }
+      }
       if (preview.replacement_existing_utility_required !== true) return diagnostics;
       if (preview.replacement_existing_utility_found !== true) {
         diagnostics.push("reverse_css_delta_replacement_existing_utility_missing");
