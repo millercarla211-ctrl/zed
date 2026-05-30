@@ -158,6 +158,10 @@ const collectRecipeTriples = (source: string, idField: string) => {
 const templatePlaceholders = (template: string) =>
   [...template.matchAll(/\{([a-z0-9_]+)\}/g)].map((match) => match[1]);
 
+const cssDeclarationProperties = (css: string) => [
+  ...css.matchAll(/(^|\n)\s*([a-z-]+)\s*:/g),
+].map((match) => match[2]);
+
 const controlInputName = (name: string) => name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
 
 const enumName = controlInputName;
@@ -1071,6 +1075,15 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       `${entry.generator_id} should only use source-owned recipe value keys`,
     );
   }
+  const reverseDeltaProperties = new Set(
+    groupReverseCssDeltaFixture.supported_properties.map((entry) => entry.property),
+  );
+  const uncoveredRecipeDeclarations = generatorRecipeFixture.entries.flatMap((entry) =>
+    cssDeclarationProperties(entry.css_template)
+      .filter((property) => !reverseDeltaProperties.has(property))
+      .map((property) => `${entry.generator_id}:${property}`),
+  );
+  assert.deepEqual(uncoveredRecipeDeclarations, []);
   assert.equal(generatorControlFixture.schema, "dx.style.visual-generator-control-catalog");
   assert.equal(generatorControlFixture.entry_count, 25);
   assert.equal(generatorControlFixture.entries.length, 25);
