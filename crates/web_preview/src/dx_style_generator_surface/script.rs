@@ -715,10 +715,49 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         if (!text.startsWith("blur(") || !text.endsWith(")")) return null;
         return arbitraryReverseDeltaToken(text.slice("blur(".length, -1));
       }
+      if (strategy === "align_items_keyword") return alignItemsReverseDeltaToken(text);
+      if (strategy === "justify_content_keyword") return justifyContentReverseDeltaToken(text);
+      if (strategy === "grid_track_repeat_count") return gridTrackRepeatCountToken(text);
       const prefix = String(mapping?.token_prefix || "");
       if (!prefix || !text.startsWith(prefix) || !text.endsWith(")")) return null;
       const token = text.slice(prefix.length, -1).trim();
       return token || null;
+    }
+
+    function alignItemsReverseDeltaToken(value) {
+      switch (String(value || "").trim()) {
+        case "normal": return "normal";
+        case "stretch": return "stretch";
+        case "center": return "center";
+        case "flex-start":
+        case "start": return "start";
+        case "flex-end":
+        case "end": return "end";
+        case "baseline": return "baseline";
+        default: return null;
+      }
+    }
+
+    function justifyContentReverseDeltaToken(value) {
+      switch (String(value || "").trim()) {
+        case "normal": return "normal";
+        case "center": return "center";
+        case "flex-start":
+        case "start": return "start";
+        case "flex-end":
+        case "end": return "end";
+        case "space-between": return "between";
+        case "space-around": return "around";
+        case "space-evenly": return "evenly";
+        case "stretch": return "stretch";
+        default: return null;
+      }
+    }
+
+    function gridTrackRepeatCountToken(value) {
+      const match = String(value || "").replace(/\s+/g, "").match(/^repeat\((\d{1,2}),minmax\(0,1fr\)\)$/);
+      if (!match || match[1] === "0") return null;
+      return match[1];
     }
 
     function arbitraryReverseDeltaToken(value) {

@@ -666,9 +666,17 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /ArbitraryBracketValue/);
   assert.match(groupReverseCssDelta, /DropShadowFunction/);
   assert.match(groupReverseCssDelta, /BackdropBlurFunction/);
+  assert.match(groupReverseCssDelta, /AlignItemsKeyword/);
+  assert.match(groupReverseCssDelta, /JustifyContentKeyword/);
+  assert.match(groupReverseCssDelta, /GridTrackRepeatCount/);
   assert.match(groupReverseCssDelta, /arbitrary_bracket_token/);
+  assert.match(groupReverseCssDelta, /align_items_token_from_value/);
+  assert.match(groupReverseCssDelta, /justify_content_token_from_value/);
+  assert.match(groupReverseCssDelta, /grid_track_repeat_count_token/);
   assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
+  assert.match(groupReverseCssDelta, /align-items/);
+  assert.match(groupReverseCssDelta, /grid-template-columns/);
   assert.match(groupReverseCssDelta, /box-shadow/);
   assert.match(groupReverseCssDelta, /backdrop-filter/);
   assert.match(groupReverseCssDelta, /padding-inline/);
@@ -700,6 +708,30 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "gap" && entry.utility_prefix === "gap-",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "align-items" &&
+        entry.utility_prefix === "items-" &&
+        entry.value_strategy === "align_items_keyword",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "justify-content" &&
+        entry.utility_prefix === "justify-" &&
+        entry.value_strategy === "justify_content_keyword",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "grid-template-columns" &&
+        entry.utility_prefix === "grid-cols-" &&
+        entry.value_strategy === "grid_track_repeat_count",
     ),
   );
   assert.ok(
@@ -2054,6 +2086,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /arbitrary_bracket_value/);
   assert.match(surfaceScript, /drop_shadow_function/);
   assert.match(surfaceScript, /backdrop_blur_function/);
+  assert.match(surfaceScript, /align_items_keyword/);
+  assert.match(surfaceScript, /justify_content_keyword/);
+  assert.match(surfaceScript, /grid_track_repeat_count/);
+  assert.match(surfaceScript, /function alignItemsReverseDeltaToken\(value\)/);
+  assert.match(surfaceScript, /function justifyContentReverseDeltaToken\(value\)/);
+  assert.match(surfaceScript, /function gridTrackRepeatCountToken\(value\)/);
   assert.match(surfaceScript, /function arbitraryReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function isShadowEffectUtility\(utility\)/);
   assert.match(surfaceScript, /function isTextShadowEffectUtility\(utility\)/);

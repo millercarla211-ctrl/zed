@@ -51,6 +51,42 @@
       "value_strategy": "design_token_suffix"
     },
     {
+      "property": "column-gap",
+      "utility_prefix": "gap-x-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "row-gap",
+      "utility_prefix": "gap-y-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "align-items",
+      "utility_prefix": "items-",
+      "token_prefix": "",
+      "value_strategy": "align_items_keyword"
+    },
+    {
+      "property": "justify-content",
+      "utility_prefix": "justify-",
+      "token_prefix": "",
+      "value_strategy": "justify_content_keyword"
+    },
+    {
+      "property": "grid-template-columns",
+      "utility_prefix": "grid-cols-",
+      "token_prefix": "",
+      "value_strategy": "grid_track_repeat_count"
+    },
+    {
+      "property": "grid-template-rows",
+      "utility_prefix": "grid-rows-",
+      "token_prefix": "",
+      "value_strategy": "grid_track_repeat_count"
+    },
+    {
       "property": "box-shadow",
       "utility_prefix": "shadow-",
       "token_prefix": "",
