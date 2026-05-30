@@ -662,7 +662,15 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /grouped_class_reverse_css_delta_preview/);
   assert.match(groupReverseCssDelta, /utility_matches_family/);
   assert.match(groupReverseCssDelta, /is_border_color_utility/);
+  assert.match(groupReverseCssDelta, /GroupedClassReverseCssDeltaValueStrategy/);
+  assert.match(groupReverseCssDelta, /ArbitraryBracketValue/);
+  assert.match(groupReverseCssDelta, /DropShadowFunction/);
+  assert.match(groupReverseCssDelta, /BackdropBlurFunction/);
+  assert.match(groupReverseCssDelta, /arbitrary_bracket_token/);
+  assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
+  assert.match(groupReverseCssDelta, /box-shadow/);
+  assert.match(groupReverseCssDelta, /backdrop-filter/);
   assert.match(groupReverseCssDelta, /padding-inline/);
   assert.match(groupReverseCssDelta, /calc\(var\(--spacing\) \* /);
   assert.match(groupReverseCssDelta, /var\(--color-/);
@@ -692,6 +700,30 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "gap" && entry.utility_prefix === "gap-",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "box-shadow" &&
+        entry.utility_prefix === "shadow-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "filter" &&
+        entry.utility_prefix === "drop-shadow-" &&
+        entry.value_strategy === "drop_shadow_function",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "backdrop-filter" &&
+        entry.utility_prefix === "backdrop-blur-" &&
+        entry.value_strategy === "backdrop_blur_function",
     ),
   );
   assert.equal(groupReverseCssDeltaFixture.example_preview.status, "ready_for_review");
@@ -2018,6 +2050,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /reverse_css_delta_contract_missing_provenance_guard/);
   assert.match(surfaceScript, /reverse_css_delta_contract_missing_required_provenance_fields/);
   assert.match(surfaceScript, /reverse_css_delta_contract_unsupported_provenance_field/);
+  assert.match(surfaceScript, /function tokenFromReverseDeltaValue\(value, mapping\)/);
+  assert.match(surfaceScript, /arbitrary_bracket_value/);
+  assert.match(surfaceScript, /drop_shadow_function/);
+  assert.match(surfaceScript, /backdrop_blur_function/);
+  assert.match(surfaceScript, /function arbitraryReverseDeltaToken\(value\)/);
+  assert.match(surfaceScript, /function isShadowEffectUtility\(utility\)/);
+  assert.match(surfaceScript, /function isTextShadowEffectUtility\(utility\)/);
+  assert.match(surfaceScript, /function isDropShadowEffectUtility\(utility\)/);
   assert.match(surfaceScript, /function reverseCssDeltaContextField\(field\)/);
   assert.match(surfaceScript, /function reverseCssDeltaPreviewProvenanceDiagnostics\(preview, group\)/);
   assert.match(surfaceScript, /reverse_css_delta_preview_missing:/);
@@ -2093,6 +2133,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_registry_receipt: group\?\.registry_receipt/);
   assert.match(surfaceScript, /reverse_css_map_status: group\?\.reverse_css_map_status/);
   assert.match(surfaceScript, /function reverseCssDeltaPreview\(output\)/);
+  assert.match(surfaceScript, /tokenFromReverseDeltaValue\(declaration\.value, mapping\)/);
   assert.match(surfaceScript, /function replacementUtilitiesForDelta/);
   assert.match(surfaceScript, /function isBorderColorUtility/);
   assert.match(surfaceScript, /no_group_utilities/);
@@ -2323,6 +2364,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /Reverse CSS status/);
   assert.match(surfaceScript, /Reverse CSS delta contract/);
   assert.match(surfaceScript, /Supported declaration deltas/);
+  assert.match(surfaceScript, /entry\.value_strategy \|\| "design_token_suffix"/);
   assert.match(surfaceScript, /Required preview provenance/);
   assert.match(surfaceScript, /Contract diagnostics/);
   assert.match(surfaceScript, /Preview provenance diagnostics/);

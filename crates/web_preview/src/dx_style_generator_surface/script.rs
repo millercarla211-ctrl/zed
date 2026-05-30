@@ -703,17 +703,36 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
 
 __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
 
-    function tokenFromReverseDeltaValue(value, tokenPrefix) {
+    function tokenFromReverseDeltaValue(value, mapping) {
       const text = String(value || "").trim();
-      const prefix = String(tokenPrefix || "");
+      const strategy = String(mapping?.value_strategy || "design_token_suffix");
+      if (strategy === "arbitrary_bracket_value") return arbitraryReverseDeltaToken(text);
+      if (strategy === "drop_shadow_function") {
+        if (!text.startsWith("drop-shadow(") || !text.endsWith(")")) return null;
+        return arbitraryReverseDeltaToken(text.slice("drop-shadow(".length, -1));
+      }
+      if (strategy === "backdrop_blur_function") {
+        if (!text.startsWith("blur(") || !text.endsWith(")")) return null;
+        return arbitraryReverseDeltaToken(text.slice("blur(".length, -1));
+      }
+      const prefix = String(mapping?.token_prefix || "");
       if (!prefix || !text.startsWith(prefix) || !text.endsWith(")")) return null;
       const token = text.slice(prefix.length, -1).trim();
       return token || null;
     }
 
+    function arbitraryReverseDeltaToken(value) {
+      const text = String(value || "").trim();
+      if (!text || text.length > 256 || /[\[\];\n\r]/.test(text)) return null;
+      return `[${text.split(/\s+/).join("_")}]`;
+    }
+
     function utilityMatchesReverseDeltaFamily(utility, utilityPrefix) {
       const text = String(utility || "");
       if (utilityPrefix === "border-") return isBorderColorUtility(text);
+      if (utilityPrefix === "shadow-") return isShadowEffectUtility(text);
+      if (utilityPrefix === "text-shadow-") return isTextShadowEffectUtility(text);
+      if (utilityPrefix === "drop-shadow-") return isDropShadowEffectUtility(text);
       return text.startsWith(utilityPrefix);
     }
 
@@ -722,6 +741,35 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (!utility.startsWith("border-") || !suffix) return false;
       if (/^\d+$/.test(suffix)) return false;
       return !["solid", "dashed", "dotted", "double", "hidden", "none"].includes(suffix);
+    }
+
+    function isShadowEffectUtility(utility) {
+      if (["shadow", "shadow-sm", "shadow-md", "shadow-lg", "shadow-xl", "shadow-2xl", "shadow-inner", "shadow-none"].includes(utility)) {
+        return true;
+      }
+      const suffix = utility.replace(/^shadow-/, "");
+      return utility.startsWith("shadow-") && isArbitraryOrCssVariableToken(suffix);
+    }
+
+    function isTextShadowEffectUtility(utility) {
+      if (["text-shadow", "text-shadow-sm", "text-shadow-md", "text-shadow-lg", "text-shadow-none"].includes(utility)) {
+        return true;
+      }
+      const suffix = utility.replace(/^text-shadow-/, "");
+      return utility.startsWith("text-shadow-") && isArbitraryOrCssVariableToken(suffix);
+    }
+
+    function isDropShadowEffectUtility(utility) {
+      if (["drop-shadow", "drop-shadow-sm", "drop-shadow-md", "drop-shadow-lg", "drop-shadow-xl", "drop-shadow-2xl", "drop-shadow-none"].includes(utility)) {
+        return true;
+      }
+      const suffix = utility.replace(/^drop-shadow-/, "");
+      return utility.startsWith("drop-shadow-") && isArbitraryOrCssVariableToken(suffix);
+    }
+
+    function isArbitraryOrCssVariableToken(suffix) {
+      return (suffix.startsWith("[") && suffix.endsWith("]"))
+        || (suffix.startsWith("(--") && suffix.endsWith(")"));
     }
 
     function replacementUtilitiesForDelta(utilities, utilityPrefix, targetUtility) {
@@ -768,7 +816,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           String(entry.property || "").toLowerCase() === declaration.property.toLowerCase()
         );
         if (!mapping) continue;
-        const token = tokenFromReverseDeltaValue(declaration.value, mapping.token_prefix);
+        const token = tokenFromReverseDeltaValue(declaration.value, mapping);
         if (!token) {
           firstUnsupportedValue ||= {
             ...provenance,
@@ -1378,7 +1426,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
     function renderReverseCssDeltaContractReview(output) {
       const deltaPreview = reverseCssDeltaPreview(output);
       const properties = reverseCssDeltaSupportedProperties.length
-        ? `<ul>${reverseCssDeltaSupportedProperties.map((entry) => `<li>${escapeHtml(entry.property || "unknown")} -> ${escapeHtml(entry.utility_prefix || "unknown")}</li>`).join("")}</ul>`
+        ? `<ul>${reverseCssDeltaSupportedProperties.map((entry) => `<li>${escapeHtml(entry.property || "unknown")} -> ${escapeHtml(entry.utility_prefix || "unknown")} (${escapeHtml(entry.value_strategy || "design_token_suffix")})</li>`).join("")}</ul>`
         : "";
       const guards = reverseCssDeltaRequiredGuards.length
         ? `<ul>${reverseCssDeltaRequiredGuards.map((guard) => `<li>${escapeHtml(guard)}</li>`).join("")}</ul>`

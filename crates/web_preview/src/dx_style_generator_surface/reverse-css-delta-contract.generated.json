@@ -11,37 +11,68 @@
     {
       "property": "background-color",
       "utility_prefix": "bg-",
-      "token_prefix": "var(--color-"
+      "token_prefix": "var(--color-",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "color",
       "utility_prefix": "text-",
-      "token_prefix": "var(--color-"
+      "token_prefix": "var(--color-",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "border-color",
       "utility_prefix": "border-",
-      "token_prefix": "var(--color-"
+      "token_prefix": "var(--color-",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "border-radius",
       "utility_prefix": "rounded-",
-      "token_prefix": "var(--radius-"
+      "token_prefix": "var(--radius-",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "padding-inline",
       "utility_prefix": "px-",
-      "token_prefix": "calc(var(--spacing) * "
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "padding-block",
       "utility_prefix": "py-",
-      "token_prefix": "calc(var(--spacing) * "
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "gap",
       "utility_prefix": "gap-",
-      "token_prefix": "calc(var(--spacing) * "
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "box-shadow",
+      "utility_prefix": "shadow-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "text-shadow",
+      "utility_prefix": "text-shadow-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "filter",
+      "utility_prefix": "drop-shadow-",
+      "token_prefix": "",
+      "value_strategy": "drop_shadow_function"
+    },
+    {
+      "property": "backdrop-filter",
+      "utility_prefix": "backdrop-blur-",
+      "token_prefix": "",
+      "value_strategy": "backdrop_blur_function"
     }
   ],
   "required_editor_guards": [
