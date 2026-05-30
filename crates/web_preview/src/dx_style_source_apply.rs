@@ -26,6 +26,8 @@ const MAX_CSS_SOURCE_EDIT_SAFETY_BYTES: usize = 128;
 const MAX_PREVIEW_KIND_BYTES: usize = 64;
 const MAX_PREVIEW_ANATOMY_PART_BYTES: usize = 64;
 const MAX_PREVIEW_ANATOMY_PARTS: usize = 8;
+const MAX_DRY_RUN_EDIT_PREVIEWS: usize = 3;
+const MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096;
 const MAX_CSS_DECLARATION_DRY_RUN_DIAGNOSTICS: usize = 8;
 const MAX_CSS_DECLARATION_DRY_RUN_DIAGNOSTIC_BYTES: usize = 160;
 const CSS_DECLARATION_DRY_RUN_MAX_DECLARATION_BYTES: usize = 4096;
@@ -152,6 +154,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
                 .to_string(),
         );
     }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "cursor-scoped dry-run structured edit preview",
+    ) {
+        reasons.push(
+            "source-apply contract is missing cursor-scoped dry-run edit preview guard".to_string(),
+        );
+    }
     if !string_array_contains(contract, "/review_context_kinds", "class_token")
         || !string_array_contains(contract, "/review_context_kinds", "class_list")
         || !string_array_contains(contract, "/review_context_kinds", "css_declaration")
@@ -203,6 +214,10 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "source-apply contract is missing native active editor source revalidation receipt field"
                 .to_string(),
         );
+    }
+    if !string_array_contains(contract, "/review_receipt_fields", "dry_run_edit_review") {
+        reasons
+            .push("source-apply contract is missing dry-run edit review receipt field".to_string());
     }
     for field in [
         "css_declaration_dry_run_contract",
@@ -356,6 +371,18 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         contract,
         "max_preview_anatomy_parts",
         MAX_PREVIEW_ANATOMY_PARTS as u64,
+        &mut reasons,
+    );
+    validate_contract_u64(
+        contract,
+        "max_dry_run_edit_previews",
+        MAX_DRY_RUN_EDIT_PREVIEWS as u64,
+        &mut reasons,
+    );
+    validate_contract_u64(
+        contract,
+        "max_dry_run_replacement_text_bytes",
+        MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES as u64,
         &mut reasons,
     );
 
@@ -760,6 +787,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         );
     }
 
+    let dry_run_edit_review_evidence = dry_run_edit_review(
+        apply_gate,
+        source_path,
+        request_span,
+        request_source_digest,
+        native_revalidation_status,
+        &mut reasons,
+    );
+
     let class_name = bounded_string(
         request,
         "/output/className",
@@ -902,6 +938,8 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "max_preview_kind_bytes": contract.get("max_preview_kind_bytes").and_then(Value::as_u64),
             "max_preview_anatomy_part_bytes": contract.get("max_preview_anatomy_part_bytes").and_then(Value::as_u64),
             "max_preview_anatomy_parts": contract.get("max_preview_anatomy_parts").and_then(Value::as_u64),
+            "max_dry_run_edit_previews": contract.get("max_dry_run_edit_previews").and_then(Value::as_u64),
+            "max_dry_run_replacement_text_bytes": contract.get("max_dry_run_replacement_text_bytes").and_then(Value::as_u64),
         },
         "source_apply_session": {
             "kind": DX_STYLE_SOURCE_APPLY_SESSION_KIND,
@@ -984,6 +1022,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "receipt_summary": apply_gate.get("receipt_summary").cloned(),
             "receipt_mismatch": apply_gate.get("receipt_mismatch").cloned(),
         },
+        "dry_run_edit_review": dry_run_edit_review_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
             "can_review_request": can_review_request,
@@ -1016,6 +1055,171 @@ pub(crate) fn source_apply_session_refused_receipt(payload: &Value, reason: &str
             "request_token_present": request.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
         },
     })
+}
+
+fn dry_run_edit_review(
+    apply_gate: &Value,
+    source_path: Option<&str>,
+    request_span: Option<SourceSpan>,
+    source_digest: Option<&str>,
+    native_revalidation_status: Option<&str>,
+    reasons: &mut Vec<String>,
+) -> Value {
+    let trusted_receipt_present = apply_gate
+        .get("trusted_dry_run_receipt_present")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let receipt_match = apply_gate.get("receipt_match").and_then(Value::as_str);
+    let native_source_matched = native_revalidation_status == Some("matched");
+    let edit_previews = apply_gate
+        .pointer("/receipt_summary/edit_previews")
+        .and_then(Value::as_array);
+    let mut diagnostics = Vec::new();
+    if trusted_receipt_present && edit_previews.is_none() {
+        diagnostics.push("dry-run edit review is missing structured edit previews".to_string());
+    }
+
+    let scoped_previews = if let (Some(source_path), Some(request_span), Some(edit_previews)) =
+        (source_path, request_span, edit_previews)
+    {
+        if edit_previews.len() > MAX_DRY_RUN_EDIT_PREVIEWS {
+            diagnostics.push(format!(
+                "dry-run edit preview count exceeds {MAX_DRY_RUN_EDIT_PREVIEWS}"
+            ));
+        }
+        edit_previews
+            .iter()
+            .take(MAX_DRY_RUN_EDIT_PREVIEWS)
+            .filter_map(|preview| {
+                dry_run_edit_preview_for_source_span(
+                    preview,
+                    source_path,
+                    request_span,
+                    &mut diagnostics,
+                )
+            })
+            .collect::<Vec<_>>()
+    } else {
+        if source_path.is_none() {
+            diagnostics.push("dry-run edit review is missing request source path".to_string());
+        }
+        if request_span.is_none() {
+            diagnostics.push("dry-run edit review is missing request source span".to_string());
+        }
+        Vec::new()
+    };
+
+    let cursor_scoped = !scoped_previews.is_empty();
+    if trusted_receipt_present
+        && receipt_match == Some("active_source_matched")
+        && native_source_matched
+        && !cursor_scoped
+    {
+        reasons.push(
+            "trusted dry-run receipt has no structured edit preview scoped to the active source span"
+                .to_string(),
+        );
+    }
+
+    let status = if !trusted_receipt_present {
+        "no_trusted_receipt"
+    } else if receipt_match != Some("active_source_matched") {
+        "receipt_not_matched"
+    } else if !native_source_matched {
+        "native_source_not_matched"
+    } else if cursor_scoped {
+        "matched"
+    } else {
+        "missing_cursor_scoped_edit_preview"
+    };
+
+    json!({
+        "status": status,
+        "trusted_receipt_present": trusted_receipt_present,
+        "receipt_match": receipt_match,
+        "receipt_path": apply_gate.get("receipt_path").and_then(Value::as_str),
+        "source_path": source_path,
+        "source_span": span_json(request_span),
+        "source_digest": source_digest,
+        "max_edit_previews": MAX_DRY_RUN_EDIT_PREVIEWS,
+        "max_replacement_text_bytes": MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES,
+        "structured_edit_preview_count": scoped_previews.len(),
+        "structured_edit_previews": scoped_previews,
+        "diagnostics": diagnostics,
+    })
+}
+
+fn dry_run_edit_preview_for_source_span(
+    preview: &Value,
+    source_path: &str,
+    request_span: SourceSpan,
+    diagnostics: &mut Vec<String>,
+) -> Option<Value> {
+    let preview_source_path = preview.get("source_path").and_then(Value::as_str)?;
+    let start_byte = preview.get("start_byte").and_then(Value::as_u64)?;
+    let end_byte = preview.get("end_byte").and_then(Value::as_u64)?;
+    let replacement_text = preview.get("replacement_text").and_then(Value::as_str);
+    if !review_source_paths_match(preview_source_path, source_path) {
+        return None;
+    }
+    if start_byte > request_span.start || request_span.end > end_byte {
+        return None;
+    }
+    let Some(replacement_text) = replacement_text else {
+        diagnostics.push("dry-run edit preview is missing replacement_text".to_string());
+        return None;
+    };
+    if replacement_text.is_empty() {
+        diagnostics.push("dry-run edit preview replacement_text is empty".to_string());
+        return None;
+    }
+    if replacement_text.len() > MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES {
+        diagnostics.push(format!(
+            "dry-run edit preview replacement_text exceeds {MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES} bytes"
+        ));
+        return None;
+    }
+
+    Some(json!({
+        "source_path": preview_source_path,
+        "start_byte": start_byte,
+        "end_byte": end_byte,
+        "replacement_text": replacement_text,
+        "replacement": preview.get("replacement").and_then(Value::as_str),
+    }))
+}
+
+fn review_source_paths_match(receipt_path: &str, active_path: &str) -> bool {
+    let receipt_path = normalize_review_source_path(receipt_path);
+    let active_path = normalize_review_source_path(active_path);
+    if review_source_paths_equal(&receipt_path, &active_path) {
+        return true;
+    }
+    if receipt_path.contains(':') || receipt_path.starts_with('/') {
+        return false;
+    }
+    if cfg!(target_os = "windows") {
+        active_path
+            .to_ascii_lowercase()
+            .ends_with(&format!("/{}", receipt_path.to_ascii_lowercase()))
+    } else {
+        active_path.ends_with(&format!("/{receipt_path}"))
+    }
+}
+
+fn review_source_paths_equal(left: &str, right: &str) -> bool {
+    if cfg!(target_os = "windows") {
+        left.eq_ignore_ascii_case(right)
+    } else {
+        left == right
+    }
+}
+
+fn normalize_review_source_path(path: &str) -> String {
+    path.replace('\\', "/")
+        .trim_start_matches("./")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 fn string_array_contains(root: &Value, pointer: &str, expected: &str) -> bool {

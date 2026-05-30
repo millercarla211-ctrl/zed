@@ -100,7 +100,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       sourceDigest: contractByteLimit("max_source_digest_bytes"),
       previewKind: contractByteLimit("max_preview_kind_bytes"),
       previewAnatomyPart: contractByteLimit("max_preview_anatomy_part_bytes"),
-      previewAnatomyParts: contractByteLimit("max_preview_anatomy_parts")
+      previewAnatomyParts: contractByteLimit("max_preview_anatomy_parts"),
+      dryRunEditPreviews: contractByteLimit("max_dry_run_edit_previews"),
+      dryRunReplacementText: contractByteLimit("max_dry_run_replacement_text_bytes")
     };
     const sourceDigestPrefix = "fnv1a64:";
     const expectedContextSchema = sourceApplyContract.active_context_schema || "zed.dx_style.active_context.v1";
@@ -430,6 +432,19 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         : null;
     }
 
+    function sourceLengthReady(context) {
+      return Number.isInteger(context?.source_len_bytes) && context.source_len_bytes >= 0;
+    }
+
+    function sourceSpanReady(context) {
+      const start = context?.source_span?.start_byte;
+      const end = context?.source_span?.end_byte;
+      if (!Number.isInteger(start) || !Number.isInteger(end)) return false;
+      if (start > end) return false;
+      if (!sourceLengthReady(context)) return false;
+      return end <= context.source_len_bytes;
+    }
+
     function exceedsContractLimit(value, limit) {
       return Number.isInteger(limit) && utf8ByteLength(value) > limit;
     }
@@ -472,13 +487,22 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && sourceSpanBytes > sourceApplyByteLimits.sourceSpan) {
         diagnostics.push("source_span_exceeds_contract_limit");
       }
+      if (Number.isInteger(context?.source_span?.start_byte)
+        && Number.isInteger(context?.source_span?.end_byte)
+        && context.source_span.start_byte > context.source_span.end_byte) {
+        diagnostics.push("source_span_start_exceeds_end");
+      }
+      if (sourceLengthReady(context)
+        && Number.isInteger(context?.source_span?.end_byte)
+        && context.source_span.end_byte > context.source_len_bytes) {
+        diagnostics.push("source_span_exceeds_source_length");
+      }
       return diagnostics;
     }
 
     function sourceDigestReady(context) {
       return typeof context?.source_digest === "string"
-        && context.source_digest.startsWith(sourceDigestPrefix)
-        && context.source_digest.length > sourceDigestPrefix.length;
+        && new RegExp(`^${sourceDigestPrefix}[0-9a-fA-F]{16}$`).test(context.source_digest);
     }
 
     function reverseCssDeltaContractDiagnostics() {
@@ -572,6 +596,8 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
         || !Number.isInteger(context.source_span?.end_byte)) {
         return "missing_source_span";
       }
+      if (!sourceLengthReady(context)) return "missing_source_length";
+      if (!sourceSpanReady(context)) return "invalid_source_span";
       if (!sourceDigestReady(context)) return "missing_or_invalid_source_digest";
       const payloadDiagnostics = sourceApplyPayloadDiagnostics(context, output);
       if (payloadDiagnostics.length) return payloadDiagnostics[0];
@@ -634,6 +660,8 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
         || !Number.isInteger(context.source_span?.end_byte)) {
         return "missing_source_span";
       }
+      if (!sourceLengthReady(context)) return "missing_source_length";
+      if (!sourceSpanReady(context)) return "invalid_source_span";
       if (!sourceDigestReady(context)) return "missing_or_invalid_source_digest";
       const payloadDiagnostics = sourceApplyPayloadDiagnostics(context, output);
       if (payloadDiagnostics.length) return payloadDiagnostics[0];
@@ -852,6 +880,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           source_path: zedStyleContext?.source_path || null,
           source_span: zedStyleContext?.source_span || null,
           source_digest: zedStyleContext?.source_digest || null,
+          source_len_bytes: zedStyleContext?.source_len_bytes || null,
           token: zedStyleContext?.token || null,
           css_property: zedStyleContext?.css_property || null,
           css_source_edit_safety: zedStyleContext?.css_source_edit_safety || null,
@@ -883,6 +912,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           contract_schema: sourceApplyContractSchema,
           receipt_schema: sourceApplyReceiptSchema,
           mutation_enabled: sourceApplyMutationEnabled,
+          source_apply_session: sourceApplySessionReviewPacket(),
           review_receipt_fields: sourceApplyReviewReceiptFields,
           css_declaration_dry_run_contract: {
             schema: cssDeclarationDryRunSchema,
@@ -915,15 +945,47 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           receipt_match: "no_apply_gate",
           receipt_path: null,
           receipt_summary: null,
+          structured_edit_preview_count: 0,
+          structured_edit_previews: [],
           receipt_mismatch: null
         };
       }
+      const structuredEditPreviews = dryRunStructuredEditPreviews(applyGate);
       return {
         trusted_receipt_present: applyGate.trusted_dry_run_receipt_present === true,
         receipt_match: applyGate.receipt_match || "unknown",
         receipt_path: applyGate.receipt_path || null,
         receipt_summary: applyGate.receipt_summary || null,
+        structured_edit_preview_count: structuredEditPreviews.length,
+        structured_edit_previews: structuredEditPreviews,
         receipt_mismatch: applyGate.receipt_mismatch || null
+      };
+    }
+
+    function dryRunStructuredEditPreviews(applyGate) {
+      const previews = Array.isArray(applyGate?.receipt_summary?.edit_previews)
+        ? applyGate.receipt_summary.edit_previews
+        : [];
+      const limit = Number.isInteger(sourceApplyByteLimits.dryRunEditPreviews)
+        ? sourceApplyByteLimits.dryRunEditPreviews
+        : 3;
+      return previews.slice(0, limit).map((edit) => ({
+        source_path: edit?.source_path || null,
+        start_byte: Number.isInteger(edit?.start_byte) ? edit.start_byte : null,
+        end_byte: Number.isInteger(edit?.end_byte) ? edit.end_byte : null,
+        replacement_text: typeof edit?.replacement_text === "string" ? edit.replacement_text : null,
+        replacement: edit?.replacement || null
+      }));
+    }
+
+    function sourceApplySessionReviewPacket() {
+      const tokenByteLength = utf8ByteLength(sourceApplySessionToken || "");
+      return {
+        kind: sourceApplySessionKind,
+        token_present: typeof sourceApplySessionToken === "string" && sourceApplySessionToken.length > 0,
+        token_byte_length: tokenByteLength,
+        within_contract_limit: !sourceApplyMaxSessionTokenBytes
+          || tokenByteLength <= sourceApplyMaxSessionTokenBytes
       };
     }
 
@@ -985,7 +1047,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         : `<span>No edit preview lines were included in the trusted receipt.</span>`;
       const structuredEditItems = Array.isArray(summary.edit_previews) && summary.edit_previews.length
         ? `<ul>${summary.edit_previews.map((edit) =>
-            `<li>${escapeHtml(edit.source_path || "unknown source")}:${Number(edit.start_byte || 0)}..${Number(edit.end_byte || 0)} -> ${escapeHtml(edit.replacement || "missing replacement")}</li>`
+            `<li>${escapeHtml(edit.source_path || "unknown source")}:${Number(edit.start_byte || 0)}..${Number(edit.end_byte || 0)} -> ${escapeHtml(edit.replacement_text || edit.replacement || "missing replacement")}</li>`
           ).join("")}</ul>`
         : "";
       patchReviewEl.innerHTML = `
@@ -1105,6 +1167,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>CSS max</dt><dd>${sourceApplyByteLimits.css || "unknown"} bytes</dd>
           <dt>Span max</dt><dd>${sourceApplyByteLimits.sourceSpan || "unknown"} bytes</dd>
           <dt>Digest max</dt><dd>${sourceApplyByteLimits.sourceDigest || "unknown"} bytes</dd>
+          <dt>Dry-run edits max</dt><dd>${sourceApplyByteLimits.dryRunEditPreviews || "unknown"} preview(s)</dd>
+          <dt>Replacement max</dt><dd>${sourceApplyByteLimits.dryRunReplacementText || "unknown"} bytes</dd>
           <dt>Preview kind max</dt><dd>${sourceApplyByteLimits.previewKind || "unknown"} bytes</dd>
           <dt>Preview anatomy max</dt><dd>${sourceApplyByteLimits.previewAnatomyParts || "unknown"} part(s)</dd>
         </dl>
@@ -1445,6 +1509,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `source_apply_max_generator_id_bytes: ${sourceApplyByteLimits.generator || "unknown"}`,
         `source_apply_max_source_span_bytes: ${sourceApplyContract.max_source_span_bytes || "unknown"}`,
         `source_apply_max_source_digest_bytes: ${sourceApplyByteLimits.sourceDigest || "unknown"}`,
+        `source_apply_max_dry_run_edit_previews: ${sourceApplyByteLimits.dryRunEditPreviews || "unknown"}`,
+        `source_apply_max_dry_run_replacement_text_bytes: ${sourceApplyByteLimits.dryRunReplacementText || "unknown"}`,
         `source_apply_max_preview_kind_bytes: ${sourceApplyByteLimits.previewKind || "unknown"}`,
         `source_apply_max_preview_anatomy_part_bytes: ${sourceApplyByteLimits.previewAnatomyPart || "unknown"}`,
         `source_apply_max_preview_anatomy_parts: ${sourceApplyByteLimits.previewAnatomyParts || "unknown"}`,

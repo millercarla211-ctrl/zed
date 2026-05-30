@@ -72,6 +72,8 @@ fn source_apply_fixture_to_web_preview_json(fixture: Value, source_path: &str) -
         "max_source_span_bytes": fixture.get("max_source_span_bytes")?.as_u64()?,
         "max_source_digest_bytes": fixture.get("max_source_digest_bytes")?.as_u64()?,
         "max_source_apply_session_token_bytes": fixture.get("max_source_apply_session_token_bytes")?.as_u64()?,
+        "max_dry_run_edit_previews": fixture.get("max_dry_run_edit_previews")?.as_u64()?,
+        "max_dry_run_replacement_text_bytes": fixture.get("max_dry_run_replacement_text_bytes")?.as_u64()?,
         "max_preview_kind_bytes": fixture.get("max_preview_kind_bytes")?.as_u64()?,
         "max_preview_anatomy_part_bytes": fixture.get("max_preview_anatomy_part_bytes")?.as_u64()?,
         "max_preview_anatomy_parts": fixture.get("max_preview_anatomy_parts")?.as_u64()?,

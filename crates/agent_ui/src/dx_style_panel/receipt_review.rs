@@ -8,6 +8,7 @@ use super::source_digest::{
 
 const DRY_RUN_EDIT_SUMMARY_LIMIT: usize = 3;
 const DRY_RUN_EDIT_PREVIEW_CHARS: usize = 120;
+const MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096;
 const GROUPED_CLASS_DRY_RUN_RECEIPT_SCHEMA: &str = "dx.style.grouped-class-dry-run-receipt";
 
 pub(super) struct TrustedDryRunReceipt {
@@ -34,6 +35,7 @@ pub(super) struct StyleDryRunEditPreview {
     start_byte: usize,
     end_byte: usize,
     replacement: String,
+    replacement_text: String,
 }
 
 pub(super) fn trusted_receipt(path: PathBuf, value: &Value) -> Option<TrustedDryRunReceipt> {
@@ -92,6 +94,7 @@ impl StyleDryRunEditPreview {
             "start_byte": self.start_byte,
             "end_byte": self.end_byte,
             "replacement": self.replacement,
+            "replacement_text": self.replacement_text,
         })
     }
 }
@@ -173,20 +176,19 @@ fn receipt_edit_preview(edit: &Value) -> Option<StyleDryRunEditPreview> {
     let end_byte = edit
         .pointer("/span/end/byte_offset")
         .and_then(Value::as_u64)? as usize;
-    if start_byte > end_byte {
+    (start_byte <= end_byte).then_some(())?;
+    let replacement_text = edit.get("replacement_text").and_then(Value::as_str)?;
+    if replacement_text.is_empty() || replacement_text.len() > MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES {
         return None;
     }
-    let replacement = edit
-        .get("replacement_text")
-        .and_then(Value::as_str)
-        .map(compact_replacement_preview)
-        .unwrap_or_else(|| "missing replacement".to_string());
+    let replacement = compact_replacement_preview(replacement_text);
 
     Some(StyleDryRunEditPreview {
         source_path: source_path.to_string(),
         start_byte,
         end_byte,
         replacement,
+        replacement_text: replacement_text.to_string(),
     })
 }
 
