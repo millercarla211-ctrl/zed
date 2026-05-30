@@ -1,0 +1,95 @@
+{
+  "schema": "dx.style.grouped-class-reverse-css-delta-contract",
+  "schema_version": 1,
+  "scope": "review-only generated CSS declaration deltas back to grouped atomic utilities",
+  "fixture_path": "fixtures/grouped-class-reverse-css-delta-contract.json",
+  "source_mutation_enabled": false,
+  "editor_write_bridge_required": true,
+  "reverse_css_map_required": true,
+  "source_apply_contract_required": true,
+  "supported_properties": [
+    {
+      "property": "background-color",
+      "utility_prefix": "bg-",
+      "token_prefix": "var(--color-"
+    },
+    {
+      "property": "color",
+      "utility_prefix": "text-",
+      "token_prefix": "var(--color-"
+    },
+    {
+      "property": "border-color",
+      "utility_prefix": "border-",
+      "token_prefix": "var(--color-"
+    },
+    {
+      "property": "border-radius",
+      "utility_prefix": "rounded-",
+      "token_prefix": "var(--radius-"
+    },
+    {
+      "property": "padding-inline",
+      "utility_prefix": "px-",
+      "token_prefix": "calc(var(--spacing) * "
+    },
+    {
+      "property": "padding-block",
+      "utility_prefix": "py-",
+      "token_prefix": "calc(var(--spacing) * "
+    },
+    {
+      "property": "gap",
+      "utility_prefix": "gap-",
+      "token_prefix": "calc(var(--spacing) * "
+    }
+  ],
+  "required_editor_guards": [
+    "reverse CSS map receipt match",
+    "generated CSS declaration delta validation",
+    "reverse CSS delta preview provenance match",
+    "active source digest match",
+    "source apply contract match",
+    "editor write bridge can_apply",
+    "explicit user apply action"
+  ],
+  "required_preview_provenance_fields": [
+    "group_alias",
+    "group_registry_receipt",
+    "reverse_css_map_receipt",
+    "reverse_css_map_status",
+    "group_expansion_status",
+    "group_source_state",
+    "group_utility_count"
+  ],
+  "consumers": [
+    "Zed Web Preview",
+    "Zed Style panel",
+    "Friday",
+    "dx-check"
+  ],
+  "example_preview": {
+    "alias": "button",
+    "property": "background-color",
+    "value": "var(--color-secondary)",
+    "target_utility": "bg-secondary",
+    "replacement_utilities": [
+      "inline-flex",
+      "items-center",
+      "justify-center",
+      "rounded-md",
+      "bg-secondary",
+      "text-primary-foreground",
+      "px-4",
+      "py-2"
+    ],
+    "replacement_source_declaration": "@button(inline-flex items-center justify-center rounded-md bg-secondary text-primary-foreground px-4 py-2)",
+    "status": "ready_for_review",
+    "reason": "generated declaration can be reviewed as a grouped atomic utility delta",
+    "source_mutation_enabled": false
+  },
+  "notes": [
+    "This fixture lets Web Preview generators preview a CSS declaration delta as source-owned grouped atomics.",
+    "This fixture is review evidence only; it must not enable mutation while source_mutation_enabled is false."
+  ]
+}

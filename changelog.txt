@@ -1,3 +1,151 @@
+[2026-05-30] - DX Style Trusted Group Registry Receipts
+
+ADDED:
+- `docs/superpowers/plans/2026-05-30-dx-style-production-completion-plan.md` records the completion plan, scorecard, tried work, remaining gaps, six-agent audit split, source-only verification commands, and professional commit boundary for the DX Style Web Preview sidebar lane.
+- `G:\Dx\style\src\core\engine\grouped_class_registry_receipt.rs` defines the source-owned grouped-class registry receipt contract for trusted alias-to-atomic expansion.
+- `G:\Dx\style\src\core\engine\grouped_class_reverse_css_map.rs` defines the source-owned reverse CSS map receipt contract for generated grouped CSS to atomic utility review.
+- `G:\Dx\style\src\core\engine\grouped_class_reverse_css_delta.rs` defines the source-owned review-only contract for generated CSS declaration deltas back to grouped atomic utilities.
+- `G:\Dx\style\fixtures\grouped-class-registry-receipt.json` mirrors a trusted group registry receipt for source-only review.
+- `G:\Dx\style\fixtures\grouped-class-reverse-css-map.json` mirrors a trusted reverse CSS map receipt for source-only review.
+- `G:\Dx\style\fixtures\grouped-class-reverse-css-delta-contract.json` mirrors the reverse CSS declaration-delta contract for Web Preview review.
+- `crates/web_preview/src/dx_style_generator_surface/reverse_css_delta_contract.rs` loads the DX Style reverse CSS delta fixture before falling back to an embedded generated mirror.
+- `crates/web_preview/src/dx_style_generator_surface/reverse-css-delta-contract.generated.json` mirrors the source-owned reverse CSS delta contract for offline Web Preview review.
+- `crates/agent_ui/src/dx_style_panel/group_registry.rs` scans bounded trusted registry receipts from the DX Style receipt roots without running DX Style.
+- `G:\Dx\style\src\core\engine\css_declaration_dry_run.rs` and `G:\Dx\style\fixtures\css-declaration-dry-run-contract.json` define the source-owned review-only CSS declaration dry-run contract.
+- `crates/web_preview/src/dx_style_generator_surface/css_declaration_dry_run_contract.rs` mirrors the CSS declaration dry-run contract into the Web Preview generator cockpit before falling back to the embedded generated fixture.
+- DX Style rebuilds now write the latest registry snapshot to `.dx/receipts/style/grouped-class-registry-latest.json`, including empty snapshots to prevent stale alias expansion.
+- DX Style rebuilds now also write `.dx/receipts/style/grouped-class-reverse-css-map-latest.json` so Web Preview can review generated grouped CSS provenance beside the alias registry.
+
+CHANGED:
+- Zed grouped-class context now expands alias-only calls such as `button()` only when a trusted `dx.style.grouped-class-registry-receipt` is present, and forwards the registry receipt path into Web Preview context.
+- Zed now looks for project-local registry receipts near the active file before the DX fallback roots and uses the freshest trusted registry receipt as one snapshot instead of merging older receipt files.
+- Zed now reads the sibling reverse CSS map receipt in a bounded source-only pass and forwards its review status into the active grouped-class Web Preview context.
+- Web Preview grouped-class review now shows the registry and reverse CSS map receipt sources when alias expansion is receipt-backed.
+- Zed source readiness now surfaces the reverse CSS delta contract and source-apply guards for generated declaration-delta validation while keeping Web Preview as the visual generator host.
+- Web Preview now displays reverse CSS delta contract source, supported declaration mappings, required guards, and the example generated-CSS-to-atomic target beside the source-apply review surface.
+- Web Preview source-apply review receipts now carry the reverse CSS delta contract summary and refuse review payloads whose source-apply contract is missing reverse-map or declaration-delta guards.
+- The reverse CSS delta contract now includes spacing/layout mappings for `padding-inline`, `padding-block`, and `gap`, enabling review targets such as `px-4`, `py-2`, and `gap-4` from DX Style generated spacing declarations.
+- Reverse delta utility-family matching now preserves border width/style utilities when reviewing `border-color` changes.
+- Web Preview now computes a live reverse CSS delta preview from current generated CSS and active grouped utilities, and native source-apply review receipts summarize that preview separately from the contract.
+- Live reverse CSS delta previews now include grouped-class provenance fields, including group alias, registry receipt, reverse CSS map receipt/status, group expansion state, source state, and grouped utility count.
+- Native source-apply review now validates reverse CSS delta preview provenance against the active Zed group context, with named refusals for stale or forged alias, receipt, reverse-map, expansion, or utility-count metadata.
+- DX Style's reverse-delta and source-apply contracts now require the reverse-delta preview provenance-match guard, and the reverse-delta fixture lists the preview provenance fields mirrored into Zed.
+- Native source-apply review now iterates the DX Style contract's required preview provenance fields and refuses unsupported field names as contract drift.
+- Web Preview now reports reverse-delta provenance contract diagnostics before IPC so provenance drift is visible in the generator cockpit.
+- Web Preview now reports live reverse-delta preview provenance diagnostics before IPC so active-context mismatch is visible separately from contract drift.
+- The context-aware Style generator URL now bounds, parses, and script-safely embeds the GPUI-provided active editor context before inserting it into the Web Preview page, converting malformed or oversized payloads into explicit read-only blocked context instead of an unbounded data URL or silent null state.
+- The Web Preview generator cockpit now filters the source-owned visual generator catalog by id, label, category, and hint text, keeping the growing generator list navigable without turning GPUI into the generator UI.
+- DX Style visual generator recipes now expose source-owned preview kinds, a supported preview-part list, and preview anatomy parts. The Web Preview surface validates and renders richer preview anatomy from that metadata for layout, motion, text, and color generators without hardcoded generator-id or preview-structure branches.
+- Web Preview now forwards DX Style catalog `preferred_output` and `source_edit_safety` into generator rows, patch review, and diagnostics so edit safety remains source-owned and visible.
+- Web Preview now exposes copy actions for generated class output, generated CSS, and a structured generator review packet containing source context, edit-safety metadata, source-apply state, reverse CSS delta preview, and metadata diagnostics.
+- Web Preview now separates native source review from mutation: the `Review source` button can send bounded review-only `dx-style-source-apply` IPC to Zed's native receipt handler, while `Apply` remains gated on a mutation-enabled contract, trusted receipt, editor write bridge, and native writer.
+- Native source-apply review receipts now preserve `dry_run_review` evidence from the active apply gate, including trusted receipt presence, match state, receipt path, receipt summary, and mismatch diagnostics. DX Style's source-apply contract now names `dry_run_review` and `mutation_ready` as expected review receipt fields, and copied Web Preview review packets include the same dry-run review block.
+- Native source-apply review receipts now preserve bounded `preview_output` metadata from Web Preview generator output, including source-owned preview kind and preview anatomy parts, so visual review state is part of the source-apply evidence.
+- DX Style's source-apply contract now publishes preview output caps for preview kind, preview anatomy part bytes, and preview anatomy part count. Web Preview reports those caps before IPC, and native review validates the same values before preserving `preview_output`.
+- Source-apply review now requires a bounded `fnv1a64:` active source digest in the Web Preview context, and the native review receipt validates the digest prefix plus source-owned byte limit before treating a request as complete source identity.
+- Trusted dry-run receipt summaries now include structured edit previews with source path, byte span, and replacement text, and Web Preview renders those exact future patch targets in the read-only patch review.
+- Zed active style context, Web Preview review packets, and native source-apply review receipts now carry `context_kind` plus DX Style-owned CSS declaration `source_edit_safety`; CSS declaration contexts can be reviewed by Web Preview but remain blocked from mutation until a CSS-specific dry-run/apply contract exists.
+- Web Preview now surfaces the CSS declaration dry-run contract schema, source, required context fields, accepted source-edit safety values, and diagnostics in the generator cockpit; native source-apply review receipts include the same contract summary while refusing CSS mutation without a trusted CSS declaration dry-run receipt.
+- Web Preview now derives a CSS declaration dry-run preview from the current generator CSS output for CSS declaration contexts and forwards the proposed declaration into copied review packets and native source-apply review receipts.
+- Web Preview and native source-apply review now enforce the CSS declaration dry-run contract's `max_declaration_bytes` cap before preserving a proposed declaration as review evidence.
+- Web Preview now gates both native source review and future source apply on CSS declaration dry-run preview diagnostics, so oversized proposed declarations are blocked before any native IPC handoff.
+- Copied Web Preview review packets now include CSS declaration dry-run diagnostics, preview diagnostics, and the declaration byte cap beside the proposed declaration, so blocked generator handoffs remain inspectable without native runtime proof.
+- Native source-apply receipts now preserve CSS declaration dry-run diagnostics, preview diagnostics, and the source-owned declaration byte cap, and refuse forged review payloads that carry non-empty CSS dry-run diagnostics.
+- Native source-apply review now validates that the source-owned contract names the CSS declaration diagnostic and preview receipt fields before treating the review payload as contract-aligned.
+- DX Style's CSS declaration dry-run contract now names the CSS dry-run diagnostic and preview-diagnostic receipt fields, and Zed mirrors that fixture into the Web Preview generator surface.
+- Web Preview now renders CSS declaration dry-run review receipt fields in the contract review surface, copied review packets include the CSS dry-run receipt schema and field list, and native receipts preserve that source-owned field list.
+- DX Style's CSS declaration dry-run contract now publishes diagnostic count and byte caps, Web Preview reports those caps, and native review validates them before preserving CSS dry-run diagnostic arrays.
+- Web Preview now reports and preflights CSS declaration dry-run source path/span/digest caps, copied review packets preserve them, and native source-apply review validates the same source-owned caps before accepting CSS dry-run contract evidence.
+- Native source-apply review now reports CSS declaration dry-run contract cap drift by the CSS dry-run contract name, so source-only handoffs can distinguish CSS dry-run policy drift from grouped-class source-apply contract drift.
+- The native Style sidebar now enables its context-aware Web Preview generator button only when the DX Style generator surface, browser script, context action, and review-only `dx-style-source-apply` handler are all discoverable in source, using a bounded streaming marker scan for the large Web Preview host file.
+- `script/dx-style-panel-source.test.ts` now extracts the embedded DX Style Web Preview generator browser script, substitutes fixture-shaped JSON for embed placeholders, and verifies the script parses without launching Zed, WebView runtime, Cargo, or `just run`.
+
+NOTES:
+- This preserves the architecture decision: GPUI is the native sidebar shell and Web Preview is the visual CSS generator cockpit. Source mutation remains disabled.
+- No `just run`, Cargo, server, browser automation, or build proof was run in this source-only slice.
+
+[2026-05-30] - DX Style Group Context Web Preview Contract
+
+ADDED:
+- `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` defines the source-owned read-only grouped-class Web Preview context contract for `alias()`, `alias(atomic utilities)`, `@alias(atomic utilities)`, and static atomic-list candidates.
+- `G:\Dx\style\fixtures\grouped-class-web-preview-context.json` mirrors the contract for source-only Zed/Web Preview review.
+- `crates/web_preview/src/dx_style_generator_surface/group_context_contract.rs` loads the DX Style group-context fixture before falling back to an embedded generated mirror.
+- `crates/web_preview/src/dx_style_generator_surface/group-context-contract.generated.json` mirrors the source-owned group-context fixture through the existing sync helper.
+- `crates/agent_ui/src/dx_style_panel/group_context.rs` derives bounded active group context from static class/className tokens without mutating source.
+
+CHANGED:
+- The Web Preview generator surface now receives the group-context contract, shows grouped-class context review, and can prioritize generators from inline group utilities before falling back to the active token or class-list hints.
+- Zed active style context now serializes `group_context` in `zed.dx_style.active_context.v1`, marking alias-only calls such as `button()` as requiring a project group registry receipt before expansion.
+- The native DX Style right-dock summary now shows grouped-class context beside token, class-list, CSS, and apply-gate state while keeping GPUI as the shell and Web Preview as the visual generator cockpit.
+- `G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs` now checks or writes the Zed Web Preview group-context contract mirror.
+- `G:\Dx\style\README.md`, `G:\Dx\style\PLAN.md`, `DX.md`, `todo.txt`, and `script/dx-style-panel-source.test.ts` now record and guard the group-context Web Preview architecture.
+
+NOTES:
+- This is still source-only. It does not run `just run`, Cargo, a dev server, browser automation, or live WebView validation.
+
+[2026-05-30] - DX Style Panel Read Model Source Guard
+
+ADDED:
+- `script/dx-style-panel-source.test.ts` now guards the adjacent `G:\Dx\style` grouped-class read-model contract, the Zed read-only Style panel phase contract, and source-truth guardrails.
+- `G:\Dx\style\fixtures\grouped-class-dry-run-receipt-fixtures.json` adds matched, path-mismatch, span-mismatch, and digest-mismatch examples for the trusted dry-run receipt applicability contract.
+- `crates/agent_ui/src/dx_style_panel.rs` adds a source-only DX Style snapshot that reads the real `G:\Dx\style` plan, grouped-class contract, visual-generator catalog, grouped-class read model, and Zed Web Preview style-edit bridge readiness.
+- `crates/agent_ui/src/dx_style_panel/readiness.rs` adds typed readiness counts for DX Style docs, contracts, fixtures, artifacts, and receipt roots without launching DX Style or running build/check commands.
+- `crates/agent_ui/src/dx_launch_workspace/style_panel.rs` adds the native GPUI rail shell for Style status, with Web Preview explicitly treated as the visual generator host.
+- `crates/agent_ui/src/dx_style_panel/panel.rs` adds a real right-dock DX Style GPUI shell with active file style relevance, source-backed readiness rows, and a wired Web Preview generator action.
+- `crates/agent_ui/src/dx_style_panel/css_cursor_context.rs` adds read-only CSS declaration hints for visual generator prioritization in CSS files.
+- `crates/agent_ui/src/dx_style_panel/css_hint_catalog.rs` consumes the DX Style-owned CSS declaration hint mirror instead of hardcoding CSS property policy in Zed.
+- `crates/agent_ui/src/dx_style_panel/css-declaration-hint-catalog.generated.json` mirrors `G:\Dx\style\fixtures\visual-generator-css-declaration-hint-catalog.json` for cursor-time lookup.
+- `crates/agent_ui/src/dx_style_panel/panel_view.rs` keeps the dock panel render surface split from panel registration and active-file context lookup.
+- `crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs` adds an explicit not-enabled editor source-write bridge contract so Apply remains blocked by named state rather than a hidden boolean.
+- `crates/agent_ui/src/dx_style_panel/readiness/expected_files.rs` splits the DX Style readiness expected-file registry out of the scanner so the new preflight contract does not bloat the readiness module.
+- `crates/agent_ui/src/dx_style_panel/cursor_context_tokens.rs` adds a bounded static class-list token collector so Web Preview can prioritize generators from the surrounding className without broad source mutation.
+- `crates/agent_ui/src/dx_style_panel/source_digest.rs` keeps the shared grouped-class source digest constants and hasher separate from cursor scanning.
+- `crates/agent_ui/src/dx_style_panel/panel_metric.rs` keeps repeated summary-row rendering outside the right-dock panel view.
+- `crates/zed_actions/src/lib.rs` adds `dx_style::OpenGeneratorPreview` as the neutral action boundary between the GPUI Style shell and Web Preview.
+- `crates/web_preview/src/dx_style_generator_surface.rs` adds the first local Web Preview DX Style generator surface with the 25-generator catalog, live preview controls, generated class/CSS output, and honest source-apply gating.
+- `crates/web_preview/src/dx_style_generator_surface/catalog.rs` owns the first-25 visual generator catalog used by the local Web Preview surface instead of embedding the catalog directly in the HTML script.
+- `crates/web_preview/src/dx_style_generator_surface/style.rs` and `script.rs` split the Web Preview generator surface CSS and JavaScript out of the Rust HTML host so visual generator work has clearer ownership.
+- `crates/web_preview/src/dx_style_generator_surface/catalog.rs` now owns token hints for cursor-aware generator prioritization, replacing the Web Preview script's hardcoded token-to-generator if-chain.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now surfaces catalog/control/recipe metadata alignment diagnostics so partial DX Style fixture drift is visible inside the Web Preview generator output.
+- `crates/web_preview/src/dx_style_generator_surface.rs` adds a Web Preview metadata badge so aligned vs drifted DX Style generator metadata is visible without opening the raw output block.
+- `G:\Dx\style\src\core\engine\visual_generator_recipe_catalog.rs` now exposes source-owned runtime template value keys, and the checked-in recipe fixture/mirror carry those keys for Zed Web Preview validation.
+- `crates/web_preview/src/dx_style_generator_surface/recipes.rs` forwards recipe runtime value keys from the DX Style fixture into the Web Preview metadata payload.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now requires a real native `window.__DX_STYLE_SOURCE_APPLY__` handler before enabling source Apply, preventing a future partially-ready bridge from becoming an enabled no-op button.
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and its fixture now name `window.__DX_STYLE_SOURCE_APPLY__` as a source-owned native handler requirement for future editor writes.
+- `crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs` now reads the DX Style write-bridge preflight fixture with bounded JSON parsing instead of duplicating the receipt/guard/native-handler checklist in Zed.
+- `crates/agent_ui/src/dx_style_panel/active_context.rs` now serializes a dedicated `source_path` field into Web Preview context JSON so future native apply code does not have to infer source identity from display/detail text.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now requires that dedicated `source_path` before source Apply can become ready and forwards it as a top-level native apply payload field.
+- `crates/agent_ui/src/dx_style_panel/active_context.rs` now exposes contextual Web Preview generator eligibility so the dock panel can distinguish style-bearing editor context from unrelated files.
+- `script/dx-style-panel-source.test.ts` now guards the Web Preview metadata-alignment diagnostics and Apply gating for drifted visual-generator metadata.
+
+CHANGED:
+- The DX launch workspace right rail now includes a source-backed Style section wired through `agent_panel.rs` and `dx_launch_workspace.rs`.
+- `agent_ui::init` now registers the DX Style dock panel and `dx_style::TogglePanel` without adding a direct `agent_ui -> web_preview` dependency cycle.
+- `crates/web_preview/src/web_preview_view.rs` now registers the DX Style generator action and opens the local generator surface in a side Web Preview pane.
+- The Style rail `Open Generators` button dispatches the real Web Preview generator action and stays disabled until the style-edit bridge is source-detected.
+- The Web Preview Style generator surface now emits generator-specific preview CSS/class output for gradient, effect, shape, transform, motion, grid/flex, and responsive catalog entries instead of reusing one generic category output.
+- Trusted dry-run receipt scanning now filters receipt files, sorts them newest-first, and then applies the scan cap so active-source matching does not miss the most recent receipts in a growing receipt directory.
+- The Style apply gate now serializes editor write-bridge state and reason to both GPUI and Web Preview review surfaces while keeping source writes disabled.
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` adds the source-owned `dx.style.grouped-class-editor-write-bridge-preflight` checklist, and Zed readiness now tracks it before any future source mutation can be enabled.
+- `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` mirrors the mutation-disabled write-bridge checklist for source-only review, and the Web Preview patch review now shows required receipts/guards from the apply-gate bridge snapshot.
+- The Web Preview Style generator surface keeps Apply gated when catalog, control, and recipe metadata drift apart, preserving read-only safety for live or overridden DX Style fixture sets.
+- The Web Preview Style generator surface now leaves unsupported recipe placeholders visible and counts them in metadata drift instead of replacing unknown `{placeholder}` values with empty strings.
+- The Web Preview Style generator output now reports native apply-handler readiness and final source-apply readiness separately from dry-run receipt readiness.
+- GPUI and Web Preview write-bridge summaries now show required native handlers beside required receipts and editor guards while source mutation remains disabled.
+- The right-dock Style panel's context-aware generator button now requires both Web Preview readiness and a style-bearing active editor context, while the launch rail still provides the neutral global generator entry.
+- Native Style panel and launch-rail controls now label the generator action as Web Preview generators, matching the GPUI-shell/Web-Preview-canvas ownership boundary.
+- Zed active style context now serializes bounded `attribute_tokens` for static class/className attributes, and Web Preview uses them as a fallback generator hint when the cursor is between tokens or inside a static class list.
+- Web Preview suggestion diagnostics now distinguish generators chosen from the exact cursor token from generators chosen from the surrounding static class-list fallback.
+- Zed active style context now maps recognized CSS declarations, such as gradients, shadows, filters, masks, transforms, grid/flex layout, and spacing/sizing declarations, to read-only Web Preview generator hints without enabling CSS source mutation.
+- DX Style now owns the CSS declaration hint contract through `src/core/engine/visual_generator_css_hint_catalog.rs`, and the source-side mirror helper keeps Zed's generated hint mirror aligned.
+- `DX.md` and `script/dx-handoff-source-guard-registry.test.ts` now register the DX Style panel/read-model guard in the lightweight source-guard registry.
+- `todo.txt` now records this source-only Subagent 6 guard pass and the skipped runtime/build proof.
+
+NOTES:
+- Style generator controls are intentionally not hand-built as GPUI widgets; GPUI stays the dock/status shell and the visual CSS generators belong in Web Preview.
+- Passed source-only verification: targeted `rustfmt --edition 2024 --check`, `node --test script/dx-style-panel-source.test.ts script/dx-launch-workspace-source.test.ts script/dx-handoff-source-guard-registry.test.ts`, conflict-marker scans, stale path scans, and `git diff --check`.
+- Verification stays source-only in this lane. Skipped Cargo build/check/test/clippy, `just run`, npm builds, local servers, destructive git commands, browser automation, and runtime proof by direct instruction.
+
 [2026-05-29] - Web Preview Onboarding And Media Explorer Lane
 
 ADDED:
@@ -10901,3 +11049,67 @@ NOTES:
 - Skipped `just run`, Cargo commands, just check/build/fmt/lint, local servers/apps, browser automation, and live editor/runtime proof by direct instruction.
 - Subagent 6 review note: the shared onboarding call and Windows/macOS/Linux WebPreview constructors now all carry the onboarding completion callback after parallel edits; compile/runtime proof is still intentionally unrun.
 - Subagent 6 review note: project-panel media preview and right-dock stack controls now have source files and real call sites; remaining risk is runtime validation and background audio/video metadata quality, not missing wiring.
+
+[2026-05-30] - DX Style Web Preview Sidebar Context
+
+ADDED:
+- Added `G:\Dx\style\src\core\engine\grouped_class_source_digest.rs` with the shared `fnv1a64:` source digest contract for dry-run receipts and Zed active-buffer matching.
+- Added `G:\Dx\style\src\core\engine\grouped_class_cursor_context.rs` with a read-only cursor-token grouped-class context contract for editor consumers.
+- Added `G:\Dx\style\src\core\engine\grouped_class_dry_run_receipt.rs` with the trusted dry-run receipt contract required before editor source writes.
+- Added `crates/agent_ui/src/dx_style_panel/apply_gate.rs` to scan bounded DX Style receipt roots and compute an honest apply gate.
+- Added `crates/agent_ui/src/dx_style_panel/receipt_match.rs` to keep active-source receipt matching and bounded mismatch diagnostics separate from receipt parsing.
+- Added `crates/agent_ui/src/dx_style_panel/receipt_review.rs` to keep trusted dry-run patch-review summary parsing out of the gate scanner.
+- Added `crates/agent_ui/src/dx_style_panel/active_context.rs` so the Zed Style panel can read active editor style context without running dx-style or applying edits.
+- Added `zed_actions::dx_style::OpenGeneratorPreviewForContext` so the native panel can open the Web Preview generator surface with read-only source-context JSON.
+
+CHANGED:
+- `crates/web_preview/src/dx_style_generator_surface.rs` now consumes optional active context, shows context status/token/span in the generator output, prioritizes the generator that matches the active token when there is a clear mapping, and renders a disabled Apply gate from the real trust state.
+- The Web Preview generator surface now renders a read-only patch-review block for trusted dry-run receipt summary fields, with escaped receipt text and no source mutation.
+- The apply gate now forwards bounded trusted dry-run edit-preview lines to GPUI and Web Preview so source patches can be reviewed before any writer exists.
+- The apply gate now treats trusted receipts as applicable only when they match the active source path, cursor token span, and active source digest.
+- The apply gate now forwards bounded mismatch diagnostics to GPUI/Web Preview when trusted receipts fail active source path/span/digest matching.
+- Web Preview mismatch diagnostics now include the closest trusted receipt candidate with a bounded path/span/digest match score while keeping writes disabled.
+- DX Style dry-run receipts now expose `source_digest_algorithm` and only mark ready receipts source-verified when the digest uses the shared `fnv1a64:` contract.
+- `crates/agent_ui/src/dx_style_panel/panel_view.rs` now dispatches the context-aware Web Preview action from the right-dock Style panel.
+- `crates/agent_ui/src/dx_style_panel/panel_view.rs` now also shows receipt intent/edit-count/message when a trusted dry-run receipt is present.
+- `crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs` now exposes a single write-bridge preflight summary for required receipts, editor guards, and runtime validation so the GPUI shell and Web Preview surface stay aligned without duplicating policy.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now renders that write-bridge preflight summary and includes it in the source-context output shown beside generated classes/CSS.
+- `crates/web_preview/src/dx_style_generator_surface/recipes.rs` now owns the first-pass class/CSS output templates for the 25 visual generators, and the browser script renders those source-owned templates instead of carrying a large generator-specific switch.
+- `G:\Dx\style\src\core\engine\visual_generator_recipe_catalog.rs` now defines the source-side `dx.style.visual-generator-recipe-catalog` read model, and Zed readiness now checks that contract beside the visual generator catalog.
+- `script/dx-style-panel-source.test.ts` now compares Zed Web Preview recipe IDs/templates with the DX Style source recipe catalog so mirrored generator output metadata cannot silently drift.
+- `G:\Dx\style\fixtures\visual-generator-recipe-catalog.json` now provides a source-owned recipe fixture, and Zed Web Preview loads that bounded fixture before falling back to the embedded recipe mirror.
+- The Zed Web Preview recipe fixture loader now honors `DX_STYLE_RECIPE_CATALOG_PATH` or `DX_STYLE_ROOT` before falling back to the local `G:\Dx\style` default.
+- `crates/web_preview/src/dx_style_generator_surface/visual-generator-recipe-catalog.generated.json` now provides the embedded fallback in the same recipe-fixture shape, replacing the earlier hand-authored Rust recipe table.
+- The Web Preview generator output now names the active recipe schema and source path so live DX Style fixture ingestion and embedded fallback use are inspectable without runtime mutation.
+- `G:\Dx\style\src\core\engine\visual_generator_control_catalog.rs` and `G:\Dx\style\fixtures\visual-generator-control-catalog.json` now define source-owned Web Preview control metadata for the first 25 visual generators.
+- `crates/web_preview/src/dx_style_generator_surface/controls.rs` now loads `DX_STYLE_CONTROL_CATALOG_PATH` or `DX_STYLE_ROOT`, validates the bounded control fixture, and falls back to an embedded generated mirror.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now renders generator controls from DX Style control metadata instead of hard-coded browser category branches, and reports the active control schema/source beside recipe provenance.
+- `G:\Dx\style\fixtures\visual-generator-catalog.json` now mirrors the source-owned visual generator catalog, and `crates/web_preview/src/dx_style_generator_surface/catalog.rs` loads it before falling back to an embedded generated mirror.
+- Web Preview cursor-to-generator suggestions now use DX Style `applicable_class_families` from the catalog fixture instead of a Zed-owned `token_hints_for` match table.
+- The Web Preview generator output now names the active generator catalog schema/source beside control and recipe provenance.
+- `crates/web_preview/src/dx_style_generator_surface/fixture.rs` now centralizes the bounded DX Style fixture path/read helper used by catalog, control, and recipe ingestion.
+- `G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs` now provides a source-side `--check`/`--write` helper for keeping Zed's embedded generated visual-generator fixtures aligned.
+- Zed active-context JSON now includes a structured `source_span` byte range beside the human-readable `start..end` span, and Web Preview requires that structured span before any future native source-apply handler can be treated as ready.
+- The Web Preview apply payload now forwards both `source_path` and `source_span` as top-level fields for the future native writer, avoiding any need to parse source identity or byte offsets from display text.
+- Web Preview now requires the expected `zed.dx_style.active_context.v1` schema before treating Zed source context as apply-ready, and prints schema support in the generator output for review.
+- Web Preview now reports a machine-readable `source_apply_blocker` code so metadata drift, unsupported context schema, missing source path/span, blocked apply gate, missing write bridge, or missing native handler are inspectable without guessing from button state.
+- The native right-dock Style panel now shows the active source path and structured span byte range beside token/span status so GPUI and Web Preview review the same source target.
+- `crates/web_preview/src/dx_style_source_apply.rs` now defines a bounded native review receipt for `dx-style-source-apply` IPC messages, validating source path/span/context schema/output metadata while still refusing mutation when the source writer capability is review-only.
+- The Web Preview generator page now installs a review-only `window.__DX_STYLE_SOURCE_APPLY__` handler through the existing Web Preview IPC bridge, and session metadata stores the latest DX Style source-apply review receipt.
+- The DX Style editor write-bridge preflight contract now names required native handler capabilities (`can_review_request`, `can_mutate_source`) so the Web Preview handler can be present without pretending the editor writer is enabled.
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now define the source-owned Web Preview source-apply IPC/review contract, including the IPC kind, active-context schema, receipt schema, handler capabilities, byte limits, and disabled mutation state.
+- Zed readiness now checks the source-owned grouped-class source-apply contract and fixture alongside the existing write-bridge preflight contract, and Web Preview source-apply review receipts now include the contract schema and IPC kind.
+- `crates/web_preview/src/dx_style_generator_surface/source_apply_contract.rs` now loads the DX Style source-apply contract fixture before falling back to an embedded mirror, and the Web Preview generator output now prints the active contract schema/source/IPC/context/receipt/mutation state.
+- `G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs` now keeps Zed's embedded source-apply contract mirror aligned with the source-owned DX Style fixture.
+- The native GPUI Style panel summary now includes a Source Apply row that reports the source-owned contract as review-only when the Rust contract and fixture agree.
+- The Web Preview generator surface now measures source-apply payload sizes against the source-owned contract before native review and reports explicit blocker codes for oversized generator ids, source paths, class output, CSS output, and source spans.
+- The native `dx-style-source-apply` review receipt now validates that the source-owned contract byte limits match the native review caps and includes those contract limits in the review receipt.
+- The native Style panel row limit now includes the Source Apply, Web Preview Host, and Native Sidebar rows together so the GPUI shell keeps showing the full Web Preview architecture state after adding the source-apply contract row.
+- The DX Style grouped-class two-way contract now exposes grouping-efficiency estimates, including compact `alias()` byte savings and recommended representation, so Zed/AI consumers can eventually recommend custom groups only when they are actually smaller than raw atomics.
+- DX Style docs now state that cursor context is metadata for preview/prioritization, not permission to mutate source.
+- DX Style docs now lock the architecture boundary: GPUI owns docking, active-source context, receipts, trust gates, and commands; Web Preview owns the visual generator cockpit, live previews, generated CSS/class output, and read-only patch review UI.
+
+NOTES:
+- Kept the architecture as GPUI native shell plus Web Preview generator canvas.
+- Ran `node --test script/dx-style-panel-source.test.ts script/dx-launch-workspace-source.test.ts script/dx-handoff-source-guard-registry.test.ts`.
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.

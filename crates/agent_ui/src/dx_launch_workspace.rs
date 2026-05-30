@@ -17,6 +17,7 @@ use crate::dx_receipt_history::DxToolHistorySnapshot;
 use crate::dx_receipts::DxReceiptSnapshot;
 use crate::dx_runtime_proof_status::DxRuntimeProofStatusSnapshot;
 use crate::dx_source_sets::DxSourceSetSnapshot;
+use crate::dx_style_panel::DxStylePanelSnapshot;
 use crate::dx_www_launch_evidence::DxWwwLaunchEvidenceSnapshot;
 
 mod agents;
@@ -35,6 +36,7 @@ mod proof_labels;
 mod readiness;
 mod source_audit;
 mod sources;
+mod style_panel;
 mod tool_history;
 mod www_evidence;
 use self::list_labels::{bounded_items, yes_no};
@@ -60,6 +62,7 @@ pub(crate) struct DxLaunchWorkspaceStatus {
     pub deploy_targets: DxDeployTargetSnapshot,
     pub proof_freshness: DxProofFreshnessSnapshot,
     pub runtime_proof_status: DxRuntimeProofStatusSnapshot,
+    pub style_panel: DxStylePanelSnapshot,
 }
 
 pub(crate) struct DxSourceRowControl {
@@ -294,6 +297,8 @@ fn render_right_rail(
         })
         .child(section_title("Check", IconName::Check))
         .child(check::check_score_state(&status.check_score, cx))
+        .child(section_title("Style", IconName::Sliders))
+        .child(style_panel::dx_style_panel_state(&status.style_panel, cx))
         .child(section_title("Proof Freshness", IconName::FileTextOutlined))
         .child(proof::proof_freshness_state(&status.proof_freshness, cx))
         .child(section_title("Runtime Proof", IconName::Check))

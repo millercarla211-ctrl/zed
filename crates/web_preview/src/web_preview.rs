@@ -16,6 +16,10 @@ pub(crate) mod dx_studio_session;
 #[cfg(target_os = "windows")]
 pub(crate) mod dx_studio_source_edit;
 #[cfg(target_os = "windows")]
+pub(crate) mod dx_style_generator_surface;
+#[cfg(target_os = "windows")]
+pub(crate) mod dx_style_source_apply;
+#[cfg(target_os = "windows")]
 pub mod web_preview_view;
 #[cfg(target_os = "windows")]
 pub(crate) mod windows_visual_webview;

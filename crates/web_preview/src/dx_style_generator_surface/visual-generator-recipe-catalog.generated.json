@@ -1,0 +1,273 @@
+{
+  "schema": "dx.style.visual-generator-recipe-catalog",
+  "schema_version": 1,
+  "scope": "class and CSS output templates for the first 25 editor-facing visual generators",
+  "entry_count": 25,
+  "runtime_value_keys": [
+    "from",
+    "to",
+    "angle",
+    "radius",
+    "blur",
+    "columns",
+    "gap",
+    "duration",
+    "easing",
+    "half_blur",
+    "third_blur",
+    "blur_eighth",
+    "blur_quarter",
+    "text_shadow_blur",
+    "glass_blur",
+    "angle_sixth",
+    "angle_quarter",
+    "gap_plus_20",
+    "css_linear",
+    "css_radial",
+    "css_conic",
+    "css_mesh",
+    "css_noise"
+  ],
+  "entries": [
+    {
+      "generator_id": "linear-gradient",
+      "class_template": "bg-[{css_linear}]",
+      "css_template": "background-image: {css_linear};",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "radial-gradient",
+      "class_template": "bg-[{css_radial}]",
+      "css_template": "background-image: {css_radial};",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "conic-gradient",
+      "class_template": "bg-[{css_conic}]",
+      "css_template": "background-image: {css_conic};",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "mesh-gradient",
+      "class_template": "bg-[{css_mesh}]",
+      "css_template": "background: {css_mesh};",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "noise-texture",
+      "class_template": "bg-[radial-gradient(...)] bg-[length:18px_18px]",
+      "css_template": "background: {css_noise};\nbackground-size: 18px 18px;",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "color-palette-token-mapper",
+      "class_template": "bg-token(surface) text-token(foreground) border-token(border)",
+      "css_template": "background: {from};\ncolor: {to};\nborder: 1px solid {to};",
+      "preview_kind": "swatch-pair",
+      "preview_anatomy": [
+        "swatch-row",
+        "color-transition-label"
+      ]
+    },
+    {
+      "generator_id": "shadow",
+      "class_template": "shadow-[0_{half_blur}px_{blur}px_{from}66]",
+      "css_template": "box-shadow: 0 {half_blur}px {blur}px {from}66;",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "text-shadow",
+      "class_template": "text-shadow-[0_4px_{text_shadow_blur}px_{from}aa]",
+      "css_template": "text-shadow: 0 4px {text_shadow_blur}px {from}aa;",
+      "preview_kind": "text-card",
+      "preview_anatomy": [
+        "preview-title",
+        "preview-subtitle"
+      ]
+    },
+    {
+      "generator_id": "drop-shadow",
+      "class_template": "drop-shadow-[0_{third_blur}px_{half_blur}px_{from}99]",
+      "css_template": "filter: drop-shadow(0 {third_blur}px {half_blur}px {from}99);",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "filter",
+      "class_template": "blur-[{blur_eighth}px] saturate-150",
+      "css_template": "filter: blur({blur_eighth}px) saturate(1.5) contrast(1.08);",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "backdrop-filter",
+      "class_template": "backdrop-blur-[{blur_quarter}px] bg-white/10",
+      "css_template": "background: rgba(255,255,255,.12);\nbackdrop-filter: blur({blur_quarter}px);",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "glassmorphism",
+      "class_template": "bg-white/10 backdrop-blur-xl border border-white/20",
+      "css_template": "background: color-mix(in srgb, {from} 18%, transparent);\nbackdrop-filter: blur({glass_blur}px);\nborder: 1px solid rgba(255,255,255,.22);",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "border-radius",
+      "class_template": "rounded-[{radius}px]",
+      "css_template": "border-radius: {radius}px;\nbackground: {from};",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "border-image-gradient-border",
+      "class_template": "border-[6px] border-image-[{css_linear}_1]",
+      "css_template": "border: 6px solid transparent;\nborder-image: {css_linear} 1;\nbackground: #0f172a;",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "clip-path-shapes",
+      "class_template": "clip-path-[polygon(12%_0,100%_0,88%_100%,0_100%)]",
+      "css_template": "clip-path: polygon(12% 0, 100% 0, 88% 100%, 0 100%);\nbackground: {from};",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "css-mask",
+      "class_template": "mask-radial-from-55% mask-radial-to-75%",
+      "css_template": "mask-image: radial-gradient(circle, black 55%, transparent 75%);\nbackground: linear-gradient({angle}deg, {from}, {to});",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "transform-2d",
+      "class_template": "rotate-[{angle_sixth}deg] scale-105",
+      "css_template": "transform: rotate({angle_sixth}deg) scale(1.05);",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "transform-3d",
+      "class_template": "transform-3d rotate-y-[{angle_quarter}deg]",
+      "css_template": "transform: perspective(720px) rotateY({angle_quarter}deg) rotateX(8deg);",
+      "preview_kind": "hero-card",
+      "preview_anatomy": [
+        "preview-label"
+      ]
+    },
+    {
+      "generator_id": "transition-builder",
+      "class_template": "transition-all duration-[{duration}ms] ease-[{easing}]",
+      "css_template": "transition-property: all;\ntransition-duration: {duration}ms;\ntransition-timing-function: {easing};",
+      "preview_kind": "timeline",
+      "preview_anatomy": [
+        "timeline-track",
+        "timeline-label"
+      ]
+    },
+    {
+      "generator_id": "keyframe-animation-timeline",
+      "class_template": "animate-[dx-style-pulse_{duration}ms_{easing}_infinite]",
+      "css_template": "animation: dx-style-pulse {duration}ms {easing} infinite;",
+      "preview_kind": "timeline",
+      "preview_anatomy": [
+        "timeline-track",
+        "timeline-label"
+      ]
+    },
+    {
+      "generator_id": "easing-cubic-bezier-editor",
+      "class_template": "ease-[{easing}] duration-[{duration}ms]",
+      "css_template": "transition-timing-function: {easing};\ntransition-duration: {duration}ms;",
+      "preview_kind": "timeline",
+      "preview_anatomy": [
+        "timeline-track",
+        "timeline-label"
+      ]
+    },
+    {
+      "generator_id": "grid-layout-editor",
+      "class_template": "grid grid-cols-{columns} gap-[{gap}px]",
+      "css_template": "display: grid;\ngrid-template-columns: repeat({columns}, minmax(0, 1fr));\ngap: {gap}px;",
+      "preview_kind": "layout-items",
+      "preview_anatomy": [
+        "layout-items"
+      ]
+    },
+    {
+      "generator_id": "flex-layout-editor",
+      "class_template": "flex items-center justify-between gap-[{gap}px]",
+      "css_template": "display: flex;\nalign-items: center;\njustify-content: space-between;\ngap: {gap}px;",
+      "preview_kind": "layout-items",
+      "preview_anatomy": [
+        "layout-items"
+      ]
+    },
+    {
+      "generator_id": "container-query-breakpoint-editor",
+      "class_template": "@container @md:grid @md:grid-cols-{columns}",
+      "css_template": "container-type: inline-size;\ncontainer-name: dx-style-preview;\n/* @container dx-style-preview (width >= 28rem) { grid-template-columns: repeat({columns}, minmax(0, 1fr)); } */",
+      "preview_kind": "layout-items",
+      "preview_anatomy": [
+        "layout-items"
+      ]
+    },
+    {
+      "generator_id": "responsive-spacing-scale-editor",
+      "class_template": "p-[clamp(12px,2vw,{gap_plus_20}px)] gap-[{gap}px]",
+      "css_template": "padding: clamp(12px, 2vw, {gap_plus_20}px);\ngap: {gap}px;",
+      "preview_kind": "layout-items",
+      "preview_anatomy": [
+        "layout-items"
+      ]
+    }
+  ],
+  "preview_anatomy_parts": [
+    "preview-label",
+    "preview-title",
+    "preview-subtitle",
+    "swatch-row",
+    "color-transition-label",
+    "layout-items",
+    "timeline-track",
+    "timeline-label"
+  ]
+}

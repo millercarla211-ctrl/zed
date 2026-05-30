@@ -40,6 +40,9 @@ use workspace::notifications::NotificationId;
 use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 
 use crate::agent_browser_contracts::*;
+use crate::dx_style_generator_surface::{
+    dx_style_generator_url, dx_style_generator_url_with_context,
+};
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
 use crate::{
@@ -717,6 +720,7 @@ pub struct WebPreviewView {
     onboarding_complete: Option<OnboardingCompleteCallback>,
     latest_dx_studio_selection: Option<Value>,
     latest_dx_studio_edit_receipt: Option<Value>,
+    latest_dx_style_source_apply_receipt: Option<Value>,
     latest_page_diagnostics: Option<Value>,
     latest_runtime_events: Option<Value>,
     latest_dom_snapshot: Option<Value>,
@@ -813,6 +817,23 @@ impl WebPreviewView {
         workspace.register_action(move |workspace, _: &OpenPreviewToTheSide, window, cx| {
             Self::open_in_side_pane(workspace, window, cx);
         });
+
+        workspace.register_action(
+            move |workspace, _: &zed_actions::dx_style::OpenGeneratorPreview, window, cx| {
+                let url = dx_style_generator_url();
+                Self::open_url_in_side_pane(workspace, &url, window, cx);
+            },
+        );
+
+        workspace.register_action(
+            move |workspace,
+                  action: &zed_actions::dx_style::OpenGeneratorPreviewForContext,
+                  window,
+                  cx| {
+                let url = dx_style_generator_url_with_context(Some(&action.source_context_json));
+                Self::open_url_in_side_pane(workspace, &url, window, cx);
+            },
+        );
     }
 
     fn open_in_active_pane(
@@ -841,6 +862,38 @@ impl WebPreviewView {
         workspace.active_pane().update(cx, |pane, cx| {
             let preview = Self::find_existing_preview_item(pane, &view, cx).unwrap_or_else(|| {
                 pane.add_item(Box::new(view.clone()), true, true, None, window, cx);
+                view.clone()
+            });
+            preview.update(cx, |this, cx| {
+                this.load_requested_url(url, window, cx);
+            });
+            if let Some(existing_view_idx) = pane.index_for_item(&preview) {
+                pane.activate_item(existing_view_idx, true, true, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
+    pub fn open_url_in_side_pane(
+        workspace: &mut Workspace,
+        url: &str,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let view = Self::open_or_create(workspace, window, cx);
+        let pane = workspace
+            .find_pane_in_direction(workspace::SplitDirection::Right, cx)
+            .unwrap_or_else(|| {
+                workspace.split_pane(
+                    workspace.active_pane().clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            });
+        pane.update(cx, |pane, cx| {
+            let preview = Self::find_existing_preview_item(pane, &view, cx).unwrap_or_else(|| {
+                pane.add_item(Box::new(view.clone()), false, false, None, window, cx);
                 view.clone()
             });
             preview.update(cx, |this, cx| {
@@ -1000,6 +1053,7 @@ impl WebPreviewView {
             onboarding_complete,
             latest_dx_studio_selection: None,
             latest_dx_studio_edit_receipt: None,
+            latest_dx_style_source_apply_receipt: None,
             latest_page_diagnostics: None,
             latest_runtime_events: None,
             latest_dom_snapshot: None,
@@ -1546,6 +1600,7 @@ impl WebPreviewView {
             "dx_studio": dx_studio,
             "dx_studio_selection": self.latest_dx_studio_selection_summary(),
             "dx_studio_edit_receipt": self.latest_dx_studio_edit_receipt_summary(),
+            "dx_style_source_apply_receipt": self.latest_dx_style_source_apply_receipt_summary(),
             "profile_dir": self.workspace_context.profile_dir.display().to_string(),
             "zoom": self.zoom_factor,
             "viewport": self.viewport_mode.snapshot(),
@@ -1914,6 +1969,33 @@ impl WebPreviewView {
             "source_edit_plan": receipt.get("source_edit_plan").cloned(),
             "source_policy": receipt.get("source_policy").cloned(),
             "style_edit_context": receipt.get("style_edit_context").cloned(),
+        }))
+    }
+
+    fn latest_dx_style_source_apply_receipt_summary(&self) -> Option<Value> {
+        let receipt = self.latest_dx_style_source_apply_receipt.as_ref()?;
+        Some(serde_json::json!({
+            "schema": receipt.get("schema").and_then(Value::as_str),
+            "status": receipt.get("status").and_then(Value::as_str),
+            "review_status": receipt.get("review_status").and_then(Value::as_str),
+            "mutation_ready": receipt.get("mutation_ready").and_then(Value::as_bool),
+            "reason_count": receipt.get("reason_count").cloned(),
+            "source_mutation": receipt.get("source_mutation").and_then(Value::as_str),
+            "generator": receipt.get("generator").and_then(Value::as_str),
+            "source_path": receipt.get("source_path").and_then(Value::as_str),
+            "source_span": receipt.get("source_span").cloned(),
+            "context_kind": receipt.pointer("/context/context_kind").and_then(Value::as_str),
+            "css_source_edit_safety": receipt.pointer("/context/css_source_edit_safety").and_then(Value::as_str),
+            "preview_output": receipt.get("preview_output").cloned(),
+            "css_declaration_dry_run_contract": receipt.get("css_declaration_dry_run_contract").cloned(),
+            "css_declaration_dry_run_diagnostics": receipt.get("css_declaration_dry_run_diagnostics").cloned(),
+            "css_declaration_dry_run_preview": receipt.get("css_declaration_dry_run_preview").cloned(),
+            "css_declaration_dry_run_preview_diagnostics": receipt.get("css_declaration_dry_run_preview_diagnostics").cloned(),
+            "reverse_css_delta_contract": receipt.get("reverse_css_delta_contract").cloned(),
+            "reverse_css_delta_preview": receipt.get("reverse_css_delta_preview").cloned(),
+            "dry_run_review": receipt.get("dry_run_review").cloned(),
+            "native_handler": receipt.get("native_handler").cloned(),
+            "apply_gate": receipt.get("apply_gate").cloned(),
         }))
     }
 
@@ -30331,6 +30413,37 @@ impl WebPreviewView {
                     }
                 }
             }
+            "dx-style-source-apply" => {
+                let receipt = crate::dx_style_source_apply::source_apply_review_receipt(&payload);
+                let status = receipt
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("refused")
+                    .to_string();
+                let reason_count = receipt
+                    .get("reason_count")
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default();
+                self.latest_dx_style_source_apply_receipt = Some(receipt);
+                if status == "accepted_for_source_writer" {
+                    self.show_toast(
+                        "DX Style source apply request accepted for native writer",
+                        cx,
+                    );
+                } else if status == "reviewed_with_blockers" {
+                    self.show_toast(
+                        format!(
+                            "DX Style source apply review recorded ({reason_count} blocker(s))"
+                        ),
+                        cx,
+                    );
+                } else {
+                    self.show_toast(
+                        format!("DX Style source apply request refused ({reason_count} reason(s))"),
+                        cx,
+                    );
+                }
+            }
             "page-diagnostics" => {
                 match catch_unwind(AssertUnwindSafe(|| -> Result<()> {
                     let action = payload
@@ -34679,6 +34792,7 @@ impl Item for WebPreviewView {
                 onboarding_complete,
                 latest_dx_studio_selection: None,
                 latest_dx_studio_edit_receipt: None,
+                latest_dx_style_source_apply_receipt: None,
                 latest_page_diagnostics: None,
                 latest_runtime_events: None,
                 latest_dom_snapshot: None,

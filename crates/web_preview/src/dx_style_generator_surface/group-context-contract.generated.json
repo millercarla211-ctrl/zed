@@ -1,0 +1,31 @@
+{
+  "schema": "dx.style.grouped-class-web-preview-context",
+  "schema_version": 1,
+  "scope": "read-only grouped-class cursor context for Zed Web Preview generator surfaces",
+  "active_context_schema": "zed.dx_style.active_context.v1",
+  "fixture_path": "fixtures/grouped-class-web-preview-context.json",
+  "source_mutation_enabled": false,
+  "supported_token_shapes": [
+    "alias()",
+    "alias(atomic utilities)",
+    "@alias(atomic utilities)",
+    "static atomic utility list"
+  ],
+  "context_fields": [
+    "group_context.schema",
+    "group_context.status",
+    "group_context.alias",
+    "group_context.syntax",
+    "group_context.utilities",
+    "group_context.utility_count",
+    "group_context.expansion_status",
+    "group_context.candidate_token_count",
+    "group_context.source_state",
+    "group_context.registry_receipt"
+  ],
+  "max_alias_bytes": 128,
+  "max_utility_count": 32,
+  "max_utility_bytes": 256,
+  "candidate_min_utility_count": 4,
+  "requires_project_group_registry_for_alias_reference": true
+}

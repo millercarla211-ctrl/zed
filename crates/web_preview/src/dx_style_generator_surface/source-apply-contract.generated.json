@@ -1,0 +1,74 @@
+{
+  "schema": "dx.style.grouped-class-source-apply-contract",
+  "schema_version": 1,
+  "scope": "source-owned IPC and review receipt requirements for grouped-class editor apply",
+  "ipc_kind": "dx-style-source-apply",
+  "receipt_schema": "zed.web_preview.dx_style_source_apply_receipt.v1",
+  "active_context_schema": "zed.dx_style.active_context.v1",
+  "fixture_path": "fixtures/grouped-class-source-apply-contract.json",
+  "source_mutation_enabled": false,
+  "required_native_handler": "window.__DX_STYLE_SOURCE_APPLY__",
+  "required_native_handler_capabilities": [
+    "can_review_request",
+    "can_mutate_source"
+  ],
+  "review_context_kinds": [
+    "class_token",
+    "class_list",
+    "css_declaration"
+  ],
+  "mutation_context_kinds_when_enabled": [
+    "class_token"
+  ],
+  "required_editor_guards": [
+    "active context schema match",
+    "active context kind supported",
+    "request source path matches active source path",
+    "request source span matches active source span",
+    "active source digest match",
+    "visual-generator metadata alignment",
+    "reverse CSS map receipt match",
+    "generated CSS declaration delta validation",
+    "source-owned preview output metadata",
+    "CSS declaration dry-run receipt for CSS contexts",
+    "reverse CSS delta preview provenance match",
+    "trusted grouped-class dry-run receipt",
+    "editor write bridge can_apply",
+    "explicit user apply action"
+  ],
+  "review_receipt_fields": [
+    "review_status",
+    "mutation_ready",
+    "dry_run_review",
+    "context_kind",
+    "css_source_edit_safety",
+    "preview_output",
+    "css_declaration_dry_run_contract",
+    "css_declaration_dry_run_diagnostics",
+    "css_declaration_dry_run_preview",
+    "css_declaration_dry_run_preview_diagnostics",
+    "reverse_css_delta_contract",
+    "reverse_css_delta_preview",
+    "apply_gate",
+    "native_handler"
+  ],
+  "max_source_path_bytes": 4096,
+  "max_class_name_bytes": 4096,
+  "max_css_bytes": 32768,
+  "max_generator_id_bytes": 128,
+  "max_source_span_bytes": 16384,
+  "max_source_digest_bytes": 128,
+  "consumers": [
+    "Zed Web Preview",
+    "Zed Style panel",
+    "Friday",
+    "dx-check"
+  ],
+  "notes": [
+    "This fixture makes Web Preview the visual generator host and keeps GPUI as the native shell.",
+    "This fixture is review evidence only; it must not enable mutation while source_mutation_enabled is false."
+  ],
+  "max_preview_kind_bytes": 64,
+  "max_preview_anatomy_part_bytes": 64,
+  "max_preview_anatomy_parts": 8
+}

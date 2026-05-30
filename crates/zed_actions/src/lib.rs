@@ -831,6 +831,30 @@ pub mod preview {
     }
 }
 
+pub mod dx_style {
+    use gpui::{Action, actions};
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
+
+    /// Opens the DX Style visual generator surface with read-only active editor context.
+    #[derive(PartialEq, Clone, Debug, Deserialize, Serialize, JsonSchema, Action)]
+    #[action(namespace = dx_style)]
+    #[serde(deny_unknown_fields)]
+    pub struct OpenGeneratorPreviewForContext {
+        pub source_context_json: String,
+    }
+
+    actions!(
+        dx_style,
+        [
+            /// Toggles the DX Style dock panel.
+            TogglePanel,
+            /// Opens the DX Style visual generator surface in Web Preview.
+            OpenGeneratorPreview,
+        ]
+    );
+}
+
 pub mod agents_sidebar {
     use gpui::{Action, actions};
     use schemars::JsonSchema;

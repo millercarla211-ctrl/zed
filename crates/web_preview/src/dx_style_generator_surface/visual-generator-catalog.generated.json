@@ -1,0 +1,420 @@
+{
+  "schema": "dx.style.visual-generator-catalog",
+  "schema_version": 1,
+  "scope": "first 25 editor-facing visual CSS generators from DX Style PLAN.md",
+  "source_truth": "source files, group declarations, DX config, theme tokens, and provenance receipts",
+  "tool_consumers": [
+    "dx-style",
+    "dx-check",
+    "Zed",
+    "Friday"
+  ],
+  "generator_count": 25,
+  "entries": [
+    {
+      "ordinal": 1,
+      "generator_id": "linear-gradient",
+      "label": "linear gradient",
+      "category": "gradient",
+      "applicable_class_families": [
+        "bg-linear-*",
+        "bg-gradient-to-*",
+        "from-*",
+        "via-*",
+        "to-*",
+        "bg-[linear-gradient(...)]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 2,
+      "generator_id": "radial-gradient",
+      "label": "radial gradient",
+      "category": "gradient",
+      "applicable_class_families": [
+        "bg-radial-*",
+        "from-*",
+        "via-*",
+        "to-*",
+        "bg-[radial-gradient(...)]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 3,
+      "generator_id": "conic-gradient",
+      "label": "conic gradient",
+      "category": "gradient",
+      "applicable_class_families": [
+        "bg-conic-*",
+        "from-*",
+        "via-*",
+        "to-*",
+        "bg-[conic-gradient(...)]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 4,
+      "generator_id": "mesh-gradient",
+      "label": "mesh gradient",
+      "category": "gradient",
+      "applicable_class_families": [
+        "bg-[radial-gradient(...)]",
+        "bg-[linear-gradient(...)]",
+        "dx-mesh-*"
+      ],
+      "preferred_output": "dx-owned-css",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 5,
+      "generator_id": "noise-texture",
+      "label": "noise texture",
+      "category": "texture",
+      "applicable_class_families": [
+        "bg-[url(...)]",
+        "bg-noise-*",
+        "before:bg-*",
+        "after:bg-*",
+        "mask-*"
+      ],
+      "preferred_output": "dx-owned-css",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 6,
+      "generator_id": "color-palette-token-mapper",
+      "label": "color palette/token mapper",
+      "category": "color",
+      "applicable_class_families": [
+        "bg-*",
+        "text-*",
+        "border-*",
+        "ring-*",
+        "fill-*",
+        "stroke-*",
+        "from-*",
+        "via-*",
+        "to-*",
+        "accent-*",
+        "caret-*",
+        "decoration-*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 7,
+      "generator_id": "shadow",
+      "label": "shadow",
+      "category": "effect",
+      "applicable_class_families": [
+        "shadow-*",
+        "inset-shadow-*",
+        "ring-*",
+        "shadow-[...]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 8,
+      "generator_id": "text-shadow",
+      "label": "text shadow",
+      "category": "effect",
+      "applicable_class_families": [
+        "text-shadow-*",
+        "text-shadow-[...]",
+        "text-shadow-(--*)"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 9,
+      "generator_id": "drop-shadow",
+      "label": "drop shadow",
+      "category": "effect",
+      "applicable_class_families": [
+        "drop-shadow-*",
+        "filter",
+        "drop-shadow-[...]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 10,
+      "generator_id": "filter",
+      "label": "filter",
+      "category": "effect",
+      "applicable_class_families": [
+        "filter",
+        "blur-*",
+        "brightness-*",
+        "contrast-*",
+        "grayscale",
+        "hue-rotate-*",
+        "invert",
+        "saturate-*",
+        "sepia"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 11,
+      "generator_id": "backdrop-filter",
+      "label": "backdrop filter",
+      "category": "effect",
+      "applicable_class_families": [
+        "backdrop-filter",
+        "backdrop-blur-*",
+        "backdrop-brightness-*",
+        "backdrop-contrast-*",
+        "backdrop-grayscale",
+        "backdrop-hue-rotate-*",
+        "backdrop-invert",
+        "backdrop-saturate-*",
+        "backdrop-sepia"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 12,
+      "generator_id": "glassmorphism",
+      "label": "glassmorphism",
+      "category": "effect",
+      "applicable_class_families": [
+        "bg-*/opacity",
+        "backdrop-blur-*",
+        "border-*",
+        "shadow-*",
+        "ring-*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 13,
+      "generator_id": "border-radius",
+      "label": "border radius",
+      "category": "shape",
+      "applicable_class_families": [
+        "rounded-*",
+        "rounded-s-*",
+        "rounded-e-*",
+        "rounded-t-*",
+        "rounded-r-*",
+        "rounded-b-*",
+        "rounded-l-*",
+        "rounded-[...]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 14,
+      "generator_id": "border-image-gradient-border",
+      "label": "border image/gradient border",
+      "category": "gradient",
+      "applicable_class_families": [
+        "border-*",
+        "border-image-[...]",
+        "bg-[linear-gradient(...)]",
+        "p-px",
+        "mask-*"
+      ],
+      "preferred_output": "dx-owned-css",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 15,
+      "generator_id": "clip-path-shapes",
+      "label": "clip-path shapes",
+      "category": "shape",
+      "applicable_class_families": [
+        "clip-*",
+        "clip-path-[...]",
+        "[clip-path:...]"
+      ],
+      "preferred_output": "dx-owned-css",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 16,
+      "generator_id": "css-mask",
+      "label": "CSS mask",
+      "category": "shape",
+      "applicable_class_families": [
+        "mask-*",
+        "mask-image-*",
+        "mask-size-*",
+        "mask-position-*",
+        "mask-repeat-*",
+        "mask-[...]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 17,
+      "generator_id": "transform-2d",
+      "label": "transform 2D",
+      "category": "transform",
+      "applicable_class_families": [
+        "translate-*",
+        "rotate-*",
+        "scale-*",
+        "skew-*",
+        "origin-*",
+        "transform"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 18,
+      "generator_id": "transform-3d",
+      "label": "transform 3D",
+      "category": "transform",
+      "applicable_class_families": [
+        "transform-3d",
+        "rotate-x-*",
+        "rotate-y-*",
+        "rotate-z-*",
+        "translate-z-*",
+        "perspective-*",
+        "backface-*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 19,
+      "generator_id": "transition-builder",
+      "label": "transition builder",
+      "category": "motion",
+      "applicable_class_families": [
+        "transition-*",
+        "duration-*",
+        "delay-*",
+        "ease-*",
+        "motion-safe:*",
+        "motion-reduce:*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 20,
+      "generator_id": "keyframe-animation-timeline",
+      "label": "keyframe animation timeline",
+      "category": "motion",
+      "applicable_class_families": [
+        "animate-*",
+        "@keyframes",
+        "[animation:...]"
+      ],
+      "preferred_output": "dx-owned-css",
+      "source_edit_safety": "safe-dx-owned-css-source-edit"
+    },
+    {
+      "ordinal": 21,
+      "generator_id": "easing-cubic-bezier-editor",
+      "label": "easing/cubic-bezier editor",
+      "category": "motion",
+      "applicable_class_families": [
+        "ease-*",
+        "ease-[cubic-bezier(...)]",
+        "[animation-timing-function:...]"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 22,
+      "generator_id": "grid-layout-editor",
+      "label": "grid layout editor",
+      "category": "layout",
+      "applicable_class_families": [
+        "grid",
+        "grid-cols-*",
+        "grid-rows-*",
+        "gap-*",
+        "col-span-*",
+        "row-span-*",
+        "auto-cols-*",
+        "auto-rows-*",
+        "place-*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 23,
+      "generator_id": "flex-layout-editor",
+      "label": "flex layout editor",
+      "category": "layout",
+      "applicable_class_families": [
+        "flex",
+        "inline-flex",
+        "flex-*",
+        "items-*",
+        "justify-*",
+        "content-*",
+        "gap-*",
+        "basis-*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 24,
+      "generator_id": "container-query-breakpoint-editor",
+      "label": "container query and breakpoint editor",
+      "category": "responsive",
+      "applicable_class_families": [
+        "@container",
+        "@sm:*",
+        "@md:*",
+        "@max-*:*",
+        "sm:*",
+        "md:*",
+        "lg:*",
+        "container-*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 25,
+      "generator_id": "responsive-spacing-scale-editor",
+      "label": "responsive spacing/scale editor",
+      "category": "responsive",
+      "applicable_class_families": [
+        "p-*",
+        "px-*",
+        "py-*",
+        "m-*",
+        "mx-*",
+        "my-*",
+        "gap-*",
+        "space-*",
+        "size-*",
+        "w-*",
+        "h-*",
+        "sm:*",
+        "md:*",
+        "lg:*"
+      ],
+      "preferred_output": "atomic-utilities",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    }
+  ]
+}

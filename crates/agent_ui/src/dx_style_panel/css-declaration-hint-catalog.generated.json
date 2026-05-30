@@ -1,0 +1,378 @@
+{
+  "schema": "dx.style.visual-generator-css-declaration-hint-catalog",
+  "schema_version": 1,
+  "scope": "read-only CSS declaration hints for Zed Web Preview visual-generator prioritization",
+  "fixture_path": "fixtures/visual-generator-css-declaration-hint-catalog.json",
+  "tool_consumers": [
+    "dx-style",
+    "Zed",
+    "Friday"
+  ],
+  "entry_count": 38,
+  "entries": [
+    {
+      "ordinal": 1,
+      "property_pattern": "background",
+      "property_match": "prefix",
+      "value_contains": [
+        "linear-gradient("
+      ],
+      "token_hint": "bg-[linear-gradient(...)]",
+      "generator_id": "linear-gradient",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 2,
+      "property_pattern": "background",
+      "property_match": "prefix",
+      "value_contains": [
+        "radial-gradient("
+      ],
+      "token_hint": "bg-[radial-gradient(...)]",
+      "generator_id": "radial-gradient",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 3,
+      "property_pattern": "background",
+      "property_match": "prefix",
+      "value_contains": [
+        "conic-gradient("
+      ],
+      "token_hint": "bg-[conic-gradient(...)]",
+      "generator_id": "conic-gradient",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 4,
+      "property_pattern": "background",
+      "property_match": "prefix",
+      "value_contains": [
+        "url("
+      ],
+      "token_hint": "bg-[url(...)]",
+      "generator_id": "noise-texture",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 5,
+      "property_pattern": "background-color",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "bg-*",
+      "generator_id": "color-palette-token-mapper",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 6,
+      "property_pattern": "color",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "text-*",
+      "generator_id": "color-palette-token-mapper",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 7,
+      "property_pattern": "border-color",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "border-*",
+      "generator_id": "color-palette-token-mapper",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 8,
+      "property_pattern": "outline-color",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "border-*",
+      "generator_id": "color-palette-token-mapper",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 9,
+      "property_pattern": "accent-color",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "accent-*",
+      "generator_id": "color-palette-token-mapper",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 10,
+      "property_pattern": "caret-color",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "caret-*",
+      "generator_id": "color-palette-token-mapper",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 11,
+      "property_pattern": "box-shadow",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "shadow-[...]",
+      "generator_id": "shadow",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 12,
+      "property_pattern": "text-shadow",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "text-shadow-[...]",
+      "generator_id": "text-shadow",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 13,
+      "property_pattern": "filter",
+      "property_match": "exact",
+      "value_contains": [
+        "drop-shadow("
+      ],
+      "token_hint": "drop-shadow-[...]",
+      "generator_id": "drop-shadow",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 14,
+      "property_pattern": "filter",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "filter",
+      "generator_id": "filter",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 15,
+      "property_pattern": "backdrop-filter",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "backdrop-filter",
+      "generator_id": "backdrop-filter",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 16,
+      "property_pattern": "radius",
+      "property_match": "contains",
+      "value_contains": [],
+      "token_hint": "rounded-[...]",
+      "generator_id": "border-radius",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 17,
+      "property_pattern": "border-image",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "border-image-[...]",
+      "generator_id": "border-image-gradient-border",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 18,
+      "property_pattern": "clip-path",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "[clip-path:...]",
+      "generator_id": "clip-path-shapes",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 19,
+      "property_pattern": "mask",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "mask-*",
+      "generator_id": "css-mask",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 20,
+      "property_pattern": "transform",
+      "property_match": "exact",
+      "value_contains": [
+        "matrix3d(",
+        "perspective(",
+        "rotate3d(",
+        "rotatex(",
+        "rotatey(",
+        "translate3d(",
+        "translatez("
+      ],
+      "token_hint": "transform-3d",
+      "generator_id": "transform-3d",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 21,
+      "property_pattern": "transform",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "transform",
+      "generator_id": "transform-2d",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 22,
+      "property_pattern": "transition",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "transition-*",
+      "generator_id": "transition-builder",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 23,
+      "property_pattern": "animation-timing-function",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "[animation-timing-function:...]",
+      "generator_id": "easing-cubic-bezier-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 24,
+      "property_pattern": "animation",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "[animation:...]",
+      "generator_id": "keyframe-animation-timeline",
+      "source_edit_safety": "read-only"
+    },
+    {
+      "ordinal": 25,
+      "property_pattern": "display",
+      "property_match": "exact",
+      "value_contains": [
+        "grid"
+      ],
+      "token_hint": "grid",
+      "generator_id": "grid-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 26,
+      "property_pattern": "display",
+      "property_match": "exact",
+      "value_contains": [
+        "flex"
+      ],
+      "token_hint": "flex",
+      "generator_id": "flex-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 27,
+      "property_pattern": "grid-template-columns",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "grid-cols-*",
+      "generator_id": "grid-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 28,
+      "property_pattern": "grid-template-rows",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "grid-rows-*",
+      "generator_id": "grid-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 29,
+      "property_pattern": "gap",
+      "property_match": "suffix",
+      "value_contains": [],
+      "token_hint": "gap-*",
+      "generator_id": "grid-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 30,
+      "property_pattern": "justify-content",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "justify-*",
+      "generator_id": "flex-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 31,
+      "property_pattern": "align-items",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "items-*",
+      "generator_id": "flex-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 32,
+      "property_pattern": "align-content",
+      "property_match": "exact",
+      "value_contains": [],
+      "token_hint": "content-*",
+      "generator_id": "flex-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 33,
+      "property_pattern": "flex",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "flex-*",
+      "generator_id": "flex-layout-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 34,
+      "property_pattern": "container-",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "@container",
+      "generator_id": "container-query-breakpoint-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 35,
+      "property_pattern": "padding",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "p-*",
+      "generator_id": "responsive-spacing-scale-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 36,
+      "property_pattern": "margin",
+      "property_match": "prefix",
+      "value_contains": [],
+      "token_hint": "m-*",
+      "generator_id": "responsive-spacing-scale-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 37,
+      "property_pattern": "width",
+      "property_match": "suffix",
+      "value_contains": [],
+      "token_hint": "w-*",
+      "generator_id": "responsive-spacing-scale-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    },
+    {
+      "ordinal": 38,
+      "property_pattern": "height",
+      "property_match": "suffix",
+      "value_contains": [],
+      "token_hint": "h-*",
+      "generator_id": "responsive-spacing-scale-editor",
+      "source_edit_safety": "safe-static-utility-source-edit"
+    }
+  ]
+}

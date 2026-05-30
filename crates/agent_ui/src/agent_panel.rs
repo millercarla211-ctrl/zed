@@ -64,6 +64,7 @@ use crate::dx_receipt_history::tool_history_snapshot;
 use crate::dx_receipts::receipt_snapshot;
 use crate::dx_runtime_proof_status::runtime_proof_status_snapshot;
 use crate::dx_source_sets::{DxSourceKind, DxSourceSetSnapshot, source_set_snapshot};
+use crate::dx_style_panel::dx_style_panel_snapshot;
 use crate::dx_www_launch_evidence::www_launch_evidence_snapshot;
 use crate::message_editor::MessageEditor;
 use crate::terminal_thread_metadata_store::{TerminalThreadMetadata, TerminalThreadMetadataStore};
@@ -7014,6 +7015,7 @@ impl AgentPanel {
         let deploy_targets = deploy_target_snapshot(&workspace_roots);
         let proof_freshness = proof_freshness_snapshot(&workspace_roots);
         let runtime_proof_status = runtime_proof_status_snapshot(&workspace_roots);
+        let style_panel = dx_style_panel_snapshot();
         let deploy_env_receipt_count = deploy_targets.receipt_bucket_count("Env");
         let deploy_log_receipt_count = deploy_targets.receipt_bucket_count("Logs");
         let deploy_rollback_receipt_count = deploy_targets.receipt_bucket_count("Rollback");
@@ -7075,6 +7077,7 @@ impl AgentPanel {
             deploy_targets,
             proof_freshness,
             runtime_proof_status,
+            style_panel,
         }
     }
 

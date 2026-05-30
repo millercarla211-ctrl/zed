@@ -24,6 +24,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
     "crates/agent_ui/src/dx_launch_workspace/readiness.rs",
     "crates/agent_ui/src/dx_launch_workspace/source_audit.rs",
     "crates/agent_ui/src/dx_launch_workspace/sources.rs",
+    "crates/agent_ui/src/dx_launch_workspace/style_panel.rs",
     "crates/agent_ui/src/dx_launch_workspace/tool_history.rs",
     "crates/agent_ui/src/dx_launch_workspace/www_evidence.rs",
   ];
@@ -48,6 +49,7 @@ test("DX launch workspace UI stays split by rail ownership", () => {
   assert.match(parent, /^mod readiness;$/m);
   assert.match(parent, /^mod source_audit;$/m);
   assert.match(parent, /^mod sources;$/m);
+  assert.match(parent, /^mod style_panel;$/m);
   assert.match(parent, /^mod tool_history;$/m);
   assert.match(parent, /^mod www_evidence;$/m);
   assert.ok(

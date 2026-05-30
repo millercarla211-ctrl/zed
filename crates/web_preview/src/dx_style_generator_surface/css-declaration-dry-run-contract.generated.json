@@ -1,0 +1,61 @@
+{
+  "schema": "dx.style.css-declaration-dry-run-contract",
+  "schema_version": 1,
+  "scope": "review-only source-span contract for CSS declaration visual-generator edits",
+  "fixture_path": "fixtures/css-declaration-dry-run-contract.json",
+  "review_context_kind": "css_declaration",
+  "dry_run_receipt_schema": "dx.style.css-declaration-dry-run-receipt",
+  "source_mutation_enabled": false,
+  "source_apply_contract_required": true,
+  "required_context_fields": [
+    "schema",
+    "context_kind",
+    "source_path",
+    "source_span",
+    "source_digest",
+    "css_property",
+    "css_source_edit_safety"
+  ],
+  "required_review_guards": [
+    "active context schema match",
+    "css declaration context kind",
+    "css declaration hint source owned",
+    "active source digest match",
+    "request source span matches active source span",
+    "generated declaration delta validation",
+    "trusted CSS declaration dry-run receipt",
+    "editor write bridge can_apply",
+    "explicit user apply action"
+  ],
+  "review_receipt_fields": [
+    "review_status",
+    "mutation_ready",
+    "context_kind",
+    "css_property",
+    "css_source_edit_safety",
+    "source_path",
+    "source_span",
+    "source_digest",
+    "proposed_declaration",
+    "css_declaration_dry_run_diagnostics",
+    "css_declaration_dry_run_preview",
+    "css_declaration_dry_run_preview_diagnostics",
+    "dry_run_receipt"
+  ],
+  "accepted_source_edit_safety": [
+    "safe-static-utility-source-edit",
+    "safe-dx-owned-css-source-edit"
+  ],
+  "max_source_path_bytes": 4096,
+  "max_declaration_bytes": 4096,
+  "max_diagnostic_count": 8,
+  "max_diagnostic_bytes": 160,
+  "max_source_span_bytes": 16384,
+  "max_source_digest_bytes": 128,
+  "consumers": [
+    "Zed Web Preview",
+    "Zed Style panel",
+    "Friday",
+    "dx-check"
+  ]
+}

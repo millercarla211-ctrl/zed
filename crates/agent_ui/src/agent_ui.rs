@@ -64,6 +64,7 @@ mod dx_receipt_history;
 mod dx_receipts;
 mod dx_runtime_proof_status;
 mod dx_source_sets;
+mod dx_style_panel;
 mod dx_www_launch_evidence;
 mod entry_view_state;
 mod external_source_prompt;
@@ -611,6 +612,7 @@ pub fn init(
         init_language_model_settings(cx);
     }
     agent_panel::init(cx);
+    dx_style_panel::panel::init(cx);
     context_server_configuration::init(language_registry.clone(), fs.clone(), cx);
     thread_metadata_store::init(cx);
     terminal_thread_metadata_store::init(cx);
