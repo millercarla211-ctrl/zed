@@ -471,6 +471,12 @@
     "group_source_state",
     "group_utility_count"
   ],
+  "fallback_review_properties": [
+    "display",
+    "transition-property",
+    "background",
+    "border"
+  ],
   "consumers": [
     "Zed Web Preview",
     "Zed Style panel",

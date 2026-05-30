@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Reverse Delta Fallback Priority
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-reverse-delta-fallback-priority-plan.md` records the source-only plan for source-owned fallback review priority.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_reverse_css_delta.rs` and its fixture now publish `fallback_review_properties` for broad declarations that should not mask richer generator deltas.
+- Zed's generated reverse-delta contract mirror now carries the source-owned fallback review property list.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now uses `fallback_review_properties` instead of hardcoding only `display` and `transition-property` as fallback mappings.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document source-owned reverse-delta fallback priority.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Reverse Delta Coverage Guard
 
 ADDED:

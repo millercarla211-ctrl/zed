@@ -79,6 +79,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const reverseCssDeltaRequiredProvenanceFields = Array.isArray(reverseCssDeltaContract.required_preview_provenance_fields)
       ? reverseCssDeltaContract.required_preview_provenance_fields
       : [];
+    const reverseCssDeltaFallbackReviewProperties = Array.isArray(reverseCssDeltaContract.fallback_review_properties)
+      ? reverseCssDeltaContract.fallback_review_properties
+      : [];
+    const reverseCssDeltaFallbackReviewPropertySet = new Set(
+      reverseCssDeltaFallbackReviewProperties.map((property) => String(property || "").toLowerCase())
+    );
     const reverseCssDeltaSupportedProvenanceFields = new Set([
       "group_status",
       "group_alias",
@@ -1004,7 +1010,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
     function isFallbackReverseDeltaMapping(mapping) {
       const strategy = String(mapping?.value_strategy || "");
       const property = String(mapping?.property || "").toLowerCase();
-      return strategy === "display_keyword" || property === "transition-property";
+      return reverseCssDeltaFallbackReviewPropertySet.has(property)
+        || (strategy === "display_keyword" && !reverseCssDeltaFallbackReviewProperties.length);
     }
 
     function reverseCssDeltaPreviewProvenance(group) {
@@ -1897,6 +1904,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `reverse_css_delta_supported_properties: ${reverseCssDeltaSupportedProperties.length}`,
         `reverse_css_delta_required_guards: ${reverseCssDeltaRequiredGuards.length}`,
         `reverse_css_delta_required_provenance_fields: ${reverseCssDeltaRequiredProvenanceFields.length}`,
+        `reverse_css_delta_fallback_review_properties: ${reverseCssDeltaFallbackReviewProperties.length}`,
         `reverse_css_delta_contract_diagnostics: ${reverseDeltaContractDiagnostics.length}`,
         ...reverseDeltaContractDiagnostics.map((diagnostic) => `reverse_css_delta_contract_diagnostic: ${diagnostic}`),
         `reverse_css_delta_preview_provenance_diagnostics: ${reverseDeltaPreviewProvenanceDiagnostics.length}`,
