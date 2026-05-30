@@ -21,6 +21,12 @@
       "value_strategy": "arbitrary_bracket_value"
     },
     {
+      "property": "background",
+      "utility_prefix": "bg-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
       "property": "background-size",
       "utility_prefix": "bg-size-",
       "token_prefix": "",

@@ -841,7 +841,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const utilityPrefix = String(mapping?.utility_prefix || "");
       const property = String(mapping?.property || "").toLowerCase();
       if (!utilityPrefix) return isDisplayUtility(text);
-      if (property === "background-image" && utilityPrefix === "bg-") {
+      if ((property === "background" || property === "background-image") && utilityPrefix === "bg-") {
         return isBackgroundImageUtility(text);
       }
       if (property === "transform" && utilityPrefix === "transform-") {
