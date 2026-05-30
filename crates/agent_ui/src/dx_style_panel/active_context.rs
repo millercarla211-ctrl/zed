@@ -33,6 +33,7 @@ pub(super) struct ActiveStyleContextSnapshot {
     pub(super) span_start: Option<usize>,
     pub(super) span_end: Option<usize>,
     pub(super) source_digest: Option<String>,
+    pub(super) source_len_bytes: Option<usize>,
     pub(super) apply_gate: StyleApplyGateSnapshot,
 }
 
@@ -55,6 +56,7 @@ impl ActiveStyleContextSnapshot {
             span_start: None,
             span_end: None,
             source_digest: None,
+            source_len_bytes: None,
             apply_gate: style_apply_gate(None),
         }
     }
@@ -74,6 +76,11 @@ impl ActiveStyleContextSnapshot {
         self
     }
 
+    fn with_source_len(mut self, source_len_bytes: usize) -> Self {
+        self.source_len_bytes = Some(source_len_bytes);
+        self
+    }
+
     fn with_token(
         mut self,
         token: impl Into<String>,
@@ -82,6 +89,7 @@ impl ActiveStyleContextSnapshot {
         source_path: &str,
         workspace_root: Option<&str>,
         source_digest: String,
+        source_len_bytes: usize,
         attribute_tokens: Vec<String>,
     ) -> Self {
         let token = token.into();
@@ -108,6 +116,7 @@ impl ActiveStyleContextSnapshot {
         self.span_start = Some(start);
         self.span_end = Some(end);
         self.source_digest = Some(source_digest);
+        self.source_len_bytes = Some(source_len_bytes);
         self
     }
 
@@ -117,6 +126,7 @@ impl ActiveStyleContextSnapshot {
         source_path: &str,
         workspace_root: Option<&str>,
         source_digest: String,
+        source_len_bytes: usize,
     ) -> Self {
         self.group_context = ActiveGroupContext::from_tokens(
             None,
@@ -127,6 +137,7 @@ impl ActiveStyleContextSnapshot {
         self.source_path = Some(source_path.to_string());
         self.workspace_root = workspace_root.map(str::to_string);
         self.source_digest = Some(source_digest);
+        self.source_len_bytes = Some(source_len_bytes);
         self.context_kind = Some("class_list".to_string());
         self.attribute_tokens = attribute_tokens;
         self
@@ -142,6 +153,7 @@ impl ActiveStyleContextSnapshot {
         end: usize,
         source_path: &str,
         source_digest: String,
+        source_len_bytes: usize,
     ) -> Self {
         self.source_path = Some(source_path.to_string());
         self.source_state = Some("CSS declaration generator hint is read-only".to_string());
@@ -154,6 +166,7 @@ impl ActiveStyleContextSnapshot {
         self.span_start = Some(start);
         self.span_end = Some(end);
         self.source_digest = Some(source_digest);
+        self.source_len_bytes = Some(source_len_bytes);
         self
     }
 
@@ -182,6 +195,7 @@ impl ActiveStyleContextSnapshot {
             "span": self.span,
             "source_span": self.source_span_json(),
             "source_digest": self.source_digest,
+            "source_len_bytes": self.source_len_bytes,
             "apply_gate": self.apply_gate.to_json(),
             "source_apply": "disabled_until_trusted_grouped_class_source_span_and_dry_run_receipt",
         })
@@ -241,6 +255,7 @@ pub(super) fn active_style_context(
         return ActiveStyleContextSnapshot::new("style file too large", source_path.clone())
             .with_source_path(source_path)
             .with_workspace_root(workspace_root.as_deref())
+            .with_source_len(source_len)
             .with_source_state("cursor token scan skipped for large active file");
     }
 
@@ -255,6 +270,7 @@ pub(super) fn active_style_context(
         return ActiveStyleContextSnapshot::new("style file too large", source_path.clone())
             .with_source_path(source_path)
             .with_workspace_root(workspace_root.as_deref())
+            .with_source_len(source.len())
             .with_source_state("cursor token scan skipped for large active file");
     }
     match cursor_style_token(&source, cursor) {
@@ -274,6 +290,7 @@ pub(super) fn active_style_context(
                     &source_path,
                     workspace_root.as_deref(),
                     source_digest,
+                    source.len(),
                     attribute_tokens,
                 )
         }
@@ -286,6 +303,7 @@ pub(super) fn active_style_context(
                     &source_path,
                     workspace_root.as_deref(),
                     source_digest,
+                    source.len(),
                 )
         }
         CursorStyleToken::DynamicAttribute => {
@@ -321,6 +339,7 @@ pub(super) fn active_style_context(
                         hint.end,
                         &source_path,
                         source_digest,
+                        source.len(),
                     )
                     .with_workspace_root(workspace_root.as_deref());
             }

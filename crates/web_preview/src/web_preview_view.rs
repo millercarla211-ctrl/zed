@@ -32,6 +32,7 @@ use ui::{
     Color, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize, Label, LabelSize,
     PopoverMenu, Tooltip, prelude::*,
 };
+use uuid::Uuid;
 use workspace::item::{
     Item, ItemBufferKind, ItemEvent, PaneTabBarControls, ProjectItem as WorkspaceProjectItem,
     ProjectItemKind, TabContentParams, WorkspaceScreenKind,
@@ -69,11 +70,14 @@ use windows::Win32::{
 use windows::core::PCWSTR;
 const DEFAULT_WEB_PREVIEW_URL: &str = "https://www.google.com/";
 const GOOGLE_SEARCH_URL: &str = "https://www.google.com/search";
+const DX_STYLE_GENERATOR_DISPLAY_URL: &str = "zed://dx-style/generator";
+const DX_STYLE_GENERATOR_DATA_URL_PREFIX: &str = "data:text/html;charset=utf-8,";
 const BOOKMARKS_FILE_NAME: &str = "bookmarks.json";
 const MAX_AGENT_BROWSER_ACTION_PAYLOAD_IMPORT_BYTES: u64 = 256 * 1024;
 const MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES: u64 = 256 * 1024;
 const MAX_WEB_PREVIEW_IPC_MESSAGE_BYTES: usize = 1024 * 1024;
 const MAX_DEFERRED_WEB_PREVIEW_IPC_MESSAGES: usize = 256;
+const MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES: usize = 8 * 1024 * 1024;
 const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 #[cfg(target_os = "windows")]
 const MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES: u64 = 64 * 1024 * 1024;
@@ -1417,7 +1421,13 @@ impl WebPreviewView {
     }
 
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Ok(url) = normalized_url(&self.current_url_text(cx)) else {
+        let requested_url = self.current_url_text(cx);
+        if is_dx_style_generator_display_url(&requested_url) {
+            self.load_dx_style_generator_url(None, window, cx);
+            return;
+        }
+
+        let Ok(url) = normalized_url(&requested_url) else {
             self.load_state = PreviewLoadState::Error("Enter a valid URL or search query.".into());
             cx.notify();
             return;
@@ -1465,10 +1475,12 @@ impl WebPreviewView {
         };
 
         let url = url.to_string();
+        let display_url =
+            display_url_for_loaded_url(url.as_str(), dx_style_source_apply_session_token.is_some());
         self.url_editor.update(cx, |editor, cx| {
-            editor.set_text(url.as_str(), window, cx);
+            editor.set_text(display_url, window, cx);
         });
-        self.active_url = url.clone().into();
+        self.active_url = display_url.into();
         self.dx_style_source_apply_session_token =
             dx_style_source_apply_session_token.map(SharedString::from);
         self.page_title = None;
@@ -1486,7 +1498,7 @@ impl WebPreviewView {
             "{}:{}:{}",
             self.session_id.as_ref(),
             self.dx_style_source_apply_session_sequence,
-            Self::current_epoch_millis()
+            Uuid::new_v4()
         )
     }
 
@@ -30195,12 +30207,17 @@ impl WebPreviewView {
             match event {
                 BrowserEvent::UrlChanged(url) => {
                     let previous_url = self.active_url.to_string();
-                    if self.dx_style_source_apply_session_token.is_some()
-                        && previous_url.as_str() != url.as_str()
+                    let source_apply_session_active =
+                        self.dx_style_source_apply_session_token.is_some();
+                    let display_url =
+                        display_url_for_loaded_url(url.as_str(), source_apply_session_active);
+                    if source_apply_session_active
+                        && !is_dx_style_generator_display_url(display_url)
+                        && previous_url.as_str() != display_url
                     {
                         self.dx_style_source_apply_session_token = None;
                     }
-                    self.active_url = url.clone().into();
+                    self.active_url = display_url.into();
                     let editor_text = self.current_url_text(cx);
                     let should_sync_editor = !self.url_editor_focus_handle.is_focused(window)
                         || editor_text.is_empty()
@@ -30208,7 +30225,7 @@ impl WebPreviewView {
 
                     if should_sync_editor {
                         self.url_editor.update(cx, |editor, cx| {
-                            editor.set_text(url.as_str(), window, cx);
+                            editor.set_text(display_url, window, cx);
                         });
                     }
                 }
@@ -30274,6 +30291,31 @@ impl WebPreviewView {
         Ok(())
     }
 
+    fn ensure_deferred_ipc_queue_has_byte_capacity(
+        current_bytes: usize,
+        incoming_bytes: usize,
+    ) -> Result<()> {
+        let total_bytes = current_bytes.checked_add(incoming_bytes).ok_or_else(|| {
+            anyhow!(
+                "Web Preview bridge queue byte count overflowed the {} byte limit",
+                MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES
+            )
+        })?;
+        if total_bytes > MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES {
+            return Err(anyhow!(
+                "Web Preview bridge queue would reach {} bytes, exceeding the {} byte limit",
+                total_bytes,
+                MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn deferred_ipc_message_bytes(messages: &[String]) -> usize {
+        messages.iter().map(String::len).sum()
+    }
+
     fn queue_deferred_ipc_message(&mut self, message: String, cx: &mut Context<Self>) {
         if let Err(error) = Self::ensure_web_preview_ipc_message_within_byte_limit(&message) {
             self.report_action_error("Web Preview bridge message rejected", error, cx);
@@ -30283,6 +30325,14 @@ impl WebPreviewView {
         if let Err(error) =
             Self::ensure_deferred_ipc_queue_has_capacity(self.deferred_ipc_messages.len())
         {
+            self.report_action_error("Web Preview bridge message rejected", error, cx);
+            return;
+        }
+
+        if let Err(error) = Self::ensure_deferred_ipc_queue_has_byte_capacity(
+            Self::deferred_ipc_message_bytes(&self.deferred_ipc_messages),
+            message.len(),
+        ) {
             self.report_action_error("Web Preview bridge message rejected", error, cx);
             return;
         }
@@ -30552,16 +30602,25 @@ impl WebPreviewView {
                 }
             }
             "dx-style-source-apply" => {
-                let receipt = if let Some(refusal_reason) =
+                let (receipt, consume_session_token) = if let Some(refusal_reason) =
                     self.dx_style_source_apply_session_refusal(&payload)
                 {
-                    crate::dx_style_source_apply::source_apply_session_refused_receipt(
-                        &payload,
-                        refusal_reason,
+                    (
+                        crate::dx_style_source_apply::source_apply_session_refused_receipt(
+                            &payload,
+                            refusal_reason,
+                        ),
+                        false,
                     )
                 } else {
-                    crate::dx_style_source_apply::source_apply_review_receipt(&payload)
+                    (
+                        crate::dx_style_source_apply::source_apply_review_receipt(&payload),
+                        true,
+                    )
                 };
+                if consume_session_token {
+                    self.dx_style_source_apply_session_token = None;
+                }
                 let status = receipt
                     .get("status")
                     .and_then(Value::as_str)
@@ -34902,7 +34961,6 @@ impl Item for WebPreviewView {
         let detected_extensions = self.detected_extensions.clone();
         let bookmarks = self.bookmarks.clone();
         let onboarding_complete = self.onboarding_complete.clone();
-        let dx_style_source_apply_session_token = self.dx_style_source_apply_session_token.clone();
         let dx_style_source_apply_session_sequence = self.dx_style_source_apply_session_sequence;
 
         Task::ready(Some(cx.new(|cx| {
@@ -34938,7 +34996,7 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
-                dx_style_source_apply_session_token,
+                dx_style_source_apply_session_token: None,
                 dx_style_source_apply_session_sequence,
                 onboarding_complete,
                 latest_dx_studio_selection: None,
@@ -35254,6 +35312,17 @@ pub(crate) fn push_browser_ipc_event(event_queue: &Arc<Mutex<Vec<BrowserEvent>>>
         return;
     }
 
+    if let Err(error) = WebPreviewView::ensure_deferred_ipc_queue_has_byte_capacity(
+        queued_browser_ipc_message_bytes(&queue),
+        message.len(),
+    ) {
+        push_browser_ipc_rejection_once(
+            &mut queue,
+            format!("Web Preview bridge message rejected: {error}"),
+        );
+        return;
+    }
+
     queue.push(BrowserEvent::IpcMessage(message));
 }
 
@@ -35262,6 +35331,16 @@ fn queued_browser_ipc_message_count(queue: &[BrowserEvent]) -> usize {
         .iter()
         .filter(|event| matches!(event, BrowserEvent::IpcMessage(_)))
         .count()
+}
+
+fn queued_browser_ipc_message_bytes(queue: &[BrowserEvent]) -> usize {
+    queue
+        .iter()
+        .filter_map(|event| match event {
+            BrowserEvent::IpcMessage(message) => Some(message.len()),
+            _ => None,
+        })
+        .sum()
 }
 
 fn push_browser_ipc_rejection_once(queue: &mut Vec<BrowserEvent>, message: String) {
@@ -37168,6 +37247,24 @@ fn normalized_url(raw: &str) -> Result<url::Url> {
     let mut url = url::Url::parse(GOOGLE_SEARCH_URL)?;
     url.query_pairs_mut().append_pair("q", trimmed);
     Ok(url)
+}
+
+fn display_url_for_loaded_url(url: &str, has_dx_style_source_apply_session: bool) -> &str {
+    if url.starts_with(DX_STYLE_GENERATOR_DATA_URL_PREFIX)
+        && (has_dx_style_source_apply_session || is_dx_style_generator_data_url(url))
+    {
+        DX_STYLE_GENERATOR_DISPLAY_URL
+    } else {
+        url
+    }
+}
+
+fn is_dx_style_generator_data_url(url: &str) -> bool {
+    url.contains("DX%20Style%20Generators")
+}
+
+fn is_dx_style_generator_display_url(url: &str) -> bool {
+    url.trim() == DX_STYLE_GENERATOR_DISPLAY_URL
 }
 
 fn slugify(input: &str) -> String {

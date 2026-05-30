@@ -347,8 +347,35 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         MAX_SOURCE_DIGEST_BYTES,
         &mut reasons,
     );
-    if context_source_digest.is_some_and(|digest| !digest.starts_with(SOURCE_DIGEST_PREFIX)) {
-        reasons.push("context source_digest does not use fnv1a64".to_string());
+    let request_source_digest = bounded_string(
+        request,
+        "/source_digest",
+        "request source_digest",
+        MAX_SOURCE_DIGEST_BYTES,
+        &mut reasons,
+    );
+    if context_source_digest.is_some_and(|digest| !is_source_digest(digest)) {
+        reasons.push("context source_digest is not a complete fnv1a64 digest".to_string());
+    }
+    if request_source_digest.is_some_and(|digest| !is_source_digest(digest)) {
+        reasons.push("request source_digest is not a complete fnv1a64 digest".to_string());
+    }
+    if request_source_digest.is_some()
+        && context_source_digest.is_some()
+        && request_source_digest != context_source_digest
+    {
+        reasons.push("request source_digest does not match context source_digest".to_string());
+    }
+    let context_source_len = context.get("source_len_bytes").and_then(Value::as_u64);
+    if let (Some(source_len), Some(span)) = (context_source_len, context_span) {
+        if span.end > source_len {
+            reasons.push("context source_span exceeds context source length".to_string());
+        }
+    }
+    if let (Some(source_len), Some(span)) = (context_source_len, request_span) {
+        if span.end > source_len {
+            reasons.push("request source_span exceeds context source length".to_string());
+        }
     }
 
     let context_schema = context.get("schema").and_then(Value::as_str);
@@ -561,6 +588,28 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if apply_gate.get("can_enable_apply").and_then(Value::as_bool) != Some(true) {
         reasons.push("style apply gate is not ready".to_string());
     }
+    if apply_gate.get("can_enable_apply").and_then(Value::as_bool) == Some(true) {
+        if apply_gate
+            .get("trusted_dry_run_receipt_present")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            reasons.push("style apply gate is ready without a trusted dry-run receipt".to_string());
+        }
+        if apply_gate.get("receipt_match").and_then(Value::as_str) != Some("active_source_matched")
+        {
+            reasons.push(
+                "style apply gate is ready without an active-source receipt match".to_string(),
+            );
+        }
+        if apply_gate
+            .get("receipt_path")
+            .and_then(Value::as_str)
+            .is_none()
+        {
+            reasons.push("style apply gate is ready without a receipt path".to_string());
+        }
+    }
     if editor_write_bridge
         .get("can_apply")
         .and_then(Value::as_bool)
@@ -582,6 +631,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push("Web Preview cannot declare native mutation capability".to_string());
     }
     reasons.push("native source writer capability is review-only".to_string());
+    reasons.push("native active editor source revalidation is not yet performed".to_string());
 
     let status = if can_review_request {
         "reviewed_with_blockers"
@@ -600,6 +650,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "reasons": reasons,
         "generator": generator,
         "source_path": source_path,
+        "source_digest": request_source_digest,
         "source_span": span_json(request_span),
         "context": {
             "schema": context_schema,
@@ -608,6 +659,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "source_path": context_source_path,
             "source_span": span_json(context_span),
             "source_digest": context_source_digest,
+            "source_len_bytes": context_source_len,
             "css_property": context.get("css_property").and_then(Value::as_str),
             "css_source_edit_safety": css_source_edit_safety,
         },
@@ -1111,6 +1163,13 @@ fn source_span_at(
         return None;
     }
     Some(SourceSpan { start, end })
+}
+
+fn is_source_digest(value: &str) -> bool {
+    let Some(digest) = value.strip_prefix(SOURCE_DIGEST_PREFIX) else {
+        return false;
+    };
+    digest.len() == 16 && digest.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 fn span_json(span: Option<SourceSpan>) -> Option<Value> {

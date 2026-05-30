@@ -832,7 +832,10 @@ test("Zed handoff docs register the DX Style panel/read-model guard", () => {
   const dx = read("DX.md");
 
   assert.match(dx, /node --test script\/dx-style-panel-source\.test\.ts/);
-  assert.match(dx, /DX Style plan\/read-model, Web Preview generator, source-apply session/);
+  assert.match(
+    dx,
+    /DX Style plan\/read-model, Web Preview generator split modules, trusted source-apply session/,
+  );
 });
 
 test("DX Style visual generator mirror helper reports Zed fallback freshness", () => {
@@ -1038,6 +1041,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
     cssTemplate: entry.css_template,
   }));
   const webPreviewCargo = read("crates/web_preview/Cargo.toml");
+  const sourceApplyArm = webPreviewView.slice(
+    webPreviewView.indexOf('"dx-style-source-apply" =>'),
+    webPreviewView.indexOf('let status = receipt', webPreviewView.indexOf('"dx-style-source-apply" =>')),
+  );
+  const sourceApplySessionTokenFn = webPreviewView.slice(
+    webPreviewView.indexOf("fn next_dx_style_source_apply_session_token"),
+    webPreviewView.indexOf("#[allow(dead_code)]", webPreviewView.indexOf("fn next_dx_style_source_apply_session_token")),
+  );
 
   assert.match(actions, /pub mod dx_style/);
   assert.match(actions, /TogglePanel/);
@@ -1056,6 +1067,21 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /dx_style_source_apply_session_refusal/);
   assert.match(webPreviewView, /dx_style_source_apply_session_token/);
   assert.match(webPreviewView, /next_dx_style_source_apply_session_token/);
+  assert.match(webPreviewCargo, /uuid\.workspace = true/);
+  assert.match(webPreviewView, /use uuid::Uuid/);
+  assert.match(sourceApplySessionTokenFn, /Uuid::new_v4\(\)/);
+  assert.doesNotMatch(sourceApplySessionTokenFn, /current_epoch_millis/);
+  assert.match(webPreviewView, /DX_STYLE_GENERATOR_DISPLAY_URL: &str = "zed:\/\/dx-style\/generator"/);
+  assert.match(webPreviewView, /DX_STYLE_GENERATOR_DATA_URL_PREFIX: &str = "data:text\/html;charset=utf-8,"/);
+  assert.match(webPreviewView, /fn display_url_for_loaded_url/);
+  assert.match(webPreviewView, /fn is_dx_style_generator_data_url/);
+  assert.match(webPreviewView, /DX%20Style%20Generators/);
+  assert.match(webPreviewView, /fn is_dx_style_generator_display_url/);
+  assert.match(webPreviewView, /editor\.set_text\(display_url, window, cx\)/);
+  assert.match(
+    webPreviewView,
+    /display_url_for_loaded_url\(url\.as_str\(\), source_apply_session_active\)/,
+  );
   assert.match(webPreviewView, /\.pointer\("\/source_apply_session\/kind"\)/);
   assert.match(webPreviewView, /\.pointer\("\/request\/source_apply_session\/kind"\)/);
   assert.match(webPreviewView, /\.pointer\("\/source_apply_session\/token"\)/);
@@ -1100,6 +1126,33 @@ test("Web Preview owns the DX Style generator surface action", () => {
     webPreviewView.indexOf("self.dx_style_source_apply_session_refusal(&payload)") <
       webPreviewView.indexOf("crate::dx_style_source_apply::source_apply_review_receipt(&payload)"),
   );
+  assert.match(sourceApplyArm, /source_apply_session_refused_receipt/);
+  assert.match(sourceApplyArm, /source_apply_review_receipt/);
+  assert.match(
+    sourceApplyArm,
+    /source_apply_session_refused_receipt[\s\S]*false/,
+  );
+  assert.match(sourceApplyArm, /source_apply_review_receipt[\s\S]*true/);
+  assert.match(sourceApplyArm, /if consume_session_token/);
+  assert.match(sourceApplyArm, /self\.dx_style_source_apply_session_token = None/);
+  assert.ok(
+    sourceApplyArm.indexOf("crate::dx_style_source_apply::source_apply_session_refused_receipt") <
+      sourceApplyArm.indexOf("self.dx_style_source_apply_session_token = None"),
+  );
+  assert.ok(
+    sourceApplyArm.indexOf("crate::dx_style_source_apply::source_apply_review_receipt") <
+      sourceApplyArm.indexOf("self.dx_style_source_apply_session_token = None"),
+  );
+  assert.match(webPreviewView, /MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES: usize = 8 \* 1024 \* 1024/);
+  assert.match(webPreviewView, /ensure_deferred_ipc_queue_has_byte_capacity/);
+  assert.match(webPreviewView, /deferred_ipc_message_bytes\(&self\.deferred_ipc_messages\)/);
+  assert.match(webPreviewView, /queued_browser_ipc_message_bytes\(&queue\)/);
+  assert.match(webPreviewView, /fn queued_browser_ipc_message_bytes/);
+  assert.doesNotMatch(
+    webPreviewView,
+    /let dx_style_source_apply_session_token = self\.dx_style_source_apply_session_token\.clone\(\)/,
+  );
+  assert.match(webPreviewView, /dx_style_source_apply_session_token: None/);
   assert.match(webPreviewView, /DX Style source apply review recorded/);
   assert.match(webPreviewView, /DX Style source apply request refused/);
   assert.match(webPreviewView, /open_url_in_side_pane/);
@@ -1209,7 +1262,20 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /editor write bridge is not ready/);
   assert.match(sourceApply, /request source_path does not match context source_path/);
   assert.match(sourceApply, /request source_span does not match context source_span/);
-  assert.match(sourceApply, /context source_digest does not use fnv1a64/);
+  assert.match(sourceApply, /request source_digest does not match context source_digest/);
+  assert.match(sourceApply, /context source_digest is not a complete fnv1a64 digest/);
+  assert.match(sourceApply, /request source_digest is not a complete fnv1a64 digest/);
+  assert.match(sourceApply, /fn is_source_digest/);
+  assert.match(sourceApply, /strip_prefix\(SOURCE_DIGEST_PREFIX\)/);
+  assert.match(sourceApply, /digest\.len\(\) == 16/);
+  assert.match(sourceApply, /source_len_bytes/);
+  assert.match(sourceApply, /context source_span exceeds context source length/);
+  assert.match(sourceApply, /request source_span exceeds context source length/);
+  assert.match(sourceApply, /style apply gate is ready without a trusted dry-run receipt/);
+  assert.match(sourceApply, /style apply gate is ready without an active-source receipt match/);
+  assert.match(sourceApply, /style apply gate is ready without a receipt path/);
+  assert.match(sourceApply, /native active editor source revalidation is not yet performed/);
+  assert.match(sourceApply, /"source_digest": request_source_digest/);
   assert.match(sourceApply, /context kind is not listed in the source-apply review contract/);
   assert.match(sourceApply, /CSS declaration context is missing source edit safety/);
   assert.match(sourceApply, /missing DX Style CSS declaration dry-run contract schema/);
@@ -1823,6 +1889,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /source_apply_review_blocker/);
   assert.match(surfaceScript, /source_path: zedStyleContext\?\.source_path \|\| null/);
   assert.match(surfaceScript, /source_span: zedStyleContext\?\.source_span \|\| null/);
+  assert.match(surfaceScript, /source_digest: zedStyleContext\?\.source_digest \|\| null/);
   assert.match(surfaceScript, /context_kind: zedStyleContext\?\.context_kind \|\| null/);
   assert.match(surfaceScript, /css_source_edit_safety: zedStyleContext\?\.css_source_edit_safety \|\| null/);
   assert.match(surfaceScript, /reverse_css_delta_contract: reverseCssDeltaContract/);
@@ -1834,6 +1901,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /context_kind/);
   assert.match(surfaceScript, /css_source_edit_safety/);
   assert.match(surfaceScript, /source_path: \$\{zedStyleContext\.source_path\}/);
+  assert.match(surfaceScript, /source_len_bytes: \$\{zedStyleContext\.source_len_bytes\}/);
   assert.match(surfaceScript, /active_token/);
   assert.match(surfaceScript, /css_property/);
   assert.match(surfaceScript, /css_generator/);
@@ -2133,6 +2201,11 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(activeContext, /can_open_generator/);
   assert.match(activeContext, /"workspace unavailable" \| "no active file" \| "non-style file"/);
   assert.match(activeContext, /source_digest::active_source_digest/);
+  assert.match(activeContext, /source_len_bytes: Option<usize>/);
+  assert.match(activeContext, /fn with_source_len/);
+  assert.match(activeContext, /"source_len_bytes": self\.source_len_bytes/);
+  assert.match(activeContext, /\.with_source_len\(source_len\)/);
+  assert.match(activeContext, /source\.len\(\)/);
   assert.doesNotMatch(
     activeContext,
     /let source_digest = active_source_digest\(&source\);\s*match cursor_style_token/s,

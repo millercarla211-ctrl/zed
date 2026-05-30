@@ -780,6 +780,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         generator: state.generator,
         source_path: zedStyleContext?.source_path || null,
         source_span: zedStyleContext?.source_span || null,
+        source_digest: zedStyleContext?.source_digest || null,
         source_apply_session: {
           kind: sourceApplySessionKind,
           token: sourceApplySessionToken
@@ -1307,6 +1308,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         zedStyleContext.span ? `source_span: ${zedStyleContext.span}` : null,
         Number.isInteger(zedStyleContext.source_span?.start_byte) && Number.isInteger(zedStyleContext.source_span?.end_byte) ? `source_span_bytes: ${zedStyleContext.source_span.start_byte}..${zedStyleContext.source_span.end_byte}` : null,
         zedStyleContext.source_digest ? `source_digest: ${zedStyleContext.source_digest}` : null,
+        Number.isInteger(zedStyleContext.source_len_bytes) ? `source_len_bytes: ${zedStyleContext.source_len_bytes}` : null,
         zedStyleContext.source_state ? `source_state: ${zedStyleContext.source_state}` : null,
         contextGenerator ? `suggested_generator: ${contextGenerator}` : null,
         zedStyleContext.apply_gate?.state ? `apply_gate: ${zedStyleContext.apply_gate.state}` : null,

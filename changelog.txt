@@ -1,3 +1,19 @@
+[2026-05-30] - DX Style Source Apply Session Hardening
+
+ADDED:
+- `docs/superpowers/plans/2026-05-30-dx-style-source-apply-session-hardening-plan.md` records the source-only session-token and IPC queue pressure hardening plan.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now generates DX Style source-apply session tokens with UUID-backed nonce material instead of sequence/time-only material.
+- DX Style source-apply review now consumes the active native session token only after a trusted `dx-style-source-apply` request reaches review, while refused/untrusted packets no longer burn the valid session.
+- DX Style generator loads now show a stable `zed://dx-style/generator` display URL instead of exposing the token-bearing data URL through active Web Preview state, and split panes start without a copied source-apply token.
+- Native source-apply review now checks request/context source digest parity, complete `fnv1a64:` digest shape, source length bounds for spans, and explicit apply-gate receipt consistency before any future write path can trust the review.
+- Web Preview IPC queueing now applies an aggregate queued-byte cap alongside the existing per-message and message-count caps for both browser-originated IPC events and deferred native handling.
+- `script/dx-style-panel-source.test.ts` now guards UUID-backed session generation, trusted-token consumption, refused-token preservation, display-URL redaction, split-token reset, source identity checks, and aggregate queued IPC byte caps.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, or live WebView validation was run.
+
 [2026-05-30] - DX Style CSS Dry-Run Script Split
 
 ADDED:
