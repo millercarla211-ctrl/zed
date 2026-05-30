@@ -722,6 +722,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (strategy === "grid_track_repeat_count") return gridTrackRepeatCountToken(text);
       if (strategy === "transition_property_value") return transitionPropertyReverseDeltaToken(text);
       if (strategy === "transition_timing_function_value") return transitionTimingFunctionReverseDeltaToken(text);
+      if (strategy === "arbitrary_css_property_value") return arbitraryCssPropertyReverseDeltaToken(mapping?.property, text);
       const prefix = String(mapping?.token_prefix || "");
       if (!prefix || !text.startsWith(prefix) || !text.endsWith(")")) return null;
       const token = text.slice(prefix.length, -1).trim();
@@ -736,6 +737,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (strategy === "margin_token_suffix" && text.startsWith("-")) {
         return `-${prefix}${text.slice(1)}`;
       }
+      if (strategy === "arbitrary_css_property_value") return text;
       return `${prefix}${text}`;
     }
 
@@ -836,16 +838,27 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       return `[${text.split(/\s+/).join("_")}]`;
     }
 
+    function arbitraryCssPropertyReverseDeltaToken(property, value) {
+      const token = arbitraryReverseDeltaToken(value);
+      const propertyName = String(property || "").trim();
+      if (!token || !/^[a-z-]+$/.test(propertyName)) return null;
+      return `[${propertyName}:${token.slice(1, -1)}]`;
+    }
+
     function utilityMatchesReverseDeltaFamily(utility, mapping) {
       const text = String(utility || "");
       const utilityPrefix = String(mapping?.utility_prefix || "");
       const property = String(mapping?.property || "").toLowerCase();
+      const strategy = String(mapping?.value_strategy || "");
       if (!utilityPrefix) return isDisplayUtility(text);
       if ((property === "background" || property === "background-image") && utilityPrefix === "bg-") {
         return isBackgroundImageUtility(text);
       }
       if (property === "transform" && utilityPrefix === "transform-") {
         return isTransformUtility(text);
+      }
+      if (strategy === "arbitrary_css_property_value") {
+        return isArbitraryCssPropertyUtility(text, property);
       }
       if (utilityPrefix === "gap-") return isBaseGapUtility(text);
       if (utilityPrefix === "border-") return isBorderColorUtility(text);
@@ -922,6 +935,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
       const suffix = text.replace(/^transform-/, "");
       return text.startsWith("transform-") && isArbitraryOrCssVariableToken(suffix);
+    }
+
+    function isArbitraryCssPropertyUtility(utility, property) {
+      const text = String(utility || "");
+      const propertyName = String(property || "").trim();
+      return text.startsWith(`[${propertyName}:`) && text.endsWith("]");
     }
 
     function isShadowEffectUtility(utility) {

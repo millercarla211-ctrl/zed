@@ -675,10 +675,13 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /GridTrackRepeatCount/);
   assert.match(groupReverseCssDelta, /TransitionPropertyValue/);
   assert.match(groupReverseCssDelta, /TransitionTimingFunctionValue/);
+  assert.match(groupReverseCssDelta, /ArbitraryCssPropertyValue/);
   assert.match(groupReverseCssDelta, /arbitrary_bracket_token/);
+  assert.match(groupReverseCssDelta, /arbitrary_css_property_token/);
   assert.match(groupReverseCssDelta, /target_utility_from_token/);
   assert.match(groupReverseCssDelta, /is_background_image_utility/);
   assert.match(groupReverseCssDelta, /is_transform_utility/);
+  assert.match(groupReverseCssDelta, /is_arbitrary_css_property_utility/);
   assert.match(groupReverseCssDelta, /display_token_from_value/);
   assert.match(groupReverseCssDelta, /align_items_token_from_value/);
   assert.match(groupReverseCssDelta, /justify_content_token_from_value/);
@@ -697,6 +700,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /background-image/);
   assert.match(groupReverseCssDelta, /background-size/);
   assert.match(groupReverseCssDelta, /border-image/);
+  assert.match(groupReverseCssDelta, /border/);
+  assert.match(groupReverseCssDelta, /container-type/);
+  assert.match(groupReverseCssDelta, /container-name/);
   assert.match(groupReverseCssDelta, /outline-color/);
   assert.match(groupReverseCssDelta, /accent-color/);
   assert.match(groupReverseCssDelta, /caret-color/);
@@ -830,6 +836,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) =>
+        entry.property === "border" &&
+        entry.utility_prefix === "[border:" &&
+        entry.value_strategy === "arbitrary_css_property_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
         entry.property === "clip-path" &&
         entry.utility_prefix === "clip-path-" &&
         entry.value_strategy === "arbitrary_bracket_value",
@@ -849,6 +863,22 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
         entry.property === "transform" &&
         entry.utility_prefix === "transform-" &&
         entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "container-type" &&
+        entry.utility_prefix === "[container-type:" &&
+        entry.value_strategy === "arbitrary_css_property_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "container-name" &&
+        entry.utility_prefix === "[container-name:" &&
+        entry.value_strategy === "arbitrary_css_property_value",
     ),
   );
   assert.ok(
@@ -2427,6 +2457,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /function isBorderColorUtility/);
   assert.match(surfaceScript, /function isBackgroundImageUtility\(utility\)/);
   assert.match(surfaceScript, /function isTransformUtility\(utility\)/);
+  assert.match(surfaceScript, /function arbitraryCssPropertyReverseDeltaToken\(property, value\)/);
+  assert.match(surfaceScript, /function isArbitraryCssPropertyUtility\(utility, property\)/);
+  assert.match(surfaceScript, /arbitrary_css_property_value/);
   assert.match(surfaceScript, /property === "background"/);
   assert.match(surfaceScript, /property === "background-image"/);
   assert.match(surfaceScript, /property === "transform"/);

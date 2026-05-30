@@ -69,6 +69,12 @@
       "value_strategy": "design_token_suffix"
     },
     {
+      "property": "border",
+      "utility_prefix": "[border:",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_css_property_value"
+    },
+    {
       "property": "border-radius",
       "utility_prefix": "rounded-",
       "token_prefix": "",
@@ -97,6 +103,18 @@
       "utility_prefix": "transform-",
       "token_prefix": "",
       "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "container-type",
+      "utility_prefix": "[container-type:",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_css_property_value"
+    },
+    {
+      "property": "container-name",
+      "utility_prefix": "[container-name:",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_css_property_value"
     },
     {
       "property": "display",
