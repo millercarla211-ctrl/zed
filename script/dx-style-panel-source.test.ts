@@ -1122,9 +1122,25 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /"dx-style-source-apply"/);
   assert.match(webPreviewView, /source_apply_review_receipt/);
   assert.match(webPreviewView, /source_apply_session_refused_receipt/);
+  assert.match(webPreviewView, /MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES: usize = 256 \* 1024/);
+  assert.match(webPreviewView, /fn dx_style_payload_with_active_editor_source_revalidation/);
+  assert.match(webPreviewView, /fn dx_style_active_editor_source_revalidation/);
+  assert.match(webPreviewView, /workspace\.items_of_type::<Editor>\(cx\)/);
+  assert.match(webPreviewView, /editor\.active_project_path\(cx\)/);
+  assert.match(webPreviewView, /editor\.buffer\(\)\.read\(cx\)\.len\(cx\)\.0/);
+  assert.match(webPreviewView, /crate::dx_style_source_apply::active_source_digest\(&source\)/);
+  assert.match(webPreviewView, /DxStyleActiveEditorSourceRevalidationEvidence/);
+  assert.match(webPreviewView, /request_source_digest/);
+  assert.match(webPreviewView, /editor_source_digest/);
+  assert.match(webPreviewView, /fn dx_style_source_paths_match/);
+  assert.match(webPreviewView, /native_active_editor_source_revalidation/);
   assert.ok(
     webPreviewView.indexOf("self.dx_style_source_apply_session_refusal(&payload)") <
       webPreviewView.indexOf("crate::dx_style_source_apply::source_apply_review_receipt(&payload)"),
+  );
+  assert.ok(
+    sourceApplyArm.indexOf("self.dx_style_payload_with_active_editor_source_revalidation(&payload, cx)") <
+      sourceApplyArm.indexOf("crate::dx_style_source_apply::source_apply_review_receipt(&payload)"),
   );
   assert.match(sourceApplyArm, /source_apply_session_refused_receipt/);
   assert.match(sourceApplyArm, /source_apply_review_receipt/);
@@ -1170,7 +1186,17 @@ test("Web Preview owns the DX Style generator surface action", () => {
     sourceApply,
     /zed\.web_preview\.dx_style\.source_apply_session/,
   );
+  assert.match(sourceApply, /DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA/);
+  assert.match(
+    sourceApply,
+    /zed\.web_preview\.dx_style\.active_editor_source_revalidation"/,
+  );
+  assert.doesNotMatch(
+    sourceApply,
+    /zed\.web_preview\.dx_style\.active_editor_source_revalidation\.v1/,
+  );
   assert.match(sourceApply, /MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256/);
+  assert.match(sourceApply, /pub\(crate\) fn active_source_digest/);
   assert.match(sourceApply, /source_apply_session_refused_receipt/);
   assert.match(sourceApply, /source_apply_session_refused/);
   assert.match(sourceApply, /not_performed_by_untrusted_session/);
@@ -1274,7 +1300,19 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /style apply gate is ready without a trusted dry-run receipt/);
   assert.match(sourceApply, /style apply gate is ready without an active-source receipt match/);
   assert.match(sourceApply, /style apply gate is ready without a receipt path/);
-  assert.match(sourceApply, /native active editor source revalidation is not yet performed/);
+  assert.match(sourceApply, /source-apply contract is missing active source digest guard/);
+  assert.match(sourceApply, /source-apply contract is missing native active editor source revalidation guard/);
+  assert.match(sourceApply, /source-apply contract is missing native active editor source revalidation receipt field/);
+  assert.match(sourceApply, /native active editor source revalidation schema is missing or invalid/);
+  assert.match(sourceApply, /native active editor source revalidation did not match active source/);
+  assert.match(sourceApply, /native active editor source revalidation path does not match request source_path/);
+  assert.match(sourceApply, /native active editor source revalidation digest does not match request source_digest/);
+  assert.match(sourceApply, /native active editor source revalidation span does not match request source_span/);
+  assert.match(sourceApply, /"native_active_editor_source_revalidation": native_active_editor_source_revalidation/);
+  assert.doesNotMatch(
+    sourceApply,
+    new RegExp("native active editor source revalidation is not yet " + "performed"),
+  );
   assert.match(sourceApply, /"source_digest": request_source_digest/);
   assert.match(sourceApply, /context kind is not listed in the source-apply review contract/);
   assert.match(sourceApply, /CSS declaration context is missing source edit safety/);
@@ -1380,6 +1418,21 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     styleSourceApplyFixture.required_editor_guards.includes(
       "trusted Web Preview source-apply session",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.required_editor_guards.includes(
+      "active source digest match",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.required_editor_guards.includes(
+      "native active editor source revalidation",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.review_receipt_fields.includes(
+      "native_active_editor_source_revalidation",
     ),
   );
   assert.ok(

@@ -28,6 +28,7 @@
     "request source path matches active source path",
     "request source span matches active source span",
     "active source digest match",
+    "native active editor source revalidation",
     "visual-generator metadata alignment",
     "reverse CSS map receipt match",
     "generated CSS declaration delta validation",
@@ -53,6 +54,7 @@
     "reverse_css_delta_contract",
     "reverse_css_delta_preview",
     "apply_gate",
+    "native_active_editor_source_revalidation",
     "native_handler"
   ],
   "max_source_path_bytes": 4096,

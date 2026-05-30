@@ -78,6 +78,7 @@ const MAX_AGENT_BROWSER_CLIPBOARD_JSON_IMPORT_BYTES: u64 = 256 * 1024;
 const MAX_WEB_PREVIEW_IPC_MESSAGE_BYTES: usize = 1024 * 1024;
 const MAX_DEFERRED_WEB_PREVIEW_IPC_MESSAGES: usize = 256;
 const MAX_DEFERRED_WEB_PREVIEW_IPC_BYTES: usize = 8 * 1024 * 1024;
+const MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES: usize = 256 * 1024;
 const MAX_WEB_PREVIEW_JSON_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 #[cfg(target_os = "windows")]
 const MAX_WEB_PREVIEW_SCREENSHOT_PNG_BYTES: u64 = 64 * 1024 * 1024;
@@ -30415,6 +30416,287 @@ impl WebPreviewView {
         None
     }
 
+    fn dx_style_payload_with_active_editor_source_revalidation(
+        &self,
+        payload: &Value,
+        cx: &App,
+    ) -> Value {
+        let revalidation = self.dx_style_active_editor_source_revalidation(payload, cx);
+        let mut payload = payload.clone();
+        if let Some(request) = payload.get_mut("request").and_then(Value::as_object_mut) {
+            request.insert(
+                "native_active_editor_source_revalidation".to_string(),
+                revalidation,
+            );
+        }
+        payload
+    }
+
+    fn dx_style_active_editor_source_revalidation(&self, payload: &Value, cx: &App) -> Value {
+        let request = payload.get("request").unwrap_or(&Value::Null);
+        let request_source_path =
+            request
+                .get("source_path")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    request
+                        .pointer("/context/source_path")
+                        .and_then(Value::as_str)
+                });
+        let request_source_digest = request
+            .get("source_digest")
+            .and_then(Value::as_str)
+            .or_else(|| {
+                request
+                    .pointer("/context/source_digest")
+                    .and_then(Value::as_str)
+            });
+        let request_source_len = request
+            .pointer("/context/source_len_bytes")
+            .and_then(Value::as_u64);
+        let request_source_span = request
+            .get("source_span")
+            .or_else(|| request.pointer("/context/source_span"))
+            .and_then(source_span_from_json);
+
+        let Some(request_source_path) = request_source_path else {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "request_source_path_missing",
+                "DX Style source apply request is missing source_path",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_digest,
+                    request_source_len,
+                    request_source_span,
+                    ..Default::default()
+                },
+            );
+        };
+        let Some(request_source_span) = request_source_span else {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "request_source_span_missing",
+                "DX Style source apply request is missing a structured source_span",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len,
+                    ..Default::default()
+                },
+            );
+        };
+
+        let Some(workspace) = self.workspace.upgrade() else {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "workspace_unavailable",
+                "DX Style source apply cannot revalidate source because the workspace is unavailable",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len,
+                    request_source_span: Some(request_source_span),
+                    ..Default::default()
+                },
+            );
+        };
+        let (project, editors) = {
+            let workspace = workspace.read(cx);
+            (
+                workspace.project().clone(),
+                workspace.items_of_type::<Editor>(cx).collect::<Vec<_>>(),
+            )
+        };
+        if editors.is_empty() {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "no_open_editor_buffers",
+                "DX Style source apply cannot revalidate source because no editor buffers are open",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len,
+                    request_source_span: Some(request_source_span),
+                    ..Default::default()
+                },
+            );
+        }
+
+        let mut matching_path_seen_in_unsupported_editor = false;
+        for editor in editors {
+            let editor = editor.read(cx);
+            let Some(project_path) = editor.active_project_path(cx) else {
+                continue;
+            };
+            let Some(editor_source_path) = project
+                .read(cx)
+                .absolute_path(&project_path, cx)
+                .map(|path| path.display().to_string())
+            else {
+                continue;
+            };
+            if !dx_style_source_paths_match(&editor_source_path, request_source_path) {
+                continue;
+            }
+            if editor.buffer_kind(cx) != ItemBufferKind::Singleton {
+                matching_path_seen_in_unsupported_editor = true;
+                continue;
+            }
+
+            let source_len = editor.buffer().read(cx).len(cx).0;
+            if source_len > MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "active_editor_source_too_large",
+                    "DX Style source apply cannot revalidate source because the active editor buffer is too large",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        request_source_digest,
+                        request_source_len,
+                        editor_source_len: Some(source_len as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            }
+            let source = editor.text(cx);
+            if source.len() > MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "active_editor_source_too_large",
+                    "DX Style source apply cannot revalidate source because the active editor source text is too large",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        request_source_digest,
+                        request_source_len,
+                        editor_source_len: Some(source.len() as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            }
+            if let Some(request_source_len) = request_source_len
+                && request_source_len != source.len() as u64
+            {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "source_length_mismatch",
+                    "DX Style source apply request source_len_bytes does not match the live editor source",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        request_source_digest,
+                        request_source_len: Some(request_source_len),
+                        editor_source_len: Some(source.len() as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            }
+            let Some(span_end) = usize::try_from(request_source_span.1).ok() else {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "source_span_out_of_range",
+                    "DX Style source apply request source_span is too large for this platform",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        request_source_digest,
+                        request_source_len,
+                        editor_source_len: Some(source.len() as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            };
+            if request_source_span.0 > request_source_span.1 || span_end > source.len() {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "source_span_out_of_range",
+                    "DX Style source apply request source_span exceeds the live editor source",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        request_source_digest,
+                        request_source_len,
+                        editor_source_len: Some(source.len() as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            }
+
+            let source_digest = crate::dx_style_source_apply::active_source_digest(&source);
+            let Some(request_source_digest) = request_source_digest else {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "request_source_digest_missing",
+                    "DX Style source apply request is missing source_digest",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        editor_source_digest: Some(source_digest.as_str()),
+                        request_source_len,
+                        editor_source_len: Some(source.len() as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            };
+            if request_source_digest != source_digest {
+                return dx_style_active_editor_source_revalidation_blocked(
+                    "source_digest_mismatch",
+                    "DX Style source apply request source_digest does not match the live editor source",
+                    DxStyleActiveEditorSourceRevalidationEvidence {
+                        request_source_path: Some(request_source_path),
+                        editor_source_path: Some(editor_source_path.as_str()),
+                        request_source_digest: Some(request_source_digest),
+                        editor_source_digest: Some(source_digest.as_str()),
+                        request_source_len,
+                        editor_source_len: Some(source.len() as u64),
+                        request_source_span: Some(request_source_span),
+                        ..Default::default()
+                    },
+                );
+            }
+
+            return serde_json::json!({
+                "schema": crate::dx_style_source_apply::DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA,
+                "status": "matched",
+                "reason": "Live editor source path, span, length, and digest match the DX Style source-apply request.",
+                "source_path": editor_source_path,
+                "source_digest": source_digest,
+                "source_len_bytes": source.len(),
+                "source_span": {
+                    "start_byte": request_source_span.0,
+                    "end_byte": request_source_span.1,
+                },
+                "request": {
+                    "source_path": request_source_path,
+                    "source_digest": request_source_digest,
+                    "source_len_bytes": request_source_len,
+                    "source_span": {
+                        "start_byte": request_source_span.0,
+                        "end_byte": request_source_span.1,
+                    },
+                },
+            });
+        }
+
+        let reason = if matching_path_seen_in_unsupported_editor {
+            "DX Style source apply found the requested source path, but the matching editor was not a singleton buffer"
+        } else {
+            "DX Style source apply could not find an open editor buffer for the requested source path"
+        };
+        dx_style_active_editor_source_revalidation_blocked(
+            if matching_path_seen_in_unsupported_editor {
+                "matching_editor_not_singleton"
+            } else {
+                "source_editor_not_found"
+            },
+            reason,
+            DxStyleActiveEditorSourceRevalidationEvidence {
+                request_source_path: Some(request_source_path),
+                request_source_digest,
+                request_source_len,
+                request_source_span: Some(request_source_span),
+                ..Default::default()
+            },
+        )
+    }
+
     fn handle_ipc_message(
         &mut self,
         message: &str,
@@ -30613,6 +30895,8 @@ impl WebPreviewView {
                         false,
                     )
                 } else {
+                    let payload =
+                        self.dx_style_payload_with_active_editor_source_revalidation(&payload, cx);
                     (
                         crate::dx_style_source_apply::source_apply_review_receipt(&payload),
                         true,
@@ -37265,6 +37549,62 @@ fn is_dx_style_generator_data_url(url: &str) -> bool {
 
 fn is_dx_style_generator_display_url(url: &str) -> bool {
     url.trim() == DX_STYLE_GENERATOR_DISPLAY_URL
+}
+
+fn source_span_from_json(value: &Value) -> Option<(u64, u64)> {
+    let start = value.get("start_byte").and_then(Value::as_u64)?;
+    let end = value.get("end_byte").and_then(Value::as_u64)?;
+    Some((start, end))
+}
+
+#[derive(Default)]
+struct DxStyleActiveEditorSourceRevalidationEvidence<'a> {
+    request_source_path: Option<&'a str>,
+    editor_source_path: Option<&'a str>,
+    request_source_digest: Option<&'a str>,
+    editor_source_digest: Option<&'a str>,
+    request_source_len: Option<u64>,
+    editor_source_len: Option<u64>,
+    request_source_span: Option<(u64, u64)>,
+    editor_source_span: Option<(u64, u64)>,
+}
+
+fn dx_style_active_editor_source_revalidation_blocked(
+    status: &'static str,
+    reason: &'static str,
+    evidence: DxStyleActiveEditorSourceRevalidationEvidence<'_>,
+) -> Value {
+    serde_json::json!({
+        "schema": crate::dx_style_source_apply::DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA,
+        "status": status,
+        "reason": reason,
+        "source_path": evidence.editor_source_path,
+        "source_digest": evidence.editor_source_digest,
+        "source_len_bytes": evidence.editor_source_len,
+        "source_span": evidence.editor_source_span.map(|(start, end)| serde_json::json!({
+            "start_byte": start,
+            "end_byte": end,
+        })),
+        "request": {
+            "source_path": evidence.request_source_path,
+            "source_digest": evidence.request_source_digest,
+            "source_len_bytes": evidence.request_source_len,
+            "source_span": evidence.request_source_span.map(|(start, end)| serde_json::json!({
+                "start_byte": start,
+                "end_byte": end,
+            })),
+        },
+    })
+}
+
+fn dx_style_source_paths_match(left: &str, right: &str) -> bool {
+    let left = left.trim().replace('\\', "/");
+    let right = right.trim().replace('\\', "/");
+    if cfg!(target_os = "windows") {
+        left.eq_ignore_ascii_case(&right)
+    } else {
+        left == right
+    }
 }
 
 fn slugify(input: &str) -> String {

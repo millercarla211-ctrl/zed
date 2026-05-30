@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Active Editor Source Revalidation
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-active-editor-source-revalidation-plan.md` records the step-back plan for native active-editor source revalidation without enabling mutation.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now injects native active-editor source revalidation into trusted DX Style source-apply review packets by matching an open singleton editor source path, structured byte span, active source length, and bounded `fnv1a64:` digest.
+- `crates/web_preview/src/dx_style_source_apply.rs` now validates and preserves the native revalidation block in source-apply review receipts instead of carrying the stale not-yet-performed blocker.
+- DX Style's source-owned source-apply contract and Zed's embedded mirror now include the active-source digest and native active-editor revalidation review guards.
+- `script/dx-style-panel-source.test.ts` now guards the native source revalidation wiring and keeps source mutation disabled.
+
+NOTES:
+- This is source-only evidence. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or source mutation proof was run. True production readiness still requires governed runtime/WebView/build proof and a mutation-capable editor write bridge.
+
 [2026-05-30] - DX Style Source Apply Session Hardening
 
 ADDED:

@@ -11,6 +11,8 @@ pub(crate) const DX_STYLE_SOURCE_APPLY_RECEIPT_SCHEMA: &str =
 const DX_STYLE_APPLY_KIND: &str = "dx-style-source-apply";
 pub(crate) const DX_STYLE_SOURCE_APPLY_SESSION_KIND: &str =
     "zed.web_preview.dx_style.source_apply_session";
+pub(crate) const DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA: &str =
+    "zed.web_preview.dx_style.active_editor_source_revalidation";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_SOURCE_PATH_BYTES: usize = 4096;
@@ -28,6 +30,15 @@ const MAX_CSS_DECLARATION_DRY_RUN_DIAGNOSTICS: usize = 8;
 const MAX_CSS_DECLARATION_DRY_RUN_DIAGNOSTIC_BYTES: usize = 160;
 const CSS_DECLARATION_DRY_RUN_MAX_DECLARATION_BYTES: usize = 4096;
 const SOURCE_DIGEST_PREFIX: &str = "fnv1a64:";
+
+pub(crate) fn active_source_digest(source: &str) -> String {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in source.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{SOURCE_DIGEST_PREFIX}{hash:016x}")
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct SourceSpan {
@@ -72,6 +83,9 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         .get("reverse_css_delta_preview")
         .unwrap_or(&Value::Null);
     let context = request.get("context").unwrap_or(&Value::Null);
+    let native_active_editor_source_revalidation = request
+        .get("native_active_editor_source_revalidation")
+        .unwrap_or(&Value::Null);
     let group_context = context.get("group_context").unwrap_or(&Value::Null);
     let apply_gate = context.get("apply_gate").unwrap_or(&Value::Null);
     let editor_write_bridge = apply_gate
@@ -111,6 +125,23 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "active context kind supported",
     ) {
         reasons.push("source-apply contract is missing active context kind guard".to_string());
+    }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "active source digest match",
+    ) {
+        reasons.push("source-apply contract is missing active source digest guard".to_string());
+    }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "native active editor source revalidation",
+    ) {
+        reasons.push(
+            "source-apply contract is missing native active editor source revalidation guard"
+                .to_string(),
+        );
     }
     if !string_array_contains(contract, "/review_context_kinds", "class_token")
         || !string_array_contains(contract, "/review_context_kinds", "class_list")
@@ -152,6 +183,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if !string_array_contains(contract, "/review_receipt_fields", "source_apply_session") {
         reasons.push(
             "source-apply contract is missing source-apply session receipt field".to_string(),
+        );
+    }
+    if !string_array_contains(
+        contract,
+        "/review_receipt_fields",
+        "native_active_editor_source_revalidation",
+    ) {
+        reasons.push(
+            "source-apply contract is missing native active editor source revalidation receipt field"
+                .to_string(),
         );
     }
     for field in [
@@ -376,6 +417,60 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         if span.end > source_len {
             reasons.push("request source_span exceeds context source length".to_string());
         }
+    }
+    let native_revalidation_schema = native_active_editor_source_revalidation
+        .get("schema")
+        .and_then(Value::as_str);
+    if native_revalidation_schema != Some(DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA) {
+        reasons.push(
+            "native active editor source revalidation schema is missing or invalid".to_string(),
+        );
+    }
+    let native_revalidation_status = native_active_editor_source_revalidation
+        .get("status")
+        .and_then(Value::as_str);
+    if native_revalidation_status != Some("matched") {
+        reasons.push(
+            "native active editor source revalidation did not match active source".to_string(),
+        );
+    }
+    let native_revalidation_source_path = native_active_editor_source_revalidation
+        .get("source_path")
+        .and_then(Value::as_str);
+    if native_revalidation_status == Some("matched")
+        && native_revalidation_source_path != source_path
+    {
+        reasons.push(
+            "native active editor source revalidation path does not match request source_path"
+                .to_string(),
+        );
+    }
+    let native_revalidation_source_digest = native_active_editor_source_revalidation
+        .get("source_digest")
+        .and_then(Value::as_str);
+    if native_revalidation_status == Some("matched")
+        && request_source_digest.is_some()
+        && native_revalidation_source_digest != request_source_digest
+    {
+        reasons.push(
+            "native active editor source revalidation digest does not match request source_digest"
+                .to_string(),
+        );
+    }
+    let native_revalidation_span = source_span_at(
+        native_active_editor_source_revalidation,
+        "/source_span",
+        "native active editor source_span",
+        &mut reasons,
+    );
+    if native_revalidation_status == Some("matched")
+        && request_span.is_some()
+        && native_revalidation_span != request_span
+    {
+        reasons.push(
+            "native active editor source revalidation span does not match request source_span"
+                .to_string(),
+        );
     }
 
     let context_schema = context.get("schema").and_then(Value::as_str);
@@ -631,7 +726,6 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push("Web Preview cannot declare native mutation capability".to_string());
     }
     reasons.push("native source writer capability is review-only".to_string());
-    reasons.push("native active editor source revalidation is not yet performed".to_string());
 
     let status = if can_review_request {
         "reviewed_with_blockers"
@@ -777,6 +871,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "receipt_summary": apply_gate.get("receipt_summary").cloned(),
             "receipt_mismatch": apply_gate.get("receipt_mismatch").cloned(),
         },
+        "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
             "can_review_request": can_review_request,
             "can_mutate_source": can_mutate_source,
