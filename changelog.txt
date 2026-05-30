@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Easing Metadata Alignment
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-easing-metadata-alignment-plan.md` records the source-only plan for easing generator metadata alignment.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\visual_generator_catalog.rs` and its fixture now advertise `[transition-timing-function:...]` for the easing/cubic-bezier generator.
+- `G:\Dx\style\src\core\engine\visual_generator_css_hint_catalog.rs` and its fixture now route `transition-timing-function` declarations to `ease-*`.
+- Zed's generated visual generator catalog and CSS declaration hint mirrors now carry the aligned transition-timing metadata.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the easing metadata alignment.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Transition Reverse Delta Review
 
 ADDED:

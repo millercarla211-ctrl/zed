@@ -228,10 +228,10 @@
     },
     {
       "ordinal": 23,
-      "property_pattern": "animation-timing-function",
+      "property_pattern": "transition-timing-function",
       "property_match": "exact",
       "value_contains": [],
-      "token_hint": "[animation-timing-function:...]",
+      "token_hint": "ease-*",
       "generator_id": "easing-cubic-bezier-editor",
       "source_edit_safety": "safe-static-utility-source-edit"
     },

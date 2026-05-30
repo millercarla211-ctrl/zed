@@ -1007,6 +1007,25 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     ).token_hint,
     "outline-*",
   );
+  const easingGenerator = generatorCatalogFixture.entries.find(
+    (entry) => entry.generator_id === "easing-cubic-bezier-editor",
+  );
+  assert.ok(
+    easingGenerator.applicable_class_families.includes(
+      "[transition-timing-function:...]",
+    ),
+  );
+  assert.equal(
+    easingGenerator.applicable_class_families.includes(
+      "[animation-timing-function:...]",
+    ),
+    false,
+  );
+  const easingCssHint = generatorCssHintFixture.entries.find(
+    (entry) => entry.generator_id === "easing-cubic-bezier-editor",
+  );
+  assert.equal(easingCssHint.property_pattern, "transition-timing-function");
+  assert.equal(easingCssHint.token_hint, "ease-*");
   assert.match(engineMod, /pub mod css_declaration_dry_run/);
   assert.match(cssDeclarationDryRunContract, /CSS_DECLARATION_DRY_RUN_CONTRACT_SCHEMA/);
   assert.match(cssDeclarationDryRunContract, /dx\.style\.css-declaration-dry-run-contract/);

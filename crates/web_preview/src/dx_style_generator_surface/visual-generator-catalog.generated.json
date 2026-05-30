@@ -332,7 +332,7 @@
       "applicable_class_families": [
         "ease-*",
         "ease-[cubic-bezier(...)]",
-        "[animation-timing-function:...]"
+        "[transition-timing-function:...]"
       ],
       "preferred_output": "atomic-utilities",
       "source_edit_safety": "safe-static-utility-source-edit"
