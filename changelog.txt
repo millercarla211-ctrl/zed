@@ -1,3 +1,16 @@
+[2026-05-31] - DX Style Background Border Media Reverse Delta Review
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-background-border-media-reverse-delta-plan.md` records the source-only plan for specific background/border media reverse-delta coverage.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_reverse_css_delta.rs` and its fixture now publish review-only mappings for `background-size` and `border-image`.
+- Zed's generated reverse-delta contract mirror now includes `bg-size-[...]` and `border-image-[...]` mappings from DX Style.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the background/border media reverse-delta checkpoint.
+
+NOTES:
+- Source mutation remains disabled. Broad `background` and `border` shorthand projection remains deferred. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Transform Reverse Delta Review
 
 ADDED:

@@ -694,6 +694,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
   assert.match(groupReverseCssDelta, /background-image/);
+  assert.match(groupReverseCssDelta, /background-size/);
+  assert.match(groupReverseCssDelta, /border-image/);
   assert.match(groupReverseCssDelta, /outline-color/);
   assert.match(groupReverseCssDelta, /accent-color/);
   assert.match(groupReverseCssDelta, /caret-color/);
@@ -748,6 +750,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   );
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "background-size" &&
+        entry.utility_prefix === "bg-size-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "gap" && entry.utility_prefix === "gap-",
     ),
   );
@@ -796,6 +806,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       (entry) =>
         entry.property === "border-radius" &&
         entry.utility_prefix === "rounded-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "border-image" &&
+        entry.utility_prefix === "border-image-" &&
         entry.value_strategy === "arbitrary_bracket_value",
     ),
   );

@@ -21,6 +21,12 @@
       "value_strategy": "arbitrary_bracket_value"
     },
     {
+      "property": "background-size",
+      "utility_prefix": "bg-size-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
       "property": "color",
       "utility_prefix": "text-",
       "token_prefix": "var(--color-",
@@ -59,6 +65,12 @@
     {
       "property": "border-radius",
       "utility_prefix": "rounded-",
+      "token_prefix": "",
+      "value_strategy": "arbitrary_bracket_value"
+    },
+    {
+      "property": "border-image",
+      "utility_prefix": "border-image-",
       "token_prefix": "",
       "value_strategy": "arbitrary_bracket_value"
     },
