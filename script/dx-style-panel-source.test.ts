@@ -664,6 +664,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /reverse CSS delta preview provenance match/);
   assert.match(groupReverseCssDelta, /required_preview_provenance_fields/);
   assert.match(groupReverseCssDelta, /fallback_review_properties/);
+  assert.match(groupReverseCssDelta, /existing_utility_required_properties/);
+  assert.match(groupReverseCssDelta, /replacement_requires_existing_utility/);
   assert.match(groupReverseCssDelta, /grouped_class_reverse_css_delta_preview/);
   assert.match(groupReverseCssDelta, /filter\(\|mapping\|[\s\S]{0,120}eq_ignore_ascii_case\(property\)/);
   assert.match(groupReverseCssDelta, /utility_matches_family/);
@@ -753,6 +755,20 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     "transition-property",
     "background",
     "border",
+  ]);
+  assert.deepEqual(groupReverseCssDeltaFixture.existing_utility_required_properties, [
+    "background",
+    "background-image",
+    "background-size",
+    "border",
+    "border-image",
+    "clip-path",
+    "mask-image",
+    "transform",
+    "transition-property",
+    "animation",
+    "container-type",
+    "container-name",
   ]);
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
@@ -2394,6 +2410,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /reverseCssDeltaFallbackReviewProperties/);
   assert.match(surfaceScript, /reverseCssDeltaFallbackReviewPropertySet/);
   assert.match(surfaceScript, /reverseCssDeltaFallbackReviewPropertySet\.has\(property\)/);
+  assert.match(surfaceScript, /reverseCssDeltaExistingUtilityRequiredProperties/);
+  assert.match(surfaceScript, /reverseCssDeltaExistingUtilityRequiredPropertySet/);
+  assert.match(surfaceScript, /function replacementRequiresExistingUtility\(mapping\)/);
+  assert.match(surfaceScript, /replacementRequiresExistingUtility\(mapping\) && !replacement\.replaced/);
   assert.match(surfaceScript, /let fallbackStrategyPreview = null/);
   assert.match(surfaceScript, /if \(fallbackStrategyPreview\) return fallbackStrategyPreview/);
   assert.match(surfaceScript, /function isShadowEffectUtility\(utility\)/);
@@ -2694,6 +2714,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /reverse_css_delta_required_guards/);
   assert.match(surfaceScript, /reverse_css_delta_required_provenance_fields/);
   assert.match(surfaceScript, /reverse_css_delta_fallback_review_properties/);
+  assert.match(surfaceScript, /reverse_css_delta_existing_utility_required_properties/);
   assert.match(surfaceScript, /reverse_css_delta_contract_diagnostics/);
   assert.match(surfaceScript, /reverse_css_delta_contract_diagnostic/);
   assert.match(surfaceScript, /reverse_css_delta_preview_provenance_diagnostics/);

@@ -477,6 +477,20 @@
     "background",
     "border"
   ],
+  "existing_utility_required_properties": [
+    "background",
+    "background-image",
+    "background-size",
+    "border",
+    "border-image",
+    "clip-path",
+    "mask-image",
+    "transform",
+    "transition-property",
+    "animation",
+    "container-type",
+    "container-name"
+  ],
   "consumers": [
     "Zed Web Preview",
     "Zed Style panel",

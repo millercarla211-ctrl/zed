@@ -85,6 +85,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const reverseCssDeltaFallbackReviewPropertySet = new Set(
       reverseCssDeltaFallbackReviewProperties.map((property) => String(property || "").toLowerCase())
     );
+    const reverseCssDeltaExistingUtilityRequiredProperties = Array.isArray(reverseCssDeltaContract.existing_utility_required_properties)
+      ? reverseCssDeltaContract.existing_utility_required_properties
+      : [];
+    const reverseCssDeltaExistingUtilityRequiredPropertySet = new Set(
+      reverseCssDeltaExistingUtilityRequiredProperties.map((property) => String(property || "").toLowerCase())
+    );
     const reverseCssDeltaSupportedProvenanceFields = new Set([
       "group_status",
       "group_alias",
@@ -994,6 +1000,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         || (suffix.startsWith("(--") && suffix.endsWith(")"));
     }
 
+    function replacementRequiresExistingUtility(mapping) {
+      return reverseCssDeltaExistingUtilityRequiredPropertySet.has(
+        String(mapping?.property || "").toLowerCase()
+      );
+    }
+
     function replacementUtilitiesForDelta(utilities, mapping, targetUtility) {
       let replaced = false;
       const next = utilities.map((utility) => {
@@ -1004,7 +1016,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         return utility;
       });
       if (!replaced) next.push(targetUtility);
-      return next;
+      return { utilities: next, replaced };
     }
 
     function isFallbackReverseDeltaMapping(mapping) {
@@ -1054,11 +1066,23 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             continue;
           }
           const targetUtility = targetUtilityFromReverseDelta(mapping, token);
-          const replacementUtilities = replacementUtilitiesForDelta(
+          const replacement = replacementUtilitiesForDelta(
             utilities,
             mapping,
             targetUtility
           );
+          if (replacementRequiresExistingUtility(mapping) && !replacement.replaced) {
+            firstUnsupportedValue ||= {
+              ...provenance,
+              status: "unsupported_value",
+              property: declaration.property,
+              value: declaration.value,
+              target_utility: targetUtility,
+              reason: "Generated declaration requires an existing same-family source utility before review."
+            };
+            continue;
+          }
+          const replacementUtilities = replacement.utilities;
           const preview = {
             ...provenance,
             status: utilities.includes(targetUtility) ? "no_change" : "ready_for_review",
@@ -1905,6 +1929,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `reverse_css_delta_required_guards: ${reverseCssDeltaRequiredGuards.length}`,
         `reverse_css_delta_required_provenance_fields: ${reverseCssDeltaRequiredProvenanceFields.length}`,
         `reverse_css_delta_fallback_review_properties: ${reverseCssDeltaFallbackReviewProperties.length}`,
+        `reverse_css_delta_existing_utility_required_properties: ${reverseCssDeltaExistingUtilityRequiredProperties.length}`,
         `reverse_css_delta_contract_diagnostics: ${reverseDeltaContractDiagnostics.length}`,
         ...reverseDeltaContractDiagnostics.map((diagnostic) => `reverse_css_delta_contract_diagnostic: ${diagnostic}`),
         `reverse_css_delta_preview_provenance_diagnostics: ${reverseDeltaPreviewProvenanceDiagnostics.length}`,
