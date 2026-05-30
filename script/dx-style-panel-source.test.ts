@@ -1710,6 +1710,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /MAX_CONTEXT_KIND_BYTES: usize = 64/);
   assert.match(sourceApply, /MAX_CSS_SOURCE_EDIT_SAFETY_BYTES: usize = 128/);
   assert.match(sourceApply, /SOURCE_DIGEST_PREFIX: &str = "fnv1a64:"/);
+  assert.match(sourceApply, /DX_STYLE_REVERSE_CSS_DELTA_REPLACEMENT_POLICY_GUARD/);
   assert.match(sourceApply, /source_apply_review_receipt/);
   assert.match(sourceApply, /"contract_schema": DX_STYLE_SOURCE_APPLY_CONTRACT_SCHEMA/);
   assert.match(sourceApply, /"ipc_kind": DX_STYLE_APPLY_KIND/);
@@ -1760,6 +1761,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"contract":/);
   assert.match(sourceApply, /"context_kind": context_kind/);
   assert.match(sourceApply, /"css_source_edit_safety": css_source_edit_safety/);
+  assert.match(sourceApply, /"reverse_delta_replacement_policy_guard_present"/);
   assert.match(sourceApply, /"review_context_kinds": string_array_at\(contract, "\/review_context_kinds"\)/);
   assert.match(sourceApply, /"mutation_context_kinds_when_enabled": string_array_at\(contract, "\/mutation_context_kinds_when_enabled"\)/);
   assert.match(sourceApply, /"max_source_path_bytes"/);
@@ -2432,7 +2434,15 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /reverseCssDeltaFallbackReviewPropertySet\.has\(property\)/);
   assert.match(surfaceScript, /reverseCssDeltaExistingUtilityRequiredProperties/);
   assert.match(surfaceScript, /reverseCssDeltaExistingUtilityRequiredPropertySet/);
+  assert.match(surfaceScript, /sourceApplyRequiredEditorGuards/);
+  assert.match(surfaceScript, /reverseCssDeltaReplacementPolicyGuard/);
   assert.match(surfaceScript, /function replacementRequiresExistingUtility\(mapping\)/);
+  assert.match(surfaceScript, /function sourceApplyContractHasGuard\(guard\)/);
+  assert.match(surfaceScript, /function reverseCssDeltaReplacementPolicyDiagnostics\(preview, group\)/);
+  assert.match(surfaceScript, /reverse_css_delta_replacement_existing_utility_missing/);
+  assert.match(surfaceScript, /reverse_css_delta_replacement_utilities_missing/);
+  assert.match(surfaceScript, /reverse_css_delta_replacement_utility_count_changed/);
+  assert.match(surfaceScript, /source_apply_contract_missing_replacement_policy_guard/);
   assert.match(surfaceScript, /replacementExistingUtilityRequired && !replacement\.replaced/);
   assert.match(surfaceScript, /replacement_existing_utility_required: replacementExistingUtilityRequired/);
   assert.match(surfaceScript, /replacement_existing_utility_found: replacement\.replaced/);
@@ -2583,6 +2593,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /native_active_editor_source_revalidation_missing/);
   assert.match(surfaceScript, /editor_write_bridge_not_ready/);
   assert.match(surfaceScript, /mutation_capable_editor_write_bridge_missing/);
+  assert.match(surfaceScript, /reverse_delta_replacement_policy_guard_present/);
+  assert.match(surfaceScript, /reverse_delta_replacement_policy_diagnostics/);
   assert.match(surfaceScript, /native_writer_can_mutate_false/);
   assert.match(surfaceScript, /runtime_webview_build_proof_missing/);
   assert.match(surfaceScript, /session_token_present: session\.token_present/);
@@ -2767,6 +2779,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_candidate_token_count/);
   assert.match(surfaceScript, /group_source_state/);
   assert.match(surfaceScript, /source_apply_mutation_enabled/);
+  assert.match(surfaceScript, /source_apply_required_editor_guards/);
   assert.match(surfaceScript, /source_apply_required_handler_capabilities/);
   assert.match(surfaceScript, /source_apply_review_context_kinds/);
   assert.match(surfaceScript, /source_apply_mutation_context_kinds/);

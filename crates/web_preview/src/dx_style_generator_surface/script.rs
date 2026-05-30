@@ -60,6 +60,10 @@ __DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__
     const sourceApplyReviewReceiptFields = Array.isArray(sourceApplyContract.review_receipt_fields)
       ? sourceApplyContract.review_receipt_fields
       : [];
+    const sourceApplyRequiredEditorGuards = Array.isArray(sourceApplyContract.required_editor_guards)
+      ? sourceApplyContract.required_editor_guards
+      : [];
+    const reverseCssDeltaReplacementPolicyGuard = "reverse CSS delta replacement policy match";
 __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextContractSchema = groupContextContract.__schema || "unknown";
     const groupContextContractSource = groupContextContract.__source || "embedded:dx-style-group-context-fixture";
@@ -583,6 +587,32 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       return diagnostics;
     }
 
+    function sourceApplyContractHasGuard(guard) {
+      return sourceApplyRequiredEditorGuards.includes(guard);
+    }
+
+    function reverseCssDeltaReplacementPolicyDiagnostics(preview, group) {
+      const diagnostics = [];
+      if (preview?.status !== "ready_for_review") return diagnostics;
+      if (preview.replacement_existing_utility_required !== true) return diagnostics;
+      if (preview.replacement_existing_utility_found !== true) {
+        diagnostics.push("reverse_css_delta_replacement_existing_utility_missing");
+      }
+      if (!Array.isArray(preview.replacement_utilities)) {
+        diagnostics.push("reverse_css_delta_replacement_utilities_missing");
+      }
+      const expectedUtilityCount = Number.isInteger(group?.utility_count)
+        ? group.utility_count
+        : null;
+      if (expectedUtilityCount === null) {
+        diagnostics.push("reverse_css_delta_replacement_utility_count_missing");
+      } else if (Array.isArray(preview.replacement_utilities)
+        && preview.replacement_utilities.length !== expectedUtilityCount) {
+        diagnostics.push("reverse_css_delta_replacement_utility_count_changed");
+      }
+      return diagnostics;
+    }
+
 __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
 
     function contextSchemaSupported(context) {
@@ -639,6 +669,9 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
       if (reverseCssDeltaContractSchema !== "dx.style.grouped-class-reverse-css-delta-contract") {
         return "reverse_css_delta_contract_missing";
       }
+      if (!sourceApplyContractHasGuard(reverseCssDeltaReplacementPolicyGuard)) {
+        return "source_apply_contract_missing_replacement_policy_guard";
+      }
       const reverseDeltaDiagnostics = reverseCssDeltaContractDiagnostics();
       if (reverseDeltaDiagnostics.length) return reverseDeltaDiagnostics[0];
       const reverseDeltaPreview = reverseCssDeltaPreview(output);
@@ -648,6 +681,14 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
       );
       if (sourceApplyMutationEnabled && reverseDeltaPreviewDiagnostics.length) {
         return reverseDeltaPreviewDiagnostics[0];
+      }
+      const reverseDeltaReplacementPolicyDiagnostics =
+        reverseCssDeltaReplacementPolicyDiagnostics(
+          reverseDeltaPreview,
+          context?.group_context || null
+        );
+      if (sourceApplyMutationEnabled && reverseDeltaReplacementPolicyDiagnostics.length) {
+        return reverseDeltaReplacementPolicyDiagnostics[0];
       }
       if (!sourceApplyMutationEnabled) return "source_apply_contract_review_only";
       const handlerState = sourceApplyHandlerState();
@@ -702,6 +743,9 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
       }
       if (reverseCssDeltaContractSchema !== "dx.style.grouped-class-reverse-css-delta-contract") {
         return "reverse_css_delta_contract_missing";
+      }
+      if (!sourceApplyContractHasGuard(reverseCssDeltaReplacementPolicyGuard)) {
+        return "source_apply_contract_missing_replacement_policy_guard";
       }
       const reverseDeltaDiagnostics = reverseCssDeltaContractDiagnostics();
       if (reverseDeltaDiagnostics.length) return reverseDeltaDiagnostics[0];
@@ -1390,8 +1434,17 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const webPreviewDeclaredMutationCapability = sourceApplyMutationCapabilityDeclared();
       const reviewBlocker = sourceApplyReviewBlocker(metadataAligned, context, output);
       const mutationBlocker = sourceApplyBlocker(applyGate, metadataAligned, context, output);
+      const reverseDeltaPreview = reverseCssDeltaPreview(output);
+      const reverseDeltaReplacementPolicyDiagnostics =
+        reverseCssDeltaReplacementPolicyDiagnostics(
+          reverseDeltaPreview,
+          context?.group_context || null
+        );
       const missingRequirements = [];
       if (!sourceApplyMutationEnabled) missingRequirements.push("source_mutation_contract_disabled");
+      if (!sourceApplyContractHasGuard(reverseCssDeltaReplacementPolicyGuard)) {
+        missingRequirements.push("source_apply_contract_missing_replacement_policy_guard");
+      }
       if (!metadataAligned) missingRequirements.push("metadata_alignment_missing");
       if (!context) missingRequirements.push("active_style_context_missing");
       if (context && !contextSchemaSupported(context)) missingRequirements.push("active_context_schema_unsupported");
@@ -1421,6 +1474,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (bridge.runtime_validation_required === true) {
         missingRequirements.push("runtime_webview_build_proof_missing");
       }
+      if (sourceApplyMutationEnabled) {
+        missingRequirements.push(...reverseDeltaReplacementPolicyDiagnostics);
+      }
       const safeToMutate = missingRequirements.length === 0 && mutationBlocker === "ready";
       return {
         schema: "zed.web_preview.dx_style.source_write_readiness.v1",
@@ -1444,6 +1500,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         dry_run_receipt_present: dryRun.trusted_receipt_present,
         dry_run_receipt_match: dryRun.receipt_match,
         dry_run_structured_edit_preview_count: dryRun.structured_edit_preview_count,
+        reverse_delta_replacement_policy_guard_present: sourceApplyContractHasGuard(
+          reverseCssDeltaReplacementPolicyGuard
+        ),
+        reverse_delta_replacement_policy_diagnostics: reverseDeltaReplacementPolicyDiagnostics,
         native_revalidation_status: "not_performed_in_web_preview",
         editor_write_bridge_state: bridge.state,
         editor_write_bridge_summary: bridge.summary,
@@ -1959,6 +2019,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `source_apply_receipt_schema: ${sourceApplyReceiptSchema}`,
         `source_apply_context_schema: ${expectedContextSchema}`,
         `source_apply_mutation_enabled: ${sourceApplyMutationEnabled}`,
+        `source_apply_required_editor_guards: ${sourceApplyRequiredEditorGuards.length}`,
         `source_apply_required_handler_capabilities: ${sourceApplyRequiredHandlerCapabilities.length}`,
         `source_apply_review_context_kinds: ${sourceApplyReviewContextKinds.length}`,
         `source_apply_mutation_context_kinds: ${sourceApplyMutationContextKinds.length}`,

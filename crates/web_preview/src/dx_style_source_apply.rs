@@ -9,6 +9,8 @@ pub(crate) const DX_STYLE_SOURCE_APPLY_RECEIPT_SCHEMA: &str =
     "zed.web_preview.dx_style_source_apply_receipt.v1";
 
 const DX_STYLE_APPLY_KIND: &str = "dx-style-source-apply";
+const DX_STYLE_REVERSE_CSS_DELTA_REPLACEMENT_POLICY_GUARD: &str =
+    "reverse CSS delta replacement policy match";
 pub(crate) const DX_STYLE_SOURCE_APPLY_SESSION_KIND: &str =
     "zed.web_preview.dx_style.source_apply_session";
 pub(crate) const DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA: &str =
@@ -250,11 +252,12 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     ) {
         reasons.push("source-apply contract is missing reverse-delta provenance guard".to_string());
     }
-    if !string_array_contains(
+    let reverse_css_delta_replacement_policy_guard_present = string_array_contains(
         contract,
         "/required_editor_guards",
-        "reverse CSS delta replacement policy match",
-    ) {
+        DX_STYLE_REVERSE_CSS_DELTA_REPLACEMENT_POLICY_GUARD,
+    );
+    if !reverse_css_delta_replacement_policy_guard_present {
         reasons.push(
             "source-apply contract is missing reverse-delta replacement policy guard".to_string(),
         );
@@ -986,6 +989,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "source_apply_session_kind": contract_session_kind,
             "source_mutation_enabled": contract_source_mutation_enabled,
             "source": contract.get("__source").and_then(Value::as_str),
+            "reverse_delta_replacement_policy_guard_present": reverse_css_delta_replacement_policy_guard_present,
             "review_context_kinds": string_array_at(contract, "/review_context_kinds"),
             "mutation_context_kinds_when_enabled": string_array_at(contract, "/mutation_context_kinds_when_enabled"),
             "max_source_path_bytes": contract.get("max_source_path_bytes").and_then(Value::as_u64),
