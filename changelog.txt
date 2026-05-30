@@ -1,3 +1,15 @@
+[2026-05-31] - DX Style Native Target Utility Contract
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-native-target-utility-contract-plan.md` records the source-only plan for native target utility contract validation.
+
+CHANGED:
+- `crates/web_preview/src/dx_style_source_apply.rs` now validates ready reverse CSS delta `target_utility` values against the source-owned `supported_properties` mapping before preserving review evidence.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document native target utility validation.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Replacement Source Declaration Validation
 
 ADDED:

@@ -1739,6 +1739,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /reverse CSS delta contract is missing existing-utility policy for/);
   assert.match(sourceApply, /validate_reverse_delta_preview_provenance/);
   assert.match(sourceApply, /validate_reverse_delta_preview_replacement_policy/);
+  assert.match(sourceApply, /validate_reverse_delta_target_utility_contract/);
+  assert.match(sourceApply, /target_utility_matches_reverse_delta_mapping/);
   assert.match(sourceApply, /validate_required_preview_provenance_field/);
   assert.match(sourceApply, /string_slice_contains_case_insensitive/);
   assert.match(sourceApply, /compare_required_str_or_null/);
@@ -1750,6 +1752,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /ready reverse CSS delta preview lacks reverse CSS map provenance/);
   assert.match(sourceApply, /ready reverse CSS delta preview has non-string replacement utilities/);
   assert.match(sourceApply, /ready reverse CSS delta preview replacement utilities do not contain target utility/);
+  assert.match(sourceApply, /ready reverse CSS delta preview property is not supported by contract/);
+  assert.match(sourceApply, /ready reverse CSS delta preview target utility does not match contract mapping/);
   assert.match(sourceApply, /ready reverse CSS delta preview source declaration does not match replacement utilities/);
   assert.match(sourceApply, /ready reverse CSS delta preview has no replacement source declaration/);
   assert.match(sourceApply, /ready reverse CSS delta preview is missing required replacement policy evidence/);

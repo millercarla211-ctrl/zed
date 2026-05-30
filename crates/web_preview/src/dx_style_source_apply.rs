@@ -369,6 +369,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     validate_reverse_delta_preview_replacement_policy(
         reverse_css_delta_preview,
         group_context,
+        reverse_css_delta_contract,
         &reverse_css_delta_existing_utility_required_properties,
         &mut reasons,
     );
@@ -1525,6 +1526,7 @@ fn validate_reverse_delta_preview_provenance(
 fn validate_reverse_delta_preview_replacement_policy(
     preview: &Value,
     group_context: &Value,
+    contract: &Value,
     existing_utility_required_properties: &[&str],
     reasons: &mut Vec<String>,
 ) {
@@ -1567,6 +1569,8 @@ fn validate_reverse_delta_preview_replacement_policy(
             );
         }
     }
+
+    validate_reverse_delta_target_utility_contract(preview, contract, reasons);
 
     if let Some(group_alias) = group_context.get("alias").and_then(Value::as_str)
         && !group_alias.is_empty()
@@ -1635,6 +1639,91 @@ fn validate_reverse_delta_preview_replacement_policy(
                 .to_string(),
         );
     }
+}
+
+fn validate_reverse_delta_target_utility_contract(
+    preview: &Value,
+    contract: &Value,
+    reasons: &mut Vec<String>,
+) {
+    let Some(property) = preview.get("property").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(target_utility) = preview.get("target_utility").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(supported_properties) = contract
+        .get("supported_properties")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+
+    let mut matching_property_seen = false;
+    for mapping in supported_properties {
+        if !mapping
+            .get("property")
+            .and_then(Value::as_str)
+            .is_some_and(|mapped_property| mapped_property.eq_ignore_ascii_case(property))
+        {
+            continue;
+        }
+        matching_property_seen = true;
+        if target_utility_matches_reverse_delta_mapping(target_utility, mapping) {
+            return;
+        }
+    }
+
+    if !matching_property_seen {
+        reasons.push(
+            "ready reverse CSS delta preview property is not supported by contract".to_string(),
+        );
+    } else {
+        reasons.push(
+            "ready reverse CSS delta preview target utility does not match contract mapping"
+                .to_string(),
+        );
+    }
+}
+
+fn target_utility_matches_reverse_delta_mapping(target_utility: &str, mapping: &Value) -> bool {
+    let utility_prefix = mapping
+        .get("utility_prefix")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let property = mapping
+        .get("property")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let value_strategy = mapping
+        .get("value_strategy")
+        .and_then(Value::as_str)
+        .unwrap_or("design_token_suffix");
+
+    if utility_prefix.is_empty() {
+        return value_strategy == "display_keyword"
+            && matches!(
+                target_utility,
+                "block"
+                    | "inline-block"
+                    | "inline"
+                    | "flex"
+                    | "inline-flex"
+                    | "grid"
+                    | "inline-grid"
+                    | "hidden"
+                    | "contents"
+                    | "flow-root"
+            );
+    }
+    if target_utility.starts_with(utility_prefix) {
+        return true;
+    }
+    property.starts_with("margin")
+        && target_utility.starts_with('-')
+        && target_utility
+            .get(1..)
+            .is_some_and(|utility| utility.starts_with(utility_prefix))
 }
 
 fn validate_required_preview_provenance_field(
