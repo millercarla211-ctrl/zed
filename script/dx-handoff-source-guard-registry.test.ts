@@ -146,6 +146,11 @@ test("DX.md exposes the lightweight source guard registry", () => {
     assert.ok(existsSync(guard), `registered guard should exist: ${guard}`);
     assert.ok(dx.includes(guard), `DX.md should list ${guard}`);
   }
+
+  assert.match(
+    dx,
+    /script\/dx-style-panel-source\.test\.ts` - DX Style .*source-apply session/,
+  );
 });
 
 test("handoff docs keep source-only proof separate from runtime readiness", () => {

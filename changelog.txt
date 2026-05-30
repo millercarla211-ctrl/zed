@@ -1,3 +1,19 @@
+[2026-05-30] - DX Style CSS Dry-Run Script Split
+
+ADDED:
+- `crates/web_preview/src/dx_style_generator_surface/css_declaration_dry_run_script.rs` owns the Web Preview browser constants, diagnostics, preview derivation, and generated CSS declaration parsing for CSS declaration dry-run review.
+- `docs/superpowers/plans/2026-05-30-dx-style-css-dry-run-script-split-plan.md` records the behavior-preserving CSS dry-run script split.
+
+CHANGED:
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now composes CSS declaration dry-run review logic from the focused module instead of keeping that review path in the main generator script body.
+- `crates/web_preview/src/dx_style_generator_surface/source_apply_contract.rs` now preserves source-owned source-apply contract version, scope, fixture path, consumers, and notes for Web Preview review metadata.
+- `crates/agent_ui/src/dx_style_panel.rs` now includes the focused CSS dry-run browser module in the Style sidebar readiness gate.
+- `script/dx-style-panel-source.test.ts` now verifies CSS dry-run helper ownership, source-apply session token/refusal ordering, source-apply contract metadata pass-through, and focused module budgets while still parsing the composed generator script.
+- `DX.md` and the focused Superpowers plan now state the current source-only readiness boundary and avoid stale runtime-readiness wording.
+
+NOTES:
+- This is a source-only maintainability slice. No `just run`, Cargo command, build, server, browser automation, or live WebView validation was run.
+
 [2026-05-30] - DX Style Source Apply Session Script Split
 
 ADDED:

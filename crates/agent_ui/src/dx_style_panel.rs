@@ -160,6 +160,12 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
         .join("src")
         .join("dx_style_generator_surface")
         .join("script.rs");
+    let dx_style_css_declaration_dry_run_script_path = zed_root
+        .join("crates")
+        .join("web_preview")
+        .join("src")
+        .join("dx_style_generator_surface")
+        .join("css_declaration_dry_run_script.rs");
     let dx_style_source_apply_session_script_path = zed_root
         .join("crates")
         .join("web_preview")
@@ -194,6 +200,8 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
     let source_apply_contract_fixture_text = read_text_limited(&source_apply_contract_fixture_path);
     let dx_style_generator_surface_text = read_text_limited(&dx_style_generator_surface_path);
     let dx_style_generator_script_text = read_text_limited(&dx_style_generator_script_path);
+    let dx_style_css_declaration_dry_run_script_text =
+        read_text_limited(&dx_style_css_declaration_dry_run_script_path);
     let dx_style_source_apply_session_script_text =
         read_text_limited(&dx_style_source_apply_session_script_path);
     let dx_style_source_apply_text = read_text_limited(&dx_style_source_apply_path);
@@ -244,6 +252,8 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
         .map(|text| {
             text.contains("GROUPED_CLASS_SOURCE_APPLY_CONTRACT_SCHEMA")
                 && text.contains("GROUPED_CLASS_SOURCE_APPLY_IPC_KIND")
+                && text.contains("GROUPED_CLASS_SOURCE_APPLY_CONTRACT_VERSION")
+                && text.contains("GROUPED_CLASS_SOURCE_APPLY_SCOPE")
                 && text.contains("source_mutation_enabled: false")
                 && text.contains("reverse CSS map receipt match")
                 && text.contains("generated CSS declaration delta validation")
@@ -253,6 +263,8 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .as_deref()
             .map(|text| {
                 text.contains("dx.style.grouped-class-source-apply-contract")
+                    && text.contains("\"schema_version\": 1")
+                    && text.contains("\"scope\":")
                     && text.contains("\"source_mutation_enabled\": false")
             })
             .unwrap_or_default();
@@ -309,8 +321,17 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .as_deref()
             .map(|text| {
                 text.contains("renderCssDeclarationDryRunContractReview")
+                    && text.contains("dx_style_css_declaration_dry_run_review_script")
                     && text.contains("Review source")
                     && text.contains("Apply gated")
+            })
+            .unwrap_or_default()
+        && dx_style_css_declaration_dry_run_script_text
+            .as_deref()
+            .map(|text| {
+                text.contains("cssDeclarationDryRunPreview")
+                    && text.contains("css_declaration_dry_run_contract_missing")
+                    && text.contains("generatedCssDeclarations")
             })
             .unwrap_or_default()
         && dx_style_source_apply_session_script_text

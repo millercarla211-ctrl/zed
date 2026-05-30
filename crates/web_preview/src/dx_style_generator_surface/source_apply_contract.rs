@@ -51,17 +51,20 @@ fn source_apply_fixture_to_web_preview_json(fixture: Value, source_path: &str) -
     serde_json::to_string(&json!({
         "__schema": DX_STYLE_SOURCE_APPLY_CONTRACT_SCHEMA,
         "__source": source_path,
+        "schema_version": fixture.get("schema_version")?.as_u64()?,
+        "scope": fixture.get("scope")?.as_str()?,
         "ipc_kind": fixture.get("ipc_kind")?.as_str()?,
         "receipt_schema": fixture.get("receipt_schema")?.as_str()?,
         "active_context_schema": fixture.get("active_context_schema")?.as_str()?,
         "source_apply_session_kind": fixture.get("source_apply_session_kind")?.as_str()?,
+        "fixture_path": fixture.get("fixture_path")?.as_str()?,
         "source_mutation_enabled": fixture.get("source_mutation_enabled")?.as_bool()?,
         "required_native_handler": fixture.get("required_native_handler")?.as_str()?,
-        "required_native_handler_capabilities": fixture.get("required_native_handler_capabilities")?.as_array()?,
-        "review_context_kinds": fixture.get("review_context_kinds")?.as_array()?,
-        "mutation_context_kinds_when_enabled": fixture.get("mutation_context_kinds_when_enabled")?.as_array()?,
-        "required_editor_guards": fixture.get("required_editor_guards")?.as_array()?,
-        "review_receipt_fields": fixture.get("review_receipt_fields")?.as_array()?,
+        "required_native_handler_capabilities": string_array(&fixture, "required_native_handler_capabilities")?,
+        "review_context_kinds": string_array(&fixture, "review_context_kinds")?,
+        "mutation_context_kinds_when_enabled": string_array(&fixture, "mutation_context_kinds_when_enabled")?,
+        "required_editor_guards": string_array(&fixture, "required_editor_guards")?,
+        "review_receipt_fields": string_array(&fixture, "review_receipt_fields")?,
         "max_source_path_bytes": fixture.get("max_source_path_bytes")?.as_u64()?,
         "max_class_name_bytes": fixture.get("max_class_name_bytes")?.as_u64()?,
         "max_css_bytes": fixture.get("max_css_bytes")?.as_u64()?,
@@ -72,6 +75,13 @@ fn source_apply_fixture_to_web_preview_json(fixture: Value, source_path: &str) -
         "max_preview_kind_bytes": fixture.get("max_preview_kind_bytes")?.as_u64()?,
         "max_preview_anatomy_part_bytes": fixture.get("max_preview_anatomy_part_bytes")?.as_u64()?,
         "max_preview_anatomy_parts": fixture.get("max_preview_anatomy_parts")?.as_u64()?,
+        "consumers": string_array(&fixture, "consumers")?,
+        "notes": string_array(&fixture, "notes")?,
     }))
     .ok()
+}
+
+fn string_array<'a>(fixture: &'a Value, field: &str) -> Option<&'a Vec<Value>> {
+    let values = fixture.get(field)?.as_array()?;
+    values.iter().all(Value::is_string).then_some(values)
 }

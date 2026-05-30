@@ -20,6 +20,9 @@ const parseableDxStyleGeneratorScript = (source: string) => {
   const sourceApplySessionScript = read(
     "crates/web_preview/src/dx_style_generator_surface/source_apply_session_script.rs",
   );
+  const cssDeclarationDryRunScript = read(
+    "crates/web_preview/src/dx_style_generator_surface/css_declaration_dry_run_script.rs",
+  );
   const replacements = {
     __DX_STYLE_GENERATOR_CATALOG_JSON__:
       '{"__schema":"dx.style.visual-generator-catalog","entries":[]}',
@@ -28,7 +31,24 @@ const parseableDxStyleGeneratorScript = (source: string) => {
     __DX_STYLE_GENERATOR_RECIPES_JSON__:
       '{"__schema":"dx.style.visual-generator-recipe-catalog","entries":[]}',
     __DX_STYLE_SOURCE_APPLY_CONTRACT_JSON__:
-      '{"__schema":"dx.style.grouped-class-source-apply-contract"}',
+      `{
+        "__schema":"dx.style.grouped-class-source-apply-contract",
+        "__source":"test:source-apply-contract",
+        "schema_version":1,
+        "scope":"source-owned IPC and review receipt requirements for grouped-class editor apply",
+        "ipc_kind":"dx-style-source-apply",
+        "receipt_schema":"zed.web_preview.dx_style_source_apply_receipt.v1",
+        "active_context_schema":"zed.dx_style.active_context.v1",
+        "source_apply_session_kind":"zed.web_preview.dx_style.source_apply_session",
+        "source_mutation_enabled":false,
+        "required_native_handler":"window.__DX_STYLE_SOURCE_APPLY__",
+        "required_native_handler_capabilities":["can_review_request","can_mutate_source"],
+        "review_context_kinds":["class_token","class_list","css_declaration"],
+        "mutation_context_kinds_when_enabled":["class_token"],
+        "required_editor_guards":["trusted Web Preview source-apply session"],
+        "review_receipt_fields":["source_apply_session"],
+        "max_source_apply_session_token_bytes":256
+      }`,
     __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONTRACT_JSON__:
       '{"__schema":"dx.style.css-declaration-dry-run-contract"}',
     __DX_STYLE_GROUP_CONTEXT_CONTRACT_JSON__:
@@ -43,6 +63,14 @@ const parseableDxStyleGeneratorScript = (source: string) => {
     __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__: embeddedRustRawString(
       sourceApplySessionScript,
       "DX_STYLE_SOURCE_APPLY_SESSION_HANDLER_SCRIPT",
+    ),
+    __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__: embeddedRustRawString(
+      cssDeclarationDryRunScript,
+      "DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS_SCRIPT",
+    ),
+    __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__: embeddedRustRawString(
+      cssDeclarationDryRunScript,
+      "DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW_SCRIPT",
     ),
     __DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__: '"source-apply-session-test-token"',
   };
@@ -804,7 +832,7 @@ test("Zed handoff docs register the DX Style panel/read-model guard", () => {
   const dx = read("DX.md");
 
   assert.match(dx, /node --test script\/dx-style-panel-source\.test\.ts/);
-  assert.match(dx, /DX Style plan\/read-model and Zed Style panel/);
+  assert.match(dx, /DX Style plan\/read-model, Web Preview generator, source-apply session/);
 });
 
 test("DX Style visual generator mirror helper reports Zed fallback freshness", () => {
@@ -856,6 +884,7 @@ test("Zed Style rail keeps GPUI as the shell and Web Preview as the generator ho
   assert.match(snapshot, /contains_subslice/);
   assert.match(snapshot, /dx_style_generator_surface_path/);
   assert.match(snapshot, /dx_style_generator_script_path/);
+  assert.match(snapshot, /dx_style_css_declaration_dry_run_script_path/);
   assert.match(snapshot, /dx_style_source_apply_session_script_path/);
   assert.match(snapshot, /dx_style_source_apply_path/);
   assert.match(snapshot, /OpenGeneratorPreviewForContext/);
@@ -864,6 +893,10 @@ test("Zed Style rail keeps GPUI as the shell and Web Preview as the generator ho
   assert.match(snapshot, /dx_style_generator_url_with_context_and_source_apply_session/);
   assert.match(snapshot, /sourceApplySessionToken/);
   assert.match(snapshot, /DX_STYLE_SOURCE_APPLY_SESSION_KIND/);
+  assert.match(snapshot, /GROUPED_CLASS_SOURCE_APPLY_CONTRACT_VERSION/);
+  assert.match(snapshot, /GROUPED_CLASS_SOURCE_APPLY_SCOPE/);
+  assert.match(snapshot, /cssDeclarationDryRunPreview/);
+  assert.match(snapshot, /css_declaration_dry_run_contract_missing/);
   assert.match(snapshot, /source_apply_review_receipt/);
   assert.match(snapshot, /source_apply_contract_ready/);
   assert.match(snapshot, /Source Apply/);
@@ -923,6 +956,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   );
   const surfaceCssDeclarationDryRunContract = read(
     "crates/web_preview/src/dx_style_generator_surface/css_declaration_dry_run_contract.rs",
+  );
+  const surfaceCssDeclarationDryRunScript = read(
+    "crates/web_preview/src/dx_style_generator_surface/css_declaration_dry_run_script.rs",
   );
   const surfaceGroupContextContract = read(
     "crates/web_preview/src/dx_style_generator_surface/group_context_contract.rs",
@@ -1020,6 +1056,25 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /dx_style_source_apply_session_refusal/);
   assert.match(webPreviewView, /dx_style_source_apply_session_token/);
   assert.match(webPreviewView, /next_dx_style_source_apply_session_token/);
+  assert.match(webPreviewView, /\.pointer\("\/source_apply_session\/kind"\)/);
+  assert.match(webPreviewView, /\.pointer\("\/request\/source_apply_session\/kind"\)/);
+  assert.match(webPreviewView, /\.pointer\("\/source_apply_session\/token"\)/);
+  assert.match(webPreviewView, /\.pointer\("\/request\/source_apply_session\/token"\)/);
+  assert.ok(
+    webPreviewView.indexOf("let session_token = self.next_dx_style_source_apply_session_token()") <
+      webPreviewView.indexOf("let url = dx_style_generator_url_with_context_and_source_apply_session"),
+  );
+  assert.ok(
+    webPreviewView.indexOf("let url = dx_style_generator_url_with_context_and_source_apply_session") <
+      webPreviewView.indexOf(
+        "load_requested_url_with_source_apply_session(&url, Some(session_token)",
+      ),
+  );
+  assert.match(
+    webPreviewView,
+    /self\.dx_style_source_apply_session_token =\s*dx_style_source_apply_session_token\.map\(SharedString::from\)/,
+  );
+  assert.match(webPreviewView, /self\.dx_style_source_apply_session_token = None/);
   assert.match(
     webPreviewView,
     /DX Style source apply session token does not match the active trusted Web Preview session/,
@@ -1041,6 +1096,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /"dx-style-source-apply"/);
   assert.match(webPreviewView, /source_apply_review_receipt/);
   assert.match(webPreviewView, /source_apply_session_refused_receipt/);
+  assert.ok(
+    webPreviewView.indexOf("self.dx_style_source_apply_session_refusal(&payload)") <
+      webPreviewView.indexOf("crate::dx_style_source_apply::source_apply_review_receipt(&payload)"),
+  );
   assert.match(webPreviewView, /DX Style source apply review recorded/);
   assert.match(webPreviewView, /DX Style source apply request refused/);
   assert.match(webPreviewView, /open_url_in_side_pane/);
@@ -1306,6 +1365,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surface, /mod catalog/);
   assert.match(surface, /mod controls/);
   assert.match(surface, /mod css_declaration_dry_run_contract/);
+  assert.match(surface, /mod css_declaration_dry_run_script/);
   assert.match(surface, /mod fixture/);
   assert.match(surface, /mod recipes/);
   assert.match(surface, /mod reverse_css_delta_contract/);
@@ -1405,6 +1465,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceSourceApplyContract, /source_apply_fixture_to_web_preview_json/);
   assert.match(surfaceSourceApplyContract, /source_mutation_enabled/);
   assert.match(surfaceSourceApplyContract, /source_apply_session_kind/);
+  assert.match(surfaceSourceApplyContract, /"schema_version": fixture\.get\("schema_version"\)\?\.as_u64\(\)\?/);
+  assert.match(surfaceSourceApplyContract, /"scope": fixture\.get\("scope"\)\?\.as_str\(\)\?/);
+  assert.match(surfaceSourceApplyContract, /"fixture_path": fixture\.get\("fixture_path"\)\?\.as_str\(\)\?/);
   assert.match(surfaceSourceApplyContract, /review_context_kinds/);
   assert.match(surfaceSourceApplyContract, /mutation_context_kinds_when_enabled/);
   assert.match(surfaceSourceApplyContract, /review_receipt_fields/);
@@ -1414,6 +1477,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceSourceApplyContract, /max_preview_kind_bytes/);
   assert.match(surfaceSourceApplyContract, /max_preview_anatomy_part_bytes/);
   assert.match(surfaceSourceApplyContract, /max_preview_anatomy_parts/);
+  assert.match(surfaceSourceApplyContract, /"consumers": string_array\(&fixture, "consumers"\)\?/);
+  assert.match(surfaceSourceApplyContract, /"notes": string_array\(&fixture, "notes"\)\?/);
+  assert.match(surfaceSourceApplyContract, /fn string_array/);
   assert.match(
     surfaceCssDeclarationDryRunContract,
     /DX_STYLE_CSS_DECLARATION_DRY_RUN_CONTRACT_SCHEMA/,
@@ -1473,8 +1539,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /DX_STYLE_GENERATOR_SCRIPT/);
   assert.match(surfaceScript, /dx_style_source_apply_session_constants_script/);
   assert.match(surfaceScript, /dx_style_source_apply_session_handler_script/);
+  assert.match(surfaceScript, /dx_style_css_declaration_dry_run_constants_script/);
+  assert.match(surfaceScript, /dx_style_css_declaration_dry_run_review_script/);
   assert.match(surfaceScript, /__DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__/);
   assert.match(surfaceScript, /__DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__/);
+  assert.match(surfaceScript, /__DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__/);
+  assert.match(surfaceScript, /__DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__/);
   assert.match(
     surfaceSourceApplySessionScript,
     /DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS_SCRIPT/,
@@ -1482,6 +1552,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(
     surfaceSourceApplySessionScript,
     /DX_STYLE_SOURCE_APPLY_SESSION_HANDLER_SCRIPT/,
+  );
+  assert.match(
+    surfaceCssDeclarationDryRunScript,
+    /DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS_SCRIPT/,
+  );
+  assert.match(
+    surfaceCssDeclarationDryRunScript,
+    /DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW_SCRIPT/,
   );
   assert.match(
     parseableDxStyleGeneratorScript(surfaceScript),
@@ -1505,6 +1583,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /const recipePreviewAnatomyParts = Array\.isArray\(recipes\.__preview_anatomy_parts\)/);
   assert.match(surfaceScript, /const recipePreviewAnatomyPartSet = new Set\(recipePreviewAnatomyParts\)/);
   assert.match(surfaceScript, /const sourceApplyContractSchema = sourceApplyContract\.__schema/);
+  assert.match(surfaceScript, /const sourceApplyContractVersion = sourceApplyContract\.schema_version/);
+  assert.match(surfaceScript, /const sourceApplyContractScope = sourceApplyContract\.scope/);
   assert.match(surfaceScript, /const sourceApplyIpcKind = sourceApplyContract\.ipc_kind/);
   assert.match(surfaceScript, /const sourceApplyReceiptSchema = sourceApplyContract\.receipt_schema/);
   assert.match(
@@ -1523,8 +1603,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /const sourceApplyRequiredHandlerCapabilities = Array\.isArray\(sourceApplyContract\.required_native_handler_capabilities\)/);
   assert.match(surfaceScript, /const sourceApplyReviewContextKinds = Array\.isArray\(sourceApplyContract\.review_context_kinds\)/);
   assert.match(surfaceScript, /const sourceApplyMutationContextKinds = Array\.isArray\(sourceApplyContract\.mutation_context_kinds_when_enabled\)/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunSchema = cssDeclarationDryRunContract\.__schema/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunAcceptedSafety = Array\.isArray\(cssDeclarationDryRunContract\.accepted_source_edit_safety\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunSchema = cssDeclarationDryRunContract\.__schema/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunAcceptedSafety = Array\.isArray\(cssDeclarationDryRunContract\.accepted_source_edit_safety\)/);
   assert.match(surfaceScript, /const groupContextContractSchema = groupContextContract\.__schema/);
   assert.match(surfaceScript, /const groupContextMaxAliasBytes = Number\(groupContextContract\.max_alias_bytes/);
   assert.match(surfaceScript, /const groupContextMaxUtilityCount = Number\(groupContextContract\.max_utility_count/);
@@ -1660,31 +1740,31 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /function sourceApplyReviewBlocker\(metadataAligned, context, output\)/);
   assert.match(surfaceScript, /function sourceApplyReviewReady\(metadataAligned, context, output\)/);
   assert.match(surfaceScript, /sourceApplyReviewBlocker\(metadataAligned, context, output\) === "ready"/);
-  assert.match(surfaceScript, /function cssDeclarationDryRunDiagnostics\(context\)/);
-  assert.match(surfaceScript, /css_declaration_dry_run_contract_missing/);
-  assert.match(surfaceScript, /function cssDeclarationDryRunSourceLimitDiagnostics\(\)/);
-  assert.match(surfaceScript, /css_declaration_dry_run_missing_source_path_byte_limit/);
-  assert.match(surfaceScript, /css_declaration_dry_run_source_path_byte_limit_mismatch/);
-  assert.match(surfaceScript, /css_declaration_dry_run_missing_source_span_byte_limit/);
-  assert.match(surfaceScript, /css_declaration_dry_run_source_span_byte_limit_mismatch/);
-  assert.match(surfaceScript, /css_declaration_dry_run_missing_source_digest_byte_limit/);
-  assert.match(surfaceScript, /css_declaration_dry_run_source_digest_byte_limit_mismatch/);
-  assert.match(surfaceScript, /css_declaration_source_edit_safety_not_accepted_for_dry_run/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunMaxDeclarationBytes = Number\(cssDeclarationDryRunContract\.max_declaration_bytes/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunMaxSourcePathBytes = Number\(cssDeclarationDryRunContract\.max_source_path_bytes/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunMaxSourceSpanBytes = Number\(cssDeclarationDryRunContract\.max_source_span_bytes/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunMaxSourceDigestBytes = Number\(cssDeclarationDryRunContract\.max_source_digest_bytes/);
-  assert.match(surfaceScript, /function cssDeclarationDryRunPreviewDiagnostics\(preview\)/);
-  assert.match(surfaceScript, /css_declaration_dry_run_preview_not_ready/);
-  assert.match(surfaceScript, /css_declaration_dry_run_proposed_declaration_exceeds_contract_limit/);
+  assert.match(surfaceCssDeclarationDryRunScript, /function cssDeclarationDryRunDiagnostics\(context\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_contract_missing/);
+  assert.match(surfaceCssDeclarationDryRunScript, /function cssDeclarationDryRunSourceLimitDiagnostics\(\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_missing_source_path_byte_limit/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_source_path_byte_limit_mismatch/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_missing_source_span_byte_limit/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_source_span_byte_limit_mismatch/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_missing_source_digest_byte_limit/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_source_digest_byte_limit_mismatch/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_source_edit_safety_not_accepted_for_dry_run/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunMaxDeclarationBytes = Number\(cssDeclarationDryRunContract\.max_declaration_bytes/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunMaxSourcePathBytes = Number\(cssDeclarationDryRunContract\.max_source_path_bytes/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunMaxSourceSpanBytes = Number\(cssDeclarationDryRunContract\.max_source_span_bytes/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunMaxSourceDigestBytes = Number\(cssDeclarationDryRunContract\.max_source_digest_bytes/);
+  assert.match(surfaceCssDeclarationDryRunScript, /function cssDeclarationDryRunPreviewDiagnostics\(preview\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_preview_not_ready/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_dry_run_proposed_declaration_exceeds_contract_limit/);
   assert.match(surfaceScript, /cssDeclarationDryRunPreview\(output, context\)/);
   assert.match(surfaceScript, /if \(cssDeclarationPreviewDiagnostics\.length\) return cssDeclarationPreviewDiagnostics\[0\]/);
-  assert.match(surfaceScript, /function cssDeclarationDryRunPreview\(output, context = zedStyleContext\)/);
-  assert.match(surfaceScript, /ready_for_review/);
-  assert.match(surfaceScript, /fallback_generated_declaration/);
+  assert.match(surfaceCssDeclarationDryRunScript, /function cssDeclarationDryRunPreview\(output, context = zedStyleContext\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /ready_for_review/);
+  assert.match(surfaceCssDeclarationDryRunScript, /fallback_generated_declaration/);
   assert.match(surfaceScript, /escapeHtml\(applyGate\?\.reason/);
   assert.match(surfaceScript, /escapeHtml\(label\)/);
-  assert.match(surfaceScript, /function generatedCssDeclarations\(css\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /function generatedCssDeclarations\(css\)/);
   assert.match(surfaceScript, /function reverseCssDeltaPreviewProvenance\(group\)/);
   assert.match(surfaceScript, /group_registry_receipt: group\?\.registry_receipt/);
   assert.match(surfaceScript, /reverse_css_map_status: group\?\.reverse_css_map_status/);
@@ -1843,6 +1923,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /editor_write_bridge_reason/);
   assert.match(surfaceScript, /source_apply_contract_schema/);
   assert.match(surfaceScript, /source_apply_contract_source/);
+  assert.match(surfaceScript, /source_apply_contract_version/);
+  assert.match(surfaceScript, /source_apply_contract_scope/);
   assert.match(surfaceScript, /source_apply_ipc_kind/);
   assert.match(surfaceScript, /source_apply_receipt_schema/);
   assert.match(surfaceScript, /source_apply_context_schema/);
@@ -1890,15 +1972,15 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /css_declaration_dry_run_contract_source/);
   assert.match(surfaceScript, /css_declaration_dry_run_required_context_fields/);
   assert.match(surfaceScript, /css_declaration_dry_run_accepted_safety/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunReviewReceiptFields = Array\.isArray\(cssDeclarationDryRunContract\.review_receipt_fields\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunReviewReceiptFields = Array\.isArray\(cssDeclarationDryRunContract\.review_receipt_fields\)/);
   assert.match(surfaceScript, /dry_run_receipt_schema: cssDeclarationDryRunContract\.dry_run_receipt_schema \|\| null/);
   assert.match(surfaceScript, /review_receipt_fields: cssDeclarationDryRunReviewReceiptFields/);
   assert.match(surfaceScript, /CSS review receipt fields/);
   assert.match(surfaceScript, /css_declaration_dry_run_review_receipt_fields/);
   assert.match(surfaceScript, /css_declaration_dry_run_max_declaration_bytes/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunMaxDiagnosticCount = Number\(cssDeclarationDryRunContract\.max_diagnostic_count/);
-  assert.match(surfaceScript, /const cssDeclarationDryRunMaxDiagnosticBytes = Number\(cssDeclarationDryRunContract\.max_diagnostic_bytes/);
-  assert.match(surfaceScript, /function cssDeclarationDryRunDiagnosticLimitDiagnostics\(diagnostics, prefix\)/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunMaxDiagnosticCount = Number\(cssDeclarationDryRunContract\.max_diagnostic_count/);
+  assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunMaxDiagnosticBytes = Number\(cssDeclarationDryRunContract\.max_diagnostic_bytes/);
+  assert.match(surfaceCssDeclarationDryRunScript, /function cssDeclarationDryRunDiagnosticLimitDiagnostics\(diagnostics, prefix\)/);
   assert.match(surfaceScript, /css_declaration_dry_run_max_diagnostic_count/);
   assert.match(surfaceScript, /css_declaration_dry_run_max_diagnostic_bytes/);
   assert.match(surfaceScript, /Diagnostic max/);
@@ -2245,6 +2327,14 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.doesNotMatch(panelView, /disabled\(!snapshot\.web_preview_bridge_ready\)/);
   assert.doesNotMatch(panel, /web_preview::|WebPreviewView/);
   assert.doesNotMatch(panelView, /web_preview::|WebPreviewView/);
+  assert.ok(
+    lineCount("crates/web_preview/src/dx_style_generator_surface/source_apply_session_script.rs") <
+      90,
+  );
+  assert.ok(
+    lineCount("crates/web_preview/src/dx_style_generator_surface/css_declaration_dry_run_script.rs") <
+      220,
+  );
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/panel.rs") < 230);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/apply_gate.rs") < 260);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/css_cursor_context.rs") < 90);

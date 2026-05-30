@@ -1,6 +1,7 @@
 mod catalog;
 mod controls;
 mod css_declaration_dry_run_contract;
+mod css_declaration_dry_run_script;
 mod fixture;
 mod group_context_contract;
 mod recipes;
