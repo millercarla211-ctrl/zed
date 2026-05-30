@@ -293,7 +293,7 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .as_deref()
             .map(|text| {
                 text.contains("DX_STYLE_GENERATOR_SURFACE_SCHEMA")
-                    && text.contains("dx_style_generator_url_with_context")
+                    && text.contains("dx_style_generator_url_with_context_and_source_apply_session")
                     && text.contains("dx_style_source_apply_contract_json")
             })
             .unwrap_or_default()
@@ -302,6 +302,7 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .map(|text| {
                 text.contains("renderCssDeclarationDryRunContractReview")
                     && text.contains("Review source")
+                    && text.contains("sourceApplySessionToken")
                     && text.contains("Apply gated")
             })
             .unwrap_or_default()
@@ -309,6 +310,7 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .as_deref()
             .map(|text| {
                 text.contains("DX_STYLE_SOURCE_APPLY_RECEIPT_SCHEMA")
+                    && text.contains("DX_STYLE_SOURCE_APPLY_SESSION_KIND")
                     && text.contains("source_apply_review_receipt")
             })
             .unwrap_or_default();

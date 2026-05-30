@@ -22,14 +22,24 @@ use style::dx_style_generator_css;
 pub const DX_STYLE_GENERATOR_SURFACE_SCHEMA: &str = "zed.web_preview.dx_style_generator_surface.v1";
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_DX_STYLE_CONTEXT_JSON_BYTES: usize = 256 * 1024;
+const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 
 pub fn dx_style_generator_url() -> String {
-    dx_style_generator_url_with_context(None)
+    dx_style_generator_url_with_context_and_source_apply_session(None, "")
 }
 
 pub fn dx_style_generator_url_with_context(source_context_json: Option<&str>) -> String {
+    dx_style_generator_url_with_context_and_source_apply_session(source_context_json, "")
+}
+
+pub fn dx_style_generator_url_with_context_and_source_apply_session(
+    source_context_json: Option<&str>,
+    source_apply_session_token: &str,
+) -> String {
     let source_context_json = bounded_source_context_json(source_context_json);
     let source_context_json = script_safe_json_string_literal(&source_context_json);
+    let source_apply_session_token = bounded_source_apply_session_token(source_apply_session_token);
+    let source_apply_session_token = script_safe_json_string_literal(&source_apply_session_token);
     let catalog_json = dx_style_generator_catalog_json();
     let controls_json = dx_style_generator_controls_json();
     let recipes_json = dx_style_generator_recipes_json();
@@ -58,7 +68,11 @@ pub fn dx_style_generator_url_with_context(source_context_json: Option<&str>) ->
             "__DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_JSON__",
             &reverse_css_delta_contract_json,
         )
-        .replace("__DX_STYLE_CONTEXT_JSON_STRING__", &source_context_json);
+        .replace("__DX_STYLE_CONTEXT_JSON_STRING__", &source_context_json)
+        .replace(
+            "__DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__",
+            &source_apply_session_token,
+        );
     let html = DX_STYLE_GENERATOR_HTML
         .replace(
             "__DX_STYLE_GENERATOR_SURFACE_SCHEMA__",
@@ -178,6 +192,13 @@ fn bounded_source_context_json(source_context_json: Option<&str>) -> String {
             "DX Style source context could not be parsed as JSON.",
         ),
     }
+}
+
+fn bounded_source_apply_session_token(source_apply_session_token: &str) -> String {
+    if source_apply_session_token.len() > MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES {
+        return String::new();
+    }
+    source_apply_session_token.to_string()
 }
 
 fn blocked_source_context_json(status: &str, detail: impl Into<String>) -> String {

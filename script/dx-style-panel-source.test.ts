@@ -33,6 +33,7 @@ const parseableDxStyleGeneratorScript = (source: string) => {
     __DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_JSON__:
       '{"__schema":"dx.style.grouped-class-reverse-css-delta-contract"}',
     __DX_STYLE_CONTEXT_JSON_STRING__: '""',
+    __DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__: '"source-apply-session-test-token"',
   };
   let parseable = script;
   for (const [token, replacement] of Object.entries(replacements)) {
@@ -848,7 +849,9 @@ test("Zed Style rail keeps GPUI as the shell and Web Preview as the generator ho
   assert.match(snapshot, /OpenGeneratorPreviewForContext/);
   assert.match(snapshot, /dx-style-source-apply/);
   assert.match(snapshot, /DX_STYLE_GENERATOR_SURFACE_SCHEMA/);
-  assert.match(snapshot, /dx_style_generator_url_with_context/);
+  assert.match(snapshot, /dx_style_generator_url_with_context_and_source_apply_session/);
+  assert.match(snapshot, /sourceApplySessionToken/);
+  assert.match(snapshot, /DX_STYLE_SOURCE_APPLY_SESSION_KIND/);
   assert.match(snapshot, /source_apply_review_receipt/);
   assert.match(snapshot, /source_apply_contract_ready/);
   assert.match(snapshot, /Source Apply/);
@@ -994,8 +997,18 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreview, /mod dx_style_source_apply/);
   assert.match(webPreviewView, /zed_actions::dx_style::OpenGeneratorPreview/);
   assert.match(webPreviewView, /OpenGeneratorPreviewForContext/);
-  assert.match(webPreviewView, /dx_style_generator_url\(\)/);
-  assert.match(webPreviewView, /dx_style_generator_url_with_context/);
+  assert.match(webPreviewView, /open_dx_style_generator_in_side_pane/);
+  assert.match(
+    webPreviewView,
+    /dx_style_generator_url_with_context_and_source_apply_session/,
+  );
+  assert.match(webPreviewView, /dx_style_source_apply_session_refusal/);
+  assert.match(webPreviewView, /dx_style_source_apply_session_token/);
+  assert.match(webPreviewView, /next_dx_style_source_apply_session_token/);
+  assert.match(
+    webPreviewView,
+    /DX Style source apply session token does not match the active trusted Web Preview session/,
+  );
   assert.match(webPreviewView, /latest_dx_style_source_apply_receipt/);
   assert.match(webPreviewView, /latest_dx_style_source_apply_receipt_summary/);
   assert.match(webPreviewView, /"reverse_css_delta_contract": receipt\.get\("reverse_css_delta_contract"\)\.cloned\(\)/);
@@ -1012,6 +1025,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /"css_declaration_dry_run_preview_diagnostics": receipt\.get\("css_declaration_dry_run_preview_diagnostics"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"dx-style-source-apply"/);
   assert.match(webPreviewView, /source_apply_review_receipt/);
+  assert.match(webPreviewView, /source_apply_session_refused_receipt/);
   assert.match(webPreviewView, /DX Style source apply review recorded/);
   assert.match(webPreviewView, /DX Style source apply request refused/);
   assert.match(webPreviewView, /open_url_in_side_pane/);
@@ -1024,6 +1038,19 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /DX_STYLE_CSS_DECLARATION_DRY_RUN_CONTRACT_SCHEMA/);
   assert.match(sourceApply, /dx\.style\.css-declaration-dry-run-contract/);
   assert.match(sourceApply, /DX_STYLE_APPLY_KIND: &str = "dx-style-source-apply"/);
+  assert.match(sourceApply, /DX_STYLE_SOURCE_APPLY_SESSION_KIND/);
+  assert.match(
+    sourceApply,
+    /zed\.web_preview\.dx_style\.source_apply_session/,
+  );
+  assert.match(sourceApply, /MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256/);
+  assert.match(sourceApply, /source_apply_session_refused_receipt/);
+  assert.match(sourceApply, /source_apply_session_refused/);
+  assert.match(sourceApply, /not_performed_by_untrusted_session/);
+  assert.match(sourceApply, /source-apply contract is missing trusted session kind/);
+  assert.match(sourceApply, /source-apply contract is missing trusted session guard/);
+  assert.match(sourceApply, /source-apply contract is missing source-apply session receipt field/);
+  assert.match(sourceApply, /max_source_apply_session_token_bytes/);
   assert.match(sourceApply, /ACTIVE_STYLE_CONTEXT_SCHEMA/);
   assert.match(sourceApply, /MAX_SOURCE_PATH_BYTES: usize = 4096/);
   assert.match(sourceApply, /MAX_CLASS_NAME_BYTES: usize = 4096/);
@@ -1172,8 +1199,13 @@ test("Web Preview owns the DX Style generator surface action", () => {
     "zed.web_preview.dx_style_source_apply_receipt.v1",
   );
   assert.equal(styleSourceApplyFixture.active_context_schema, "zed.dx_style.active_context.v1");
+  assert.equal(
+    styleSourceApplyFixture.source_apply_session_kind,
+    "zed.web_preview.dx_style.source_apply_session",
+  );
   assert.equal(styleSourceApplyFixture.source_mutation_enabled, false);
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
+  assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("source_apply_session"));
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("context_kind"));
   assert.ok(
     styleSourceApplyFixture.review_receipt_fields.includes("css_source_edit_safety"),
@@ -1207,6 +1239,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("mutation_ready"));
   assert.ok(
     styleSourceApplyFixture.required_editor_guards.includes(
+      "trusted Web Preview source-apply session",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.required_editor_guards.includes(
       "CSS declaration dry-run receipt for CSS contexts",
     ),
   );
@@ -1223,6 +1260,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.equal(styleSourceApplyFixture.max_css_bytes, 32768);
   assert.equal(styleSourceApplyFixture.max_generator_id_bytes, 128);
   assert.equal(styleSourceApplyFixture.max_source_span_bytes, 16384);
+  assert.equal(styleSourceApplyFixture.max_source_apply_session_token_bytes, 256);
   assert.ok(
     styleSourceApplyFixture.required_native_handler_capabilities.includes(
       "can_review_request",
@@ -1237,6 +1275,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surface, /zed\.web_preview\.dx_style_generator_surface\.v1/);
   assert.match(surface, /ACTIVE_STYLE_CONTEXT_SCHEMA/);
   assert.match(surface, /MAX_DX_STYLE_CONTEXT_JSON_BYTES: usize = 256 \* 1024/);
+  assert.match(surface, /MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256/);
+  assert.match(surface, /dx_style_generator_url_with_context_and_source_apply_session/);
+  assert.match(surface, /bounded_source_apply_session_token/);
   assert.match(surface, /bounded_source_context_json/);
   assert.match(surface, /blocked_source_context_json/);
   assert.match(surface, /script_safe_json_string_literal/);
@@ -1274,6 +1315,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surface, /__DX_STYLE_CSS_DECLARATION_DRY_RUN_CONTRACT_JSON__/);
   assert.match(surface, /__DX_STYLE_GROUP_CONTEXT_CONTRACT_JSON__/);
   assert.match(surface, /__DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_JSON__/);
+  assert.match(surface, /__DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__/);
   assert.match(surface, /__DX_STYLE_GENERATOR_SCRIPT__/);
   assert.match(surface, /id="metadataStatus"/);
   assert.match(surface, /id="generatorSearch"/);
@@ -1346,11 +1388,13 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceSourceApplyContract, /bounded_json_fixture/);
   assert.match(surfaceSourceApplyContract, /source_apply_fixture_to_web_preview_json/);
   assert.match(surfaceSourceApplyContract, /source_mutation_enabled/);
+  assert.match(surfaceSourceApplyContract, /source_apply_session_kind/);
   assert.match(surfaceSourceApplyContract, /review_context_kinds/);
   assert.match(surfaceSourceApplyContract, /mutation_context_kinds_when_enabled/);
   assert.match(surfaceSourceApplyContract, /review_receipt_fields/);
   assert.match(surfaceSourceApplyContract, /max_source_span_bytes/);
   assert.match(surfaceSourceApplyContract, /max_source_digest_bytes/);
+  assert.match(surfaceSourceApplyContract, /max_source_apply_session_token_bytes/);
   assert.match(surfaceSourceApplyContract, /max_preview_kind_bytes/);
   assert.match(surfaceSourceApplyContract, /max_preview_anatomy_part_bytes/);
   assert.match(surfaceSourceApplyContract, /max_preview_anatomy_parts/);
@@ -1435,6 +1479,15 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /const sourceApplyContractSchema = sourceApplyContract\.__schema/);
   assert.match(surfaceScript, /const sourceApplyIpcKind = sourceApplyContract\.ipc_kind/);
   assert.match(surfaceScript, /const sourceApplyReceiptSchema = sourceApplyContract\.receipt_schema/);
+  assert.match(
+    surfaceScript,
+    /const sourceApplySessionKind = sourceApplyContract\.source_apply_session_kind/,
+  );
+  assert.match(
+    surfaceScript,
+    /const sourceApplySessionToken = __DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__/,
+  );
+  assert.match(surfaceScript, /const sourceApplyMaxSessionTokenBytes = Number\(sourceApplyContract\.max_source_apply_session_token_bytes/);
   assert.match(surfaceScript, /const sourceApplyMutationEnabled = sourceApplyContract\.source_mutation_enabled === true/);
   assert.match(surfaceScript, /const sourceApplyRequiredHandlerCapabilities = Array\.isArray\(sourceApplyContract\.required_native_handler_capabilities\)/);
   assert.match(surfaceScript, /const sourceApplyReviewContextKinds = Array\.isArray\(sourceApplyContract\.review_context_kinds\)/);
@@ -1544,6 +1597,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /installSourceApplyHandler\(\)/);
   assert.match(surfaceScript, /function installSourceApplyHandler\(\)/);
   assert.match(surfaceScript, /kind: sourceApplyIpcKind/);
+  assert.match(surfaceScript, /source_apply_session: \{/);
+  assert.match(surfaceScript, /kind: sourceApplySessionKind/);
+  assert.match(surfaceScript, /token: sourceApplySessionToken/);
   assert.match(surfaceScript, /handler_capability/);
   assert.match(surfaceScript, /can_review_request: true/);
   assert.match(surfaceScript, /can_mutate_source: false/);
@@ -1611,8 +1667,13 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /Number\.isInteger\(context\.source_span\?\.start_byte\)/);
   assert.match(surfaceScript, /Number\.isInteger\(context\.source_span\?\.end_byte\)/);
   assert.match(surfaceScript, /applyGate\?\.editor_write_bridge\?\.can_apply/);
+  assert.match(surfaceScript, /source_apply_session_kind_missing/);
+  assert.match(surfaceScript, /source_apply_session_missing/);
+  assert.match(surfaceScript, /source_apply_session_token_exceeds_contract_limit/);
   assert.match(surfaceScript, /function sourceApplyRequest\(output\)/);
   assert.match(surfaceScript, /const cssDeclarationPreview = cssDeclarationDryRunPreview\(output, zedStyleContext\)/);
+  assert.match(surfaceScript, /source_apply_session: \{/);
+  assert.match(surfaceScript, /token: sourceApplySessionToken/);
   assert.match(surfaceScript, /css_declaration_dry_run_contract: cssDeclarationDryRunContract/);
   assert.match(surfaceScript, /css_declaration_dry_run_diagnostics: cssDeclarationDryRunContextDiagnostics\(zedStyleContext\)/);
   assert.match(surfaceScript, /css_declaration_dry_run_preview: cssDeclarationPreview/);

@@ -40,9 +40,7 @@ use workspace::notifications::NotificationId;
 use workspace::{NewWebPreview, Pane, Toast, Workspace, WorkspaceId};
 
 use crate::agent_browser_contracts::*;
-use crate::dx_style_generator_surface::{
-    dx_style_generator_url, dx_style_generator_url_with_context,
-};
+use crate::dx_style_generator_surface::dx_style_generator_url_with_context_and_source_apply_session;
 #[cfg(target_os = "windows")]
 use crate::windows_visual_webview::WindowsVisualWebView;
 use crate::{
@@ -717,6 +715,8 @@ pub struct WebPreviewView {
     browser_events: Arc<Mutex<Vec<BrowserEvent>>>,
     deferred_ipc_messages: Vec<String>,
     ipc_flush_scheduled: bool,
+    dx_style_source_apply_session_token: Option<SharedString>,
+    dx_style_source_apply_session_sequence: u64,
     onboarding_complete: Option<OnboardingCompleteCallback>,
     latest_dx_studio_selection: Option<Value>,
     latest_dx_studio_edit_receipt: Option<Value>,
@@ -820,8 +820,7 @@ impl WebPreviewView {
 
         workspace.register_action(
             move |workspace, _: &zed_actions::dx_style::OpenGeneratorPreview, window, cx| {
-                let url = dx_style_generator_url();
-                Self::open_url_in_side_pane(workspace, &url, window, cx);
+                Self::open_dx_style_generator_in_side_pane(workspace, None, window, cx);
             },
         );
 
@@ -830,8 +829,12 @@ impl WebPreviewView {
                   action: &zed_actions::dx_style::OpenGeneratorPreviewForContext,
                   window,
                   cx| {
-                let url = dx_style_generator_url_with_context(Some(&action.source_context_json));
-                Self::open_url_in_side_pane(workspace, &url, window, cx);
+                Self::open_dx_style_generator_in_side_pane(
+                    workspace,
+                    Some(&action.source_context_json),
+                    window,
+                    cx,
+                );
             },
         );
     }
@@ -898,6 +901,39 @@ impl WebPreviewView {
             });
             preview.update(cx, |this, cx| {
                 this.load_requested_url(url, window, cx);
+            });
+            if let Some(existing_view_idx) = pane.index_for_item(&preview) {
+                pane.activate_item(existing_view_idx, true, true, window, cx);
+            }
+        });
+        cx.notify();
+    }
+
+    fn open_dx_style_generator_in_side_pane(
+        workspace: &mut Workspace,
+        source_context_json: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let source_context_json = source_context_json.map(str::to_string);
+        let view = Self::open_or_create(workspace, window, cx);
+        let pane = workspace
+            .find_pane_in_direction(workspace::SplitDirection::Right, cx)
+            .unwrap_or_else(|| {
+                workspace.split_pane(
+                    workspace.active_pane().clone(),
+                    workspace::SplitDirection::Right,
+                    window,
+                    cx,
+                )
+            });
+        pane.update(cx, |pane, cx| {
+            let preview = Self::find_existing_preview_item(pane, &view, cx).unwrap_or_else(|| {
+                pane.add_item(Box::new(view.clone()), false, false, None, window, cx);
+                view.clone()
+            });
+            preview.update(cx, |this, cx| {
+                this.load_dx_style_generator_url(source_context_json.as_deref(), window, cx);
             });
             if let Some(existing_view_idx) = pane.index_for_item(&preview) {
                 pane.activate_item(existing_view_idx, true, true, window, cx);
@@ -1050,6 +1086,8 @@ impl WebPreviewView {
             browser_events,
             deferred_ipc_messages: Vec::new(),
             ipc_flush_scheduled: false,
+            dx_style_source_apply_session_token: None,
+            dx_style_source_apply_session_sequence: 0,
             onboarding_complete,
             latest_dx_studio_selection: None,
             latest_dx_studio_edit_receipt: None,
@@ -1386,6 +1424,7 @@ impl WebPreviewView {
         };
 
         self.active_url = url.to_string().into();
+        self.dx_style_source_apply_session_token = None;
         self.page_title = None;
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
@@ -1395,6 +1434,30 @@ impl WebPreviewView {
     }
 
     fn load_requested_url(&mut self, url: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.load_requested_url_with_source_apply_session(url, None, window, cx);
+    }
+
+    fn load_dx_style_generator_url(
+        &mut self,
+        source_context_json: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let session_token = self.next_dx_style_source_apply_session_token();
+        let url = dx_style_generator_url_with_context_and_source_apply_session(
+            source_context_json,
+            &session_token,
+        );
+        self.load_requested_url_with_source_apply_session(&url, Some(session_token), window, cx);
+    }
+
+    fn load_requested_url_with_source_apply_session(
+        &mut self,
+        url: &str,
+        dx_style_source_apply_session_token: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Ok(url) = normalized_url(url) else {
             self.load_state = PreviewLoadState::Error("Enter a valid URL or search query.".into());
             cx.notify();
@@ -1406,12 +1469,25 @@ impl WebPreviewView {
             editor.set_text(url.as_str(), window, cx);
         });
         self.active_url = url.clone().into();
+        self.dx_style_source_apply_session_token =
+            dx_style_source_apply_session_token.map(SharedString::from);
         self.page_title = None;
         if let Err(error) = self.load_url(url.as_str(), window, cx) {
             self.load_state = PreviewLoadState::Error(error.to_string().into());
         }
         cx.emit(ItemEvent::UpdateTab);
         cx.notify();
+    }
+
+    fn next_dx_style_source_apply_session_token(&mut self) -> String {
+        self.dx_style_source_apply_session_sequence =
+            self.dx_style_source_apply_session_sequence.wrapping_add(1);
+        format!(
+            "{}:{}:{}",
+            self.session_id.as_ref(),
+            self.dx_style_source_apply_session_sequence,
+            Self::current_epoch_millis()
+        )
     }
 
     #[allow(dead_code)]
@@ -30119,6 +30195,11 @@ impl WebPreviewView {
             match event {
                 BrowserEvent::UrlChanged(url) => {
                     let previous_url = self.active_url.to_string();
+                    if self.dx_style_source_apply_session_token.is_some()
+                        && previous_url.as_str() != url.as_str()
+                    {
+                        self.dx_style_source_apply_session_token = None;
+                    }
                     self.active_url = url.clone().into();
                     let editor_text = self.current_url_text(cx);
                     let should_sync_editor = !self.url_editor_focus_handle.is_focused(window)
@@ -30225,6 +30306,63 @@ impl WebPreviewView {
             }
             cx.notify();
         });
+    }
+
+    fn dx_style_source_apply_session_refusal(&self, payload: &Value) -> Option<&'static str> {
+        let Some(expected_token) = self.dx_style_source_apply_session_token.as_ref() else {
+            return Some(
+                "DX Style source apply is only accepted from a trusted generator Web Preview session",
+            );
+        };
+        let expected_token: &str = expected_token.as_ref();
+        if expected_token.is_empty()
+            || expected_token.len()
+                > crate::dx_style_source_apply::MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES
+        {
+            return Some("trusted DX Style source apply session token is invalid");
+        }
+
+        if payload
+            .pointer("/source_apply_session/kind")
+            .and_then(Value::as_str)
+            != Some(crate::dx_style_source_apply::DX_STYLE_SOURCE_APPLY_SESSION_KIND)
+        {
+            return Some("DX Style source apply session kind is missing or invalid");
+        }
+        if payload
+            .pointer("/request/source_apply_session/kind")
+            .and_then(Value::as_str)
+            != Some(crate::dx_style_source_apply::DX_STYLE_SOURCE_APPLY_SESSION_KIND)
+        {
+            return Some("DX Style source apply request session kind is missing or invalid");
+        }
+
+        let Some(payload_token) = payload
+            .pointer("/source_apply_session/token")
+            .and_then(Value::as_str)
+        else {
+            return Some("DX Style source apply session token is missing");
+        };
+        let Some(request_token) = payload
+            .pointer("/request/source_apply_session/token")
+            .and_then(Value::as_str)
+        else {
+            return Some("DX Style source apply request session token is missing");
+        };
+        if payload_token.len()
+            > crate::dx_style_source_apply::MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES
+            || request_token.len()
+                > crate::dx_style_source_apply::MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES
+        {
+            return Some("DX Style source apply session token is too large");
+        }
+        if payload_token != expected_token || request_token != expected_token {
+            return Some(
+                "DX Style source apply session token does not match the active trusted Web Preview session",
+            );
+        }
+
+        None
     }
 
     fn handle_ipc_message(
@@ -30414,7 +30552,16 @@ impl WebPreviewView {
                 }
             }
             "dx-style-source-apply" => {
-                let receipt = crate::dx_style_source_apply::source_apply_review_receipt(&payload);
+                let receipt = if let Some(refusal_reason) =
+                    self.dx_style_source_apply_session_refusal(&payload)
+                {
+                    crate::dx_style_source_apply::source_apply_session_refused_receipt(
+                        &payload,
+                        refusal_reason,
+                    )
+                } else {
+                    crate::dx_style_source_apply::source_apply_review_receipt(&payload)
+                };
                 let status = receipt
                     .get("status")
                     .and_then(Value::as_str)
@@ -34755,6 +34902,8 @@ impl Item for WebPreviewView {
         let detected_extensions = self.detected_extensions.clone();
         let bookmarks = self.bookmarks.clone();
         let onboarding_complete = self.onboarding_complete.clone();
+        let dx_style_source_apply_session_token = self.dx_style_source_apply_session_token.clone();
+        let dx_style_source_apply_session_sequence = self.dx_style_source_apply_session_sequence;
 
         Task::ready(Some(cx.new(|cx| {
             let url_editor = cx.new(|cx| {
@@ -34789,6 +34938,8 @@ impl Item for WebPreviewView {
                 browser_events,
                 deferred_ipc_messages: Vec::new(),
                 ipc_flush_scheduled: false,
+                dx_style_source_apply_session_token,
+                dx_style_source_apply_session_sequence,
                 onboarding_complete,
                 latest_dx_studio_selection: None,
                 latest_dx_studio_edit_receipt: None,

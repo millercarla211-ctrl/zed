@@ -9,6 +9,9 @@ pub(crate) const DX_STYLE_SOURCE_APPLY_RECEIPT_SCHEMA: &str =
     "zed.web_preview.dx_style_source_apply_receipt.v1";
 
 const DX_STYLE_APPLY_KIND: &str = "dx-style-source-apply";
+pub(crate) const DX_STYLE_SOURCE_APPLY_SESSION_KIND: &str =
+    "zed.web_preview.dx_style.source_apply_session";
+pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_SOURCE_PATH_BYTES: usize = 4096;
 const MAX_CLASS_NAME_BYTES: usize = 4096;
@@ -83,11 +86,24 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if contract_ipc_kind != Some(DX_STYLE_APPLY_KIND) {
         reasons.push("source-apply contract IPC kind does not match payload kind".to_string());
     }
+    let contract_session_kind = contract
+        .get("source_apply_session_kind")
+        .and_then(Value::as_str);
+    if contract_session_kind != Some(DX_STYLE_SOURCE_APPLY_SESSION_KIND) {
+        reasons.push("source-apply contract is missing trusted session kind".to_string());
+    }
     let contract_source_mutation_enabled = contract
         .get("source_mutation_enabled")
         .and_then(Value::as_bool);
     if contract_source_mutation_enabled != Some(true) {
         reasons.push("source-apply contract is review-only".to_string());
+    }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "trusted Web Preview source-apply session",
+    ) {
+        reasons.push("source-apply contract is missing trusted session guard".to_string());
     }
     if !string_array_contains(
         contract,
@@ -132,6 +148,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     }
     if !string_array_contains(contract, "/review_receipt_fields", "preview_output") {
         reasons.push("source-apply contract is missing preview output receipt field".to_string());
+    }
+    if !string_array_contains(contract, "/review_receipt_fields", "source_apply_session") {
+        reasons.push(
+            "source-apply contract is missing source-apply session receipt field".to_string(),
+        );
     }
     for field in [
         "css_declaration_dry_run_contract",
@@ -261,6 +282,12 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         contract,
         "max_source_digest_bytes",
         MAX_SOURCE_DIGEST_BYTES as u64,
+        &mut reasons,
+    );
+    validate_contract_u64(
+        contract,
+        "max_source_apply_session_token_bytes",
+        MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES as u64,
         &mut reasons,
     );
     validate_contract_u64(
@@ -601,6 +628,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "contract": {
             "schema": contract_schema,
             "ipc_kind": contract_ipc_kind,
+            "source_apply_session_kind": contract_session_kind,
             "source_mutation_enabled": contract_source_mutation_enabled,
             "source": contract.get("__source").and_then(Value::as_str),
             "review_context_kinds": string_array_at(contract, "/review_context_kinds"),
@@ -611,9 +639,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "max_generator_id_bytes": contract.get("max_generator_id_bytes").and_then(Value::as_u64),
             "max_source_span_bytes": contract.get("max_source_span_bytes").and_then(Value::as_u64),
             "max_source_digest_bytes": contract.get("max_source_digest_bytes").and_then(Value::as_u64),
+            "max_source_apply_session_token_bytes": contract.get("max_source_apply_session_token_bytes").and_then(Value::as_u64),
             "max_preview_kind_bytes": contract.get("max_preview_kind_bytes").and_then(Value::as_u64),
             "max_preview_anatomy_part_bytes": contract.get("max_preview_anatomy_part_bytes").and_then(Value::as_u64),
             "max_preview_anatomy_parts": contract.get("max_preview_anatomy_parts").and_then(Value::as_u64),
+        },
+        "source_apply_session": {
+            "kind": DX_STYLE_SOURCE_APPLY_SESSION_KIND,
+            "trusted": true,
+            "token_present": payload.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
+            "request_token_present": request.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
         },
         "css_declaration_dry_run_contract": {
             "schema": css_declaration_dry_run_contract.get("__schema").and_then(Value::as_str),
@@ -695,6 +730,30 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "can_mutate_source": can_mutate_source,
             "web_preview_declared_review_capability": web_preview_declared_review_capability,
             "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
+        },
+    })
+}
+
+pub(crate) fn source_apply_session_refused_receipt(payload: &Value, reason: &str) -> Value {
+    let request = payload.get("request").unwrap_or(&Value::Null);
+    json!({
+        "schema": DX_STYLE_SOURCE_APPLY_RECEIPT_SCHEMA,
+        "contract_schema": DX_STYLE_SOURCE_APPLY_CONTRACT_SCHEMA,
+        "ipc_kind": DX_STYLE_APPLY_KIND,
+        "status": "refused",
+        "review_status": "source_apply_session_refused",
+        "mutation_ready": false,
+        "source_mutation": "not_performed_by_untrusted_session",
+        "reason_count": 1,
+        "reasons": [reason],
+        "generator": request.get("generator").and_then(Value::as_str),
+        "source_path": request.get("source_path").and_then(Value::as_str),
+        "source_span": request.get("source_span").cloned(),
+        "source_apply_session": {
+            "kind": payload.pointer("/source_apply_session/kind").and_then(Value::as_str),
+            "request_kind": request.pointer("/source_apply_session/kind").and_then(Value::as_str),
+            "token_present": payload.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
+            "request_token_present": request.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
         },
     })
 }

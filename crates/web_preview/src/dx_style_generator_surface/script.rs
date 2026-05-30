@@ -36,6 +36,9 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
     const sourceApplyContractSource = sourceApplyContract.__source || "embedded:dx-style-source-apply-contract-fixture";
     const sourceApplyIpcKind = sourceApplyContract.ipc_kind || "dx-style-source-apply";
     const sourceApplyReceiptSchema = sourceApplyContract.receipt_schema || "unknown";
+    const sourceApplySessionKind = sourceApplyContract.source_apply_session_kind || "unknown";
+    const sourceApplySessionToken = __DX_STYLE_SOURCE_APPLY_SESSION_TOKEN__;
+    const sourceApplyMaxSessionTokenBytes = Number(sourceApplyContract.max_source_apply_session_token_bytes || 0);
     const sourceApplyMutationEnabled = sourceApplyContract.source_mutation_enabled === true;
     const sourceApplyRequiredHandlerCapabilities = Array.isArray(sourceApplyContract.required_native_handler_capabilities)
       ? sourceApplyContract.required_native_handler_capabilities
@@ -585,6 +588,10 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
         window.ipc.postMessage(JSON.stringify({
           kind: sourceApplyIpcKind,
           request,
+          source_apply_session: {
+            kind: sourceApplySessionKind,
+            token: sourceApplySessionToken
+          },
           handler_capability: {
             can_review_request: true,
             can_mutate_source: false
@@ -631,6 +638,19 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
       if (!applyGate?.editor_write_bridge?.can_apply) return "editor_write_bridge_not_ready";
       if (sourceApplyContractSchema !== "dx.style.grouped-class-source-apply-contract") {
         return "source_apply_contract_missing";
+      }
+      if (sourceApplyIpcKind !== "dx-style-source-apply") {
+        return "source_apply_ipc_kind_mismatch";
+      }
+      if (sourceApplySessionKind !== "zed.web_preview.dx_style.source_apply_session") {
+        return "source_apply_session_kind_missing";
+      }
+      if (!sourceApplySessionToken) {
+        return "source_apply_session_missing";
+      }
+      if (sourceApplyMaxSessionTokenBytes
+        && utf8ByteLength(sourceApplySessionToken) > sourceApplyMaxSessionTokenBytes) {
+        return "source_apply_session_token_exceeds_contract_limit";
       }
       if (reverseCssDeltaContractSchema !== "dx.style.grouped-class-reverse-css-delta-contract") {
         return "reverse_css_delta_contract_missing";
@@ -683,6 +703,16 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
       }
       if (sourceApplyIpcKind !== "dx-style-source-apply") {
         return "source_apply_ipc_kind_mismatch";
+      }
+      if (sourceApplySessionKind !== "zed.web_preview.dx_style.source_apply_session") {
+        return "source_apply_session_kind_missing";
+      }
+      if (!sourceApplySessionToken) {
+        return "source_apply_session_missing";
+      }
+      if (sourceApplyMaxSessionTokenBytes
+        && utf8ByteLength(sourceApplySessionToken) > sourceApplyMaxSessionTokenBytes) {
+        return "source_apply_session_token_exceeds_contract_limit";
       }
       if (reverseCssDeltaContractSchema !== "dx.style.grouped-class-reverse-css-delta-contract") {
         return "reverse_css_delta_contract_missing";
@@ -963,6 +993,10 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
         generator: state.generator,
         source_path: zedStyleContext?.source_path || null,
         source_span: zedStyleContext?.source_span || null,
+        source_apply_session: {
+          kind: sourceApplySessionKind,
+          token: sourceApplySessionToken
+        },
         output,
         context: zedStyleContext,
         metadata: metadataDiagnostics,

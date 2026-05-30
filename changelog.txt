@@ -1,3 +1,21 @@
+[2026-05-30] - DX Style Web Preview Source Apply Session Trust
+
+ADDED:
+- `docs/superpowers/plans/2026-05-30-dx-style-web-preview-source-apply-session-plan.md` records the step-back assessment, next-course plan, and source-only verification boundary for the Web Preview source-apply trust slice.
+- `crates/web_preview/src/web_preview_view.rs` now keeps a native-held DX Style source-apply session token for generator surfaces opened through Zed actions.
+- `crates/web_preview/src/dx_style_source_apply.rs` now exposes the source-apply session kind, token byte limit, and a refusal receipt for untrusted source-apply IPC.
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now make the trusted Web Preview source-apply session a source-owned contract guard.
+
+CHANGED:
+- Opening the DX Style generator through the right-dock panel or launch rail now embeds the native session token into the local Web Preview generator surface.
+- The generator's review handler echoes the session token in both the IPC envelope and request body, while keeping mutation disabled.
+- Native `dx-style-source-apply` review now refuses messages that do not match the active trusted generator Web Preview session before running normal contract review.
+- `crates/web_preview/src/dx_style_generator_surface/source-apply-contract.generated.json` mirrors the updated DX Style source-apply contract with the session kind and token cap.
+- DX Style sidebar readiness and source guards now require the session-token path beside the existing review-only handler.
+
+NOTES:
+- This is a source-only hardening slice. No `just run`, Cargo command, build, server, browser automation, or live WebView validation was run.
+
 [2026-05-30] - DX Style Trusted Group Registry Receipts
 
 ADDED:

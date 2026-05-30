@@ -5,6 +5,7 @@
   "ipc_kind": "dx-style-source-apply",
   "receipt_schema": "zed.web_preview.dx_style_source_apply_receipt.v1",
   "active_context_schema": "zed.dx_style.active_context.v1",
+  "source_apply_session_kind": "zed.web_preview.dx_style.source_apply_session",
   "fixture_path": "fixtures/grouped-class-source-apply-contract.json",
   "source_mutation_enabled": false,
   "required_native_handler": "window.__DX_STYLE_SOURCE_APPLY__",
@@ -23,6 +24,7 @@
   "required_editor_guards": [
     "active context schema match",
     "active context kind supported",
+    "trusted Web Preview source-apply session",
     "request source path matches active source path",
     "request source span matches active source span",
     "active source digest match",
@@ -42,6 +44,7 @@
     "dry_run_review",
     "context_kind",
     "css_source_edit_safety",
+    "source_apply_session",
     "preview_output",
     "css_declaration_dry_run_contract",
     "css_declaration_dry_run_diagnostics",
@@ -58,6 +61,7 @@
   "max_generator_id_bytes": 128,
   "max_source_span_bytes": 16384,
   "max_source_digest_bytes": 128,
+  "max_source_apply_session_token_bytes": 256,
   "consumers": [
     "Zed Web Preview",
     "Zed Style panel",
