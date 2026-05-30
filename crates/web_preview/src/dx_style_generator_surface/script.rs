@@ -930,12 +930,42 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       let firstUnsupportedValue = null;
       let fallbackDisplayPreview = null;
       for (const declaration of declarations) {
-        const mapping = reverseCssDeltaSupportedProperties.find((entry) =>
+        const mappings = reverseCssDeltaSupportedProperties.filter((entry) =>
           String(entry.property || "").toLowerCase() === declaration.property.toLowerCase()
         );
-        if (!mapping) continue;
-        const token = tokenFromReverseDeltaValue(declaration.value, mapping);
-        if (!token) {
+        if (!mappings.length) continue;
+        let declarationHadUnsupportedValue = false;
+        for (const mapping of mappings) {
+          const token = tokenFromReverseDeltaValue(declaration.value, mapping);
+          if (!token) {
+            declarationHadUnsupportedValue = true;
+            continue;
+          }
+          const targetUtility = targetUtilityFromReverseDelta(mapping, token);
+          const replacementUtilities = replacementUtilitiesForDelta(
+            utilities,
+            mapping.utility_prefix,
+            targetUtility
+          );
+          const preview = {
+            ...provenance,
+            status: utilities.includes(targetUtility) ? "no_change" : "ready_for_review",
+            property: declaration.property,
+            value: declaration.value,
+            target_utility: targetUtility,
+            replacement_utilities: replacementUtilities,
+            replacement_source_declaration: group?.alias
+              ? `@${group.alias}(${replacementUtilities.join(" ")})`
+              : null,
+            reason: "Generated declaration can be reviewed against source-owned grouped atomics."
+          };
+          if (String(mapping.value_strategy || "") === "display_keyword") {
+            fallbackDisplayPreview ||= preview;
+            continue;
+          }
+          return preview;
+        }
+        if (declarationHadUnsupportedValue) {
           firstUnsupportedValue ||= {
             ...provenance,
             status: "unsupported_value",
@@ -945,29 +975,6 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           };
           continue;
         }
-        const targetUtility = targetUtilityFromReverseDelta(mapping, token);
-        const replacementUtilities = replacementUtilitiesForDelta(
-          utilities,
-          mapping.utility_prefix,
-          targetUtility
-        );
-        const preview = {
-          ...provenance,
-          status: utilities.includes(targetUtility) ? "no_change" : "ready_for_review",
-          property: declaration.property,
-          value: declaration.value,
-          target_utility: targetUtility,
-          replacement_utilities: replacementUtilities,
-          replacement_source_declaration: group?.alias
-            ? `@${group.alias}(${replacementUtilities.join(" ")})`
-            : null,
-          reason: "Generated declaration can be reviewed against source-owned grouped atomics."
-        };
-        if (String(mapping.value_strategy || "") === "display_keyword") {
-          fallbackDisplayPreview ||= preview;
-          continue;
-        }
-        return preview;
       }
       if (fallbackDisplayPreview) return fallbackDisplayPreview;
       if (firstUnsupportedValue) return firstUnsupportedValue;

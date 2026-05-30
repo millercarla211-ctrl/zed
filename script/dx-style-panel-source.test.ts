@@ -660,6 +660,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /reverse CSS delta preview provenance match/);
   assert.match(groupReverseCssDelta, /required_preview_provenance_fields/);
   assert.match(groupReverseCssDelta, /grouped_class_reverse_css_delta_preview/);
+  assert.match(groupReverseCssDelta, /filter\(\|mapping\|[\s\S]{0,120}eq_ignore_ascii_case\(property\)/);
   assert.match(groupReverseCssDelta, /utility_matches_family/);
   assert.match(groupReverseCssDelta, /is_border_color_utility/);
   assert.match(groupReverseCssDelta, /GroupedClassReverseCssDeltaValueStrategy/);
@@ -721,6 +722,30 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "gap" && entry.utility_prefix === "gap-",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "gap" &&
+        entry.utility_prefix === "gap-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "padding" &&
+        entry.utility_prefix === "p-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "border-radius" &&
+        entry.utility_prefix === "rounded-" &&
+        entry.value_strategy === "arbitrary_bracket_value",
     ),
   );
   assert.ok(
@@ -2128,6 +2153,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /reverse_css_delta_contract_missing_required_provenance_fields/);
   assert.match(surfaceScript, /reverse_css_delta_contract_unsupported_provenance_field/);
   assert.match(surfaceScript, /function tokenFromReverseDeltaValue\(value, mapping\)/);
+  assert.match(surfaceScript, /reverseCssDeltaSupportedProperties\.filter/);
+  assert.match(surfaceScript, /let declarationHadUnsupportedValue = false/);
   assert.match(surfaceScript, /display_keyword/);
   assert.match(surfaceScript, /margin_token_suffix/);
   assert.match(surfaceScript, /arbitrary_bracket_value/);
