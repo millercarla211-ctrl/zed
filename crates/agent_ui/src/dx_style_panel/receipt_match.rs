@@ -7,6 +7,7 @@ const RECEIPT_MISMATCH_REASON_LIMIT: usize = 3;
 pub(super) struct StyleApplyGateInput<'a> {
     pub(super) token: &'a str,
     pub(super) source_path: &'a str,
+    pub(super) workspace_root: Option<&'a str>,
     pub(super) span_start: usize,
     pub(super) span_end: usize,
     pub(super) source_digest: Option<&'a str>,

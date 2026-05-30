@@ -16,9 +16,8 @@ use super::receipt_match::{
 use super::receipt_review::{
     StyleDryRunReceiptSummary, TrustedDryRunReceipt, trusted_receipt as trusted_receipt_from_value,
 };
+use super::receipt_roots::active_style_receipt_roots;
 
-const DX_STYLE_PROJECT_RECEIPT_ROOT: &str = r"G:\Dx\style\.dx\receipts\style";
-const DX_STYLE_HUB_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\style";
 const MAX_DRY_RUN_RECEIPT_BYTES: u64 = 128 * 1024;
 const DRY_RUN_RECEIPT_SCAN_LIMIT: usize = 64;
 
@@ -88,7 +87,7 @@ pub(super) fn style_apply_gate(input: Option<StyleApplyGateInput<'_>>) -> StyleA
         );
     }
 
-    let receipts = trusted_dry_run_receipts();
+    let receipts = trusted_dry_run_receipts(input.source_path, input.workspace_root);
     if receipts.is_empty() {
         return blocked(
             "needs_trusted_dry_run_receipt",
@@ -165,10 +164,13 @@ fn blocked(
     }
 }
 
-fn trusted_dry_run_receipts() -> Vec<TrustedDryRunReceipt> {
-    [DX_STYLE_PROJECT_RECEIPT_ROOT, DX_STYLE_HUB_RECEIPT_ROOT]
+fn trusted_dry_run_receipts(
+    source_path: &str,
+    workspace_root: Option<&str>,
+) -> Vec<TrustedDryRunReceipt> {
+    active_style_receipt_roots(Some(source_path), workspace_root)
         .into_iter()
-        .flat_map(|root| trusted_receipts_in(Path::new(root)))
+        .flat_map(|root| trusted_receipts_in(&root))
         .collect()
 }
 

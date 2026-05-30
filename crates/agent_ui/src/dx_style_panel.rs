@@ -21,6 +21,7 @@ mod panel_view;
 mod readiness;
 mod receipt_match;
 mod receipt_review;
+mod receipt_roots;
 mod reverse_css_map;
 mod source_digest;
 

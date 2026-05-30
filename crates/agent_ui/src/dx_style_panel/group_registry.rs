@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
@@ -9,10 +8,10 @@ use std::{
 
 use serde_json::Value;
 
+use super::receipt_roots::active_style_receipt_roots;
+
 const DX_STYLE_GROUP_REGISTRY_RECEIPT_SCHEMA: &str = "dx.style.grouped-class-registry-receipt";
 const DX_STYLE_REVERSE_CSS_MAP_RECEIPT_FILE: &str = "grouped-class-reverse-css-map-latest.json";
-const DX_STYLE_PROJECT_REGISTRY_RECEIPT_ROOT: &str = r"G:\Dx\style\.dx\receipts\style";
-const DX_STYLE_HUB_REGISTRY_RECEIPT_ROOT: &str = r"G:\Dx\.dx\receipts\style";
 const GROUP_REGISTRY_CACHE_TTL: Duration = Duration::from_secs(5);
 const MAX_GROUP_REGISTRY_RECEIPT_BYTES: u64 = 128 * 1024;
 const GROUP_REGISTRY_RECEIPT_SCAN_LIMIT: usize = 64;
@@ -35,17 +34,21 @@ static GROUP_REGISTRY_CACHE: OnceLock<Mutex<Option<(Instant, String, Vec<Registr
 pub(super) fn registry_group_entry(
     alias: &str,
     source_path: Option<&str>,
+    workspace_root: Option<&str>,
 ) -> Option<RegistryGroupEntry> {
     if !valid_alias(alias) {
         return None;
     }
-    registry_group_entries(source_path)
+    registry_group_entries(source_path, workspace_root)
         .into_iter()
         .find(|entry| entry.alias == alias)
 }
 
-fn registry_group_entries(source_path: Option<&str>) -> Vec<RegistryGroupEntry> {
-    let roots = registry_receipt_roots(source_path);
+fn registry_group_entries(
+    source_path: Option<&str>,
+    workspace_root: Option<&str>,
+) -> Vec<RegistryGroupEntry> {
+    let roots = registry_receipt_roots(source_path, workspace_root);
     let cache_key = roots
         .iter()
         .map(|root| root.display().to_string())
@@ -68,21 +71,8 @@ fn registry_group_entries(source_path: Option<&str>) -> Vec<RegistryGroupEntry> 
     scan_registry_group_entries(&roots)
 }
 
-fn registry_receipt_roots(source_path: Option<&str>) -> Vec<PathBuf> {
-    let mut seen = HashSet::new();
-    let mut roots = Vec::new();
-    if let Some(source_path) = source_path {
-        let path = Path::new(source_path);
-        for ancestor in path.parent().into_iter().flat_map(Path::ancestors).take(8) {
-            roots.push(ancestor.join(".dx").join("receipts").join("style"));
-        }
-    }
-    roots.push(PathBuf::from(DX_STYLE_PROJECT_REGISTRY_RECEIPT_ROOT));
-    roots.push(PathBuf::from(DX_STYLE_HUB_REGISTRY_RECEIPT_ROOT));
-    roots
-        .into_iter()
-        .filter(|root| seen.insert(root.clone()))
-        .collect()
+fn registry_receipt_roots(source_path: Option<&str>, workspace_root: Option<&str>) -> Vec<PathBuf> {
+    active_style_receipt_roots(source_path, workspace_root)
 }
 
 fn scan_registry_group_entries(roots: &[PathBuf]) -> Vec<RegistryGroupEntry> {

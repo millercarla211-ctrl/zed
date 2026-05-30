@@ -12,10 +12,10 @@
 
 ## Current Score
 
-- Source-only integration score: **72/100**.
-- True production readiness score: **55/100**.
+- Source-only integration score after checkpoint commit `e47da5d496`: **82/100**.
+- True production readiness score after checkpoint commit `e47da5d496`: **60/100**.
 
-The source architecture is directionally strong: real right-dock panel, source-owned DX Style contracts, Web Preview generator cockpit, bounded active editor context, review-only native source-apply receipts, fixture mirror checks, and source guards exist. It is not 100/100 because build/runtime proof is intentionally blocked, source mutation remains disabled, several files are still untracked, and the final integration has not been compiled or run inside Zed.
+The source architecture is directionally strong: real right-dock panel, source-owned DX Style contracts, Web Preview generator cockpit, bounded active editor context, review-only native source-apply receipts, fixture mirror checks, and source guards exist. It is not 100/100 because build/runtime proof is intentionally blocked, source mutation remains disabled, WebView behavior is unproven, and the final integration has not been compiled or run inside Zed.
 
 ## What Has Been Tried
 
@@ -33,7 +33,7 @@ The source architecture is directionally strong: real right-dock panel, source-o
 - The code is not compiled. Source guards prove shape, not Rust type correctness across the full Zed workspace.
 - The Web Preview UI is not runtime-verified inside Zed. The script parse guard is useful but does not prove WebView rendering, IPC, focus behavior, or pane placement.
 - Apply remains intentionally disabled. That is correct for safety, but it means the atomic/custom CSS two-way workflow is still review-first, not mutation-ready.
-- The current worktree has many untracked files. A production handoff requires staging and committing the whole coherent lane, not leaving generated mirrors and source modules loose.
+- The sidebar lane is now committed at `e47da5d496`; remaining proof gaps are compile/runtime/WebView validation, mutation readiness, and additional source hardening.
 - Some user-facing docs are long and need a crisp checkpoint summary so the next worker sees exact status, risks, and validation boundaries.
 - Existing internal schema strings use established compatibility names. New user-facing surfaces should avoid throwaway labels and version-ish naming, while preserving existing wire contracts unless a coordinated migration is planned.
 
@@ -117,4 +117,4 @@ Use clear product names in new user-facing docs and UI: "DX Style", "Style sideb
 
 ## Next Exact Action
 
-Run the six-agent audit, integrate only concrete source-only findings, then verify and commit the lane as one professional checkpoint.
+Continue post-commit source hardening, integrate only narrow review findings that do not require build/runtime proof, then schedule governed runtime/build/WebView proof only after the user explicitly authorizes it.

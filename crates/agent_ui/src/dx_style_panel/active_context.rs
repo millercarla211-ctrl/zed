@@ -20,6 +20,7 @@ pub(super) struct ActiveStyleContextSnapshot {
     pub(super) status: String,
     pub(super) detail: String,
     pub(super) source_path: Option<String>,
+    pub(super) workspace_root: Option<String>,
     pub(super) source_state: Option<String>,
     pub(super) context_kind: Option<String>,
     pub(super) token: Option<String>,
@@ -41,6 +42,7 @@ impl ActiveStyleContextSnapshot {
             status: status.into(),
             detail: detail.into(),
             source_path: None,
+            workspace_root: None,
             source_state: None,
             context_kind: None,
             token: None,
@@ -67,12 +69,18 @@ impl ActiveStyleContextSnapshot {
         self
     }
 
+    fn with_workspace_root(mut self, workspace_root: Option<&str>) -> Self {
+        self.workspace_root = workspace_root.map(str::to_string);
+        self
+    }
+
     fn with_token(
         mut self,
         token: impl Into<String>,
         start: usize,
         end: usize,
         source_path: &str,
+        workspace_root: Option<&str>,
         source_digest: String,
         attribute_tokens: Vec<String>,
     ) -> Self {
@@ -81,15 +89,18 @@ impl ActiveStyleContextSnapshot {
             Some(&token),
             attribute_tokens.as_slice(),
             Some(source_path),
+            workspace_root,
         );
         self.apply_gate = style_apply_gate(Some(StyleApplyGateInput {
             token: &token,
             source_path,
+            workspace_root,
             span_start: start,
             span_end: end,
             source_digest: Some(&source_digest),
         }));
         self.source_path = Some(source_path.to_string());
+        self.workspace_root = workspace_root.map(str::to_string);
         self.context_kind = Some("class_token".to_string());
         self.token = Some(token);
         self.attribute_tokens = attribute_tokens;
@@ -104,11 +115,17 @@ impl ActiveStyleContextSnapshot {
         mut self,
         attribute_tokens: Vec<String>,
         source_path: &str,
+        workspace_root: Option<&str>,
         source_digest: String,
     ) -> Self {
-        self.group_context =
-            ActiveGroupContext::from_tokens(None, attribute_tokens.as_slice(), Some(source_path));
+        self.group_context = ActiveGroupContext::from_tokens(
+            None,
+            attribute_tokens.as_slice(),
+            Some(source_path),
+            workspace_root,
+        );
         self.source_path = Some(source_path.to_string());
+        self.workspace_root = workspace_root.map(str::to_string);
         self.source_digest = Some(source_digest);
         self.context_kind = Some("class_list".to_string());
         self.attribute_tokens = attribute_tokens;
@@ -153,6 +170,7 @@ impl ActiveStyleContextSnapshot {
             "status": self.status,
             "detail": self.detail,
             "source_path": self.source_path,
+            "workspace_root": self.workspace_root,
             "source_state": self.source_state,
             "context_kind": self.context_kind,
             "token": self.token,
@@ -197,17 +215,35 @@ pub(super) fn active_style_context(
         return ActiveStyleContextSnapshot::new("no active file", "Open a style-bearing file");
     };
 
-    let path = project_path.path.display(PathStyle::local()).into_owned();
-    if !is_style_bearing_path(&path) {
-        return ActiveStyleContextSnapshot::new("non-style file", path);
+    let display_path = project_path.path.display(PathStyle::local()).into_owned();
+    let project = workspace.project().read(cx);
+    let source_path = project
+        .absolute_path(&project_path, cx)
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| display_path.clone());
+    let workspace_root = project
+        .get_workspace_root(&project_path, cx)
+        .map(|path| path.display().to_string());
+    drop(project);
+    if !is_style_bearing_path(&source_path) {
+        return ActiveStyleContextSnapshot::new("non-style file", source_path);
     }
 
     let Some(editor) = active_item.act_as::<Editor>(cx) else {
-        return ActiveStyleContextSnapshot::new("style file", path.clone())
-            .with_source_path(path)
+        return ActiveStyleContextSnapshot::new("style file", source_path.clone())
+            .with_source_path(source_path)
+            .with_workspace_root(workspace_root.as_deref())
             .with_source_state("active item is not an editor buffer");
     };
     let editor = editor.read(cx);
+    let source_len = editor.buffer().read(cx).len(cx).0;
+    if source_len > MAX_ACTIVE_STYLE_CONTEXT_BYTES {
+        return ActiveStyleContextSnapshot::new("style file too large", source_path.clone())
+            .with_source_path(source_path)
+            .with_workspace_root(workspace_root.as_deref())
+            .with_source_state("cursor token scan skipped for large active file");
+    }
+
     let display_snapshot = editor.display_snapshot(cx);
     let cursor = editor
         .selections
@@ -216,46 +252,66 @@ pub(super) fn active_style_context(
         .0;
     let source = editor.text(cx);
     if source.len() > MAX_ACTIVE_STYLE_CONTEXT_BYTES {
-        return ActiveStyleContextSnapshot::new("style file too large", path.clone())
-            .with_source_path(path)
+        return ActiveStyleContextSnapshot::new("style file too large", source_path.clone())
+            .with_source_path(source_path)
+            .with_workspace_root(workspace_root.as_deref())
             .with_source_state("cursor token scan skipped for large active file");
     }
-    let source_digest = active_source_digest(&source);
-
     match cursor_style_token(&source, cursor) {
         CursorStyleToken::Token {
             token,
             start,
             end,
             attribute_tokens,
-        } => ActiveStyleContextSnapshot::new("style token", path.clone())
-            .with_source_state("static class/className token under cursor")
-            .with_token(token, start, end, &path, source_digest, attribute_tokens),
+        } => {
+            let source_digest = active_source_digest(&source);
+            ActiveStyleContextSnapshot::new("style token", source_path.clone())
+                .with_source_state("static class/className token under cursor")
+                .with_token(
+                    token,
+                    start,
+                    end,
+                    &source_path,
+                    workspace_root.as_deref(),
+                    source_digest,
+                    attribute_tokens,
+                )
+        }
         CursorStyleToken::StaticAttribute { attribute_tokens } => {
-            ActiveStyleContextSnapshot::new("static class list", path.clone())
+            let source_digest = active_source_digest(&source);
+            ActiveStyleContextSnapshot::new("static class list", source_path.clone())
                 .with_source_state("cursor is inside a static class/className attribute")
-                .with_attribute_tokens(attribute_tokens, &path, source_digest)
+                .with_attribute_tokens(
+                    attribute_tokens,
+                    &source_path,
+                    workspace_root.as_deref(),
+                    source_digest,
+                )
         }
         CursorStyleToken::DynamicAttribute => {
-            ActiveStyleContextSnapshot::new("dynamic className", path.clone())
-                .with_source_path(path)
+            ActiveStyleContextSnapshot::new("dynamic className", source_path.clone())
+                .with_source_path(source_path)
+                .with_workspace_root(workspace_root.as_deref())
                 .with_source_state(
                     "dynamic expressions are read-only until DX Style returns trusted spans",
                 )
         }
         CursorStyleToken::NonLiteralAttribute => {
-            ActiveStyleContextSnapshot::new("non-literal class", path.clone())
-                .with_source_path(path)
+            ActiveStyleContextSnapshot::new("non-literal class", source_path.clone())
+                .with_source_path(source_path)
+                .with_workspace_root(workspace_root.as_deref())
                 .with_source_state("non-literal class values are read-only")
         }
         CursorStyleToken::UnterminatedAttribute => {
-            ActiveStyleContextSnapshot::new("unterminated class", path.clone())
-                .with_source_path(path)
+            ActiveStyleContextSnapshot::new("unterminated class", source_path.clone())
+                .with_source_path(source_path)
+                .with_workspace_root(workspace_root.as_deref())
                 .with_source_state("class literal must be valid before Style tools can read it")
         }
-        CursorStyleToken::Outside if is_css_style_sheet_path(&path) => {
+        CursorStyleToken::Outside if is_css_style_sheet_path(&source_path) => {
             if let Some(hint) = css_style_hint(&source, cursor) {
-                return ActiveStyleContextSnapshot::new("css declaration", path.clone())
+                let source_digest = active_source_digest(&source);
+                return ActiveStyleContextSnapshot::new("css declaration", source_path.clone())
                     .with_css_hint(
                         hint.token,
                         hint.property,
@@ -263,17 +319,20 @@ pub(super) fn active_style_context(
                         hint.source_edit_safety,
                         hint.start,
                         hint.end,
-                        &path,
+                        &source_path,
                         source_digest,
-                    );
+                    )
+                    .with_workspace_root(workspace_root.as_deref());
             }
-            ActiveStyleContextSnapshot::new("style-relevant file", path.clone())
-                .with_source_path(path)
+            ActiveStyleContextSnapshot::new("style-relevant file", source_path.clone())
+                .with_source_path(source_path)
+                .with_workspace_root(workspace_root.as_deref())
                 .with_source_state("cursor is outside a recognized CSS declaration")
         }
         CursorStyleToken::Outside => {
-            ActiveStyleContextSnapshot::new("style-relevant file", path.clone())
-                .with_source_path(path)
+            ActiveStyleContextSnapshot::new("style-relevant file", source_path.clone())
+                .with_source_path(source_path)
+                .with_workspace_root(workspace_root.as_deref())
                 .with_source_state("cursor is outside a class/className attribute")
         }
     }

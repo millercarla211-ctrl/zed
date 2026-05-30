@@ -1,6 +1,9 @@
 [2026-05-30] - DX Style Trusted Group Registry Receipts
 
 ADDED:
+- `docs/superpowers/plans/2026-05-30-dx-style-receipt-root-and-context-hardening-plan.md` records the source-only plan for project-local receipt roots and active-context performance hardening.
+- `crates/agent_ui/src/dx_style_panel/receipt_roots.rs` centralizes DX Style receipt root discovery for active workspace-local `.dx\receipts\style` roots without global fallback roots for active-source decisions.
+- `crates/agent_ui/src/dx_style_panel/grouped-class-dry-run-receipt-fixtures.generated.json` mirrors the DX Style grouped-class dry-run receipt fixture set for Zed source-only review.
 - `docs/superpowers/plans/2026-05-30-dx-style-production-completion-plan.md` records the completion plan, scorecard, tried work, remaining gaps, six-agent audit split, source-only verification commands, and professional commit boundary for the DX Style Web Preview sidebar lane.
 - `G:\Dx\style\src\core\engine\grouped_class_registry_receipt.rs` defines the source-owned grouped-class registry receipt contract for trusted alias-to-atomic expansion.
 - `G:\Dx\style\src\core\engine\grouped_class_reverse_css_map.rs` defines the source-owned reverse CSS map receipt contract for generated grouped CSS to atomic utility review.
@@ -17,6 +20,10 @@ ADDED:
 - DX Style rebuilds now also write `.dx/receipts/style/grouped-class-reverse-css-map-latest.json` so Web Preview can review generated grouped CSS provenance beside the alias registry.
 
 CHANGED:
+- Zed now resolves the active editor `ProjectPath` to an absolute workspace file path before forwarding DX Style `source_path` into group context, dry-run receipt matching, and Web Preview source review, while preserving the relative path only as a fallback.
+- Project-local receipt scanning now walks active source ancestors only for absolute source paths and de-duplicates roots with Windows-friendly slash/case normalization, avoiding accidental `.dx` lookups under Zed's process working directory.
+- The active Style context now checks `editor.buffer().len()` before cloning full editor text, so oversized style-bearing files are refused before the expensive token/digest scan.
+- `G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs` now keeps the grouped-class dry-run receipt fixture mirror aligned with the other DX Style/Zed generator fixtures.
 - Zed grouped-class context now expands alias-only calls such as `button()` only when a trusted `dx.style.grouped-class-registry-receipt` is present, and forwards the registry receipt path into Web Preview context.
 - Zed now looks for project-local registry receipts near the active file before the DX fallback roots and uses the freshest trusted registry receipt as one snapshot instead of merging older receipt files.
 - Zed now reads the sibling reverse CSS map receipt in a bounded source-only pass and forwards its review status into the active grouped-class Web Preview context.
@@ -62,7 +69,7 @@ CHANGED:
 
 NOTES:
 - This preserves the architecture decision: GPUI is the native sidebar shell and Web Preview is the visual CSS generator cockpit. Source mutation remains disabled.
-- No `just run`, Cargo, server, browser automation, or build proof was run in this source-only slice.
+- No `just run`, Cargo, server, browser automation, WebView proof, or build proof was run in this source-only slice.
 
 [2026-05-30] - DX Style Group Context Web Preview Contract
 

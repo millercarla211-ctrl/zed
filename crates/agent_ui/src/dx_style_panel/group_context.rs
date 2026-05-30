@@ -44,13 +44,16 @@ impl ActiveGroupContext {
         token: Option<&str>,
         attribute_tokens: &[String],
         source_path: Option<&str>,
+        workspace_root: Option<&str>,
     ) -> Self {
-        if let Some(context) = token.and_then(|token| group_call_context(token, source_path)) {
+        if let Some(context) =
+            token.and_then(|token| group_call_context(token, source_path, workspace_root))
+        {
             return context;
         }
         if let Some(context) = attribute_tokens
             .iter()
-            .find_map(|token| group_call_context(token, source_path))
+            .find_map(|token| group_call_context(token, source_path, workspace_root))
         {
             return context;
         }
@@ -98,10 +101,14 @@ impl ActiveGroupContext {
     }
 }
 
-fn group_call_context(token: &str, source_path: Option<&str>) -> Option<ActiveGroupContext> {
+fn group_call_context(
+    token: &str,
+    source_path: Option<&str>,
+    workspace_root: Option<&str>,
+) -> Option<ActiveGroupContext> {
     let (alias, body) = parse_group_call(token)?;
     if body.trim().is_empty() {
-        if let Some(entry) = registry_group_entry(alias, source_path) {
+        if let Some(entry) = registry_group_entry(alias, source_path, workspace_root) {
             let reverse_css_map =
                 reverse_css_map_summary(alias, entry.reverse_css_map_receipt.as_deref());
             return Some(ActiveGroupContext {

@@ -1,0 +1,206 @@
+{
+  "schema": "dx.style.grouped-class-dry-run-receipt-fixtures",
+  "schema_version": 1,
+  "description": "Source-owned examples for Zed/Web Preview matching of trusted grouped-class dry-run receipts.",
+  "active_source": {
+    "path": "src/components/button.tsx",
+    "source_text": "export function Demo(){return <Button className=\"p-4 m-2 bg-primary text-primary-foreground\" />}",
+    "token": "p-4 m-2 bg-primary text-primary-foreground",
+    "span": {
+      "start": {
+        "byte_offset": 49,
+        "line": 1,
+        "column": 50
+      },
+      "end": {
+        "byte_offset": 91,
+        "line": 1,
+        "column": 92
+      }
+    },
+    "source_digest_algorithm": "fnv1a64",
+    "source_digest": "fnv1a64:da057a4c61517af3"
+  },
+  "receipts": {
+    "matching": {
+      "schema": "dx.style.grouped-class-dry-run-receipt",
+      "schema_version": 1,
+      "source_file": {
+        "path": "src/components/button.tsx"
+      },
+      "source_digest_algorithm": "fnv1a64",
+      "source_digest": "fnv1a64:da057a4c61517af3",
+      "cursor_context": {
+        "token": "p-4 m-2 bg-primary text-primary-foreground",
+        "status": "static_class_token"
+      },
+      "patch_preview": {
+        "intent": "collapse_static_class_string_to_group_usage",
+        "status": "ready",
+        "edits": [
+          {
+            "source_file": {
+              "path": "src/components/button.tsx"
+            },
+            "span": {
+              "start": {
+                "byte_offset": 49,
+                "line": 1,
+                "column": 50
+              },
+              "end": {
+                "byte_offset": 91,
+                "line": 1,
+                "column": 92
+              }
+            },
+            "replacement_text": "button()"
+          }
+        ]
+      },
+      "status": "ready",
+      "trust": {
+        "source_digest_verified": true,
+        "source_span_trusted": true,
+        "dry_run_preview_ready": true,
+        "editor_write_bridge_required": true
+      },
+      "message": "fixture receipt matches active source path, token span, and source digest"
+    },
+    "path_mismatch": {
+      "schema": "dx.style.grouped-class-dry-run-receipt",
+      "schema_version": 1,
+      "source_file": {
+        "path": "src/components/card.tsx"
+      },
+      "source_digest_algorithm": "fnv1a64",
+      "source_digest": "fnv1a64:da057a4c61517af3",
+      "cursor_context": {
+        "token": "p-4 m-2 bg-primary text-primary-foreground",
+        "status": "static_class_token"
+      },
+      "patch_preview": {
+        "intent": "collapse_static_class_string_to_group_usage",
+        "status": "ready",
+        "edits": [
+          {
+            "source_file": {
+              "path": "src/components/card.tsx"
+            },
+            "span": {
+              "start": {
+                "byte_offset": 49,
+                "line": 1,
+                "column": 50
+              },
+              "end": {
+                "byte_offset": 91,
+                "line": 1,
+                "column": 92
+              }
+            },
+            "replacement_text": "button()"
+          }
+        ]
+      },
+      "status": "ready",
+      "trust": {
+        "source_digest_verified": true,
+        "source_span_trusted": true,
+        "dry_run_preview_ready": true,
+        "editor_write_bridge_required": true
+      },
+      "message": "fixture receipt is trusted but belongs to a different source path"
+    },
+    "span_mismatch": {
+      "schema": "dx.style.grouped-class-dry-run-receipt",
+      "schema_version": 1,
+      "source_file": {
+        "path": "src/components/button.tsx"
+      },
+      "source_digest_algorithm": "fnv1a64",
+      "source_digest": "fnv1a64:da057a4c61517af3",
+      "cursor_context": {
+        "token": "p-4 m-2 bg-primary text-primary-foreground",
+        "status": "static_class_token"
+      },
+      "patch_preview": {
+        "intent": "collapse_static_class_string_to_group_usage",
+        "status": "ready",
+        "edits": [
+          {
+            "source_file": {
+              "path": "src/components/button.tsx"
+            },
+            "span": {
+              "start": {
+                "byte_offset": 0,
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "byte_offset": 24,
+                "line": 1,
+                "column": 25
+              }
+            },
+            "replacement_text": "button()"
+          }
+        ]
+      },
+      "status": "ready",
+      "trust": {
+        "source_digest_verified": true,
+        "source_span_trusted": true,
+        "dry_run_preview_ready": true,
+        "editor_write_bridge_required": true
+      },
+      "message": "fixture receipt is trusted but does not enclose the active cursor token span"
+    },
+    "digest_mismatch": {
+      "schema": "dx.style.grouped-class-dry-run-receipt",
+      "schema_version": 1,
+      "source_file": {
+        "path": "src/components/button.tsx"
+      },
+      "source_digest_algorithm": "fnv1a64",
+      "source_digest": "fnv1a64:0000000000000000",
+      "cursor_context": {
+        "token": "p-4 m-2 bg-primary text-primary-foreground",
+        "status": "static_class_token"
+      },
+      "patch_preview": {
+        "intent": "collapse_static_class_string_to_group_usage",
+        "status": "ready",
+        "edits": [
+          {
+            "source_file": {
+              "path": "src/components/button.tsx"
+            },
+            "span": {
+              "start": {
+                "byte_offset": 49,
+                "line": 1,
+                "column": 50
+              },
+              "end": {
+                "byte_offset": 91,
+                "line": 1,
+                "column": 92
+              }
+            },
+            "replacement_text": "button()"
+          }
+        ]
+      },
+      "status": "ready",
+      "trust": {
+        "source_digest_verified": true,
+        "source_span_trusted": true,
+        "dry_run_preview_ready": true,
+        "editor_write_bridge_required": true
+      },
+      "message": "fixture receipt is trusted but stale for the active source digest"
+    }
+  }
+}

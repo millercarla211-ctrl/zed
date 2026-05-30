@@ -238,6 +238,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   const receiptFixtures = JSON.parse(
     readStyle("fixtures/grouped-class-dry-run-receipt-fixtures.json"),
   );
+  const receiptFixturesGenerated = JSON.parse(
+    read("crates/agent_ui/src/dx_style_panel/grouped-class-dry-run-receipt-fixtures.generated.json"),
+  );
 
   assert.match(readme, /stable read model/);
   assert.match(readme, /dx\.style\.group-two-way-contract/);
@@ -731,6 +734,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(fixtureMirrorScript, /group-context-contract\.generated\.json/);
   assert.match(fixtureMirrorScript, /css-declaration-hint-catalog\.generated\.json/);
   assert.match(fixtureMirrorScript, /css-declaration-dry-run-contract\.generated\.json/);
+  assert.match(fixtureMirrorScript, /grouped-class-dry-run-receipt-fixtures\.generated\.json/);
+  assert.deepEqual(receiptFixturesGenerated, receiptFixtures);
   assert.equal(
     receiptFixtures.schema,
     "dx.style.grouped-class-dry-run-receipt-fixtures",
@@ -772,7 +777,7 @@ test("DX Style plan keeps the Zed panel source-backed and read-only first", () =
   assert.match(plan, /Add a right-panel surface in Zed for DX Style/);
   assert.match(plan, /Detect current file\/cursor style context/);
   assert.match(plan, /Show class expansions, group metadata, generated CSS, and warnings/);
-  assert.match(plan, /Do not apply writes yet unless source spans are trusted/);
+  assert.match(plan, /Do not apply writes yet unless a trusted receipt, active path\/span\/digest match/);
   assert.match(plan, /No fake two-way editing/);
   assert.match(plan, /No generated CSS as the only source of truth/);
   assert.match(plan, /No disconnected demo-only panel controls/);
@@ -812,6 +817,7 @@ test("DX Style visual generator mirror helper reports Zed fallback freshness", (
   assert.match(output, /ok fixtures\/grouped-class-reverse-css-delta-contract\.json/);
   assert.match(output, /ok fixtures\/visual-generator-css-declaration-hint-catalog\.json/);
   assert.match(output, /ok fixtures\/css-declaration-dry-run-contract\.json/);
+  assert.match(output, /ok fixtures\/grouped-class-dry-run-receipt-fixtures\.json/);
 });
 
 test("Zed Style rail keeps GPUI as the shell and Web Preview as the generator host", () => {
@@ -1862,6 +1868,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   );
   const groupContext = read("crates/agent_ui/src/dx_style_panel/group_context.rs");
   const groupRegistry = read("crates/agent_ui/src/dx_style_panel/group_registry.rs");
+  const receiptRoots = read("crates/agent_ui/src/dx_style_panel/receipt_roots.rs");
   const reverseCssMap = read("crates/agent_ui/src/dx_style_panel/reverse_css_map.rs");
   const editorWriteBridge = read(
     "crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs",
@@ -1888,6 +1895,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(root, /mod editor_write_bridge/);
   assert.match(root, /mod panel_view/);
   assert.match(root, /mod panel_metric/);
+  assert.match(root, /mod receipt_roots/);
   assert.match(root, /mod receipt_match/);
   assert.match(root, /mod receipt_review/);
   assert.match(root, /mod reverse_css_map/);
@@ -1912,6 +1920,15 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(activeContext, /active_item\(cx\)/);
   assert.match(activeContext, /project_path\(cx\)/);
   assert.match(activeContext, /PathStyle::local\(\)/);
+  assert.match(activeContext, /absolute_path\(&project_path, cx\)/);
+  assert.match(activeContext, /get_workspace_root\(&project_path, cx\)/);
+  assert.match(activeContext, /workspace_root: Option<String>/);
+  assert.match(activeContext, /"workspace_root": self\.workspace_root/);
+  assert.match(activeContext, /editor\.buffer\(\)\.read\(cx\)\.len\(cx\)\.0/);
+  assert.ok(
+    activeContext.indexOf("let source_len = editor.buffer().read(cx).len(cx).0") <
+      activeContext.indexOf("let source = editor.text(cx)"),
+  );
   assert.match(cursorContext, /is_style_bearing_path/);
   assert.match(activeContext, /newest::<MultiBufferOffset>/);
   assert.match(cursorContext, /cursor_style_token/);
@@ -1942,6 +1959,10 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(activeContext, /can_open_generator/);
   assert.match(activeContext, /"workspace unavailable" \| "no active file" \| "non-style file"/);
   assert.match(activeContext, /source_digest::active_source_digest/);
+  assert.doesNotMatch(
+    activeContext,
+    /let source_digest = active_source_digest\(&source\);\s*match cursor_style_token/s,
+  );
   assert.match(sourceDigest, /active_source_digest/);
   assert.match(sourceDigest, /DX_STYLE_GROUPED_CLASS_SOURCE_DIGEST_ALGORITHM/);
   assert.match(sourceDigest, /DX_STYLE_GROUPED_CLASS_SOURCE_DIGEST_PREFIX/);
@@ -1977,7 +1998,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(groupContext, /from_tokens/);
   assert.match(groupContext, /registry_group_entry/);
   assert.match(groupContext, /source_path: Option<&str>/);
-  assert.match(groupContext, /registry_group_entry\(alias, source_path\)/);
+  assert.match(groupContext, /registry_group_entry\(alias, source_path, workspace_root\)/);
   assert.match(groupContext, /alias_reference_expanded/);
   assert.match(groupContext, /registry_receipt_expansion_available/);
   assert.match(groupContext, /registry_receipt/);
@@ -1995,12 +2016,25 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(groupRegistry, /dx\.style\.grouped-class-registry-receipt/);
   assert.match(groupRegistry, /DX_STYLE_REVERSE_CSS_MAP_RECEIPT_FILE/);
   assert.match(groupRegistry, /grouped-class-reverse-css-map-latest\.json/);
-  assert.match(groupRegistry, /DX_STYLE_PROJECT_REGISTRY_RECEIPT_ROOT/);
-  assert.match(groupRegistry, /DX_STYLE_HUB_REGISTRY_RECEIPT_ROOT/);
+  assert.doesNotMatch(groupRegistry, /DX_STYLE_PROJECT_REGISTRY_RECEIPT_ROOT/);
+  assert.doesNotMatch(groupRegistry, /DX_STYLE_HUB_REGISTRY_RECEIPT_ROOT/);
   assert.match(groupRegistry, /registry_receipt_roots/);
+  assert.match(groupRegistry, /active_style_receipt_roots/);
   assert.match(groupRegistry, /source_path: Option<&str>/);
-  assert.match(groupRegistry, /Path::ancestors/);
-  assert.match(groupRegistry, /\.dx"\)\.join\("receipts"\)\.join\("style"\)/);
+  assert.match(groupRegistry, /workspace_root: Option<&str>/);
+  assert.doesNotMatch(groupRegistry, /Path::ancestors/);
+  assert.match(receiptRoots, /PROJECT_RECEIPT_ANCESTOR_LIMIT: usize = 8/);
+  assert.match(receiptRoots, /active_style_receipt_roots/);
+  assert.match(receiptRoots, /path\.is_absolute\(\)/);
+  assert.match(receiptRoots, /workspace_root/);
+  assert.match(receiptRoots, /source_path\.starts_with\(root\)/);
+  assert.match(receiptRoots, /Path::ancestors/);
+  assert.match(receiptRoots, /if !ancestor\.starts_with\(workspace_root\)/);
+  assert.match(receiptRoots, /if ancestor == workspace_root/);
+  assert.match(receiptRoots, /\.dx"\)\.join\("receipts"\)\.join\("style"\)/);
+  assert.match(receiptRoots, /receipt_root_key/);
+  assert.match(receiptRoots, /replace/);
+  assert.match(receiptRoots, /to_ascii_lowercase/);
   assert.match(groupRegistry, /cache_key/);
   assert.match(groupRegistry, /GROUP_REGISTRY_CACHE_TTL/);
   assert.match(groupRegistry, /MAX_GROUP_REGISTRY_RECEIPT_BYTES: u64 = 128 \* 1024/);
@@ -2020,7 +2054,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(reverseCssMap, /reverse_status/);
   assert.doesNotMatch(reverseCssMap, /Command::new|spawn|powershell|cmd \/c/);
   assert.match(activeContext, /with_attribute_tokens[\s\S]*source_digest: String/);
-  assert.match(activeContext, /ActiveGroupContext::from_tokens[\s\S]*Some\(source_path\)/);
+  assert.match(activeContext, /ActiveGroupContext::from_tokens[\s\S]*Some\(source_path\)[\s\S]*workspace_root/);
   assert.match(activeContext, /StyleApplyGateInput/);
   assert.match(activeContext, /style_apply_gate/);
   assert.match(activeContext, /apply_gate\.to_json/);
@@ -2028,6 +2062,11 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(receiptReview, /GROUPED_CLASS_DRY_RUN_RECEIPT_SCHEMA/);
   assert.match(applyGate, /style_apply_gate/);
   assert.match(applyGate, /style_editor_write_bridge_snapshot/);
+  assert.match(applyGate, /active_style_receipt_roots/);
+  assert.match(applyGate, /trusted_dry_run_receipts\(input\.source_path, input\.workspace_root\)/);
+  assert.match(applyGate, /input\.workspace_root/);
+  assert.match(applyGate, /trusted_dry_run_receipts\(\s*source_path: &str,\s*workspace_root: Option<&str>,/s);
+  assert.doesNotMatch(applyGate, /DX_STYLE_PROJECT_RECEIPT_ROOT|DX_STYLE_HUB_RECEIPT_ROOT/);
   assert.match(applyGate, /latest_matching_trusted_dry_run_receipt/);
   assert.match(applyGate, /paths\.sort_by/);
   assert.match(applyGate, /receipt_modified/);
@@ -2122,6 +2161,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/cursor_context_tokens.rs") < 100);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/group_context.rs") < 210);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/group_registry.rs") < 220);
+  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/receipt_roots.rs") < 90);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/reverse_css_map.rs") < 120);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/source_digest.rs") < 50);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/receipt_match.rs") < 180);
