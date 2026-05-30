@@ -706,6 +706,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
     function tokenFromReverseDeltaValue(value, mapping) {
       const text = String(value || "").trim();
       const strategy = String(mapping?.value_strategy || "design_token_suffix");
+      if (strategy === "display_keyword") return displayReverseDeltaToken(text);
       if (strategy === "arbitrary_bracket_value") return arbitraryReverseDeltaToken(text);
       if (strategy === "drop_shadow_function") {
         if (!text.startsWith("drop-shadow(") || !text.endsWith(")")) return null;
@@ -717,11 +718,39 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
       if (strategy === "align_items_keyword") return alignItemsReverseDeltaToken(text);
       if (strategy === "justify_content_keyword") return justifyContentReverseDeltaToken(text);
+      if (strategy === "align_content_keyword") return alignContentReverseDeltaToken(text);
       if (strategy === "grid_track_repeat_count") return gridTrackRepeatCountToken(text);
       const prefix = String(mapping?.token_prefix || "");
       if (!prefix || !text.startsWith(prefix) || !text.endsWith(")")) return null;
       const token = text.slice(prefix.length, -1).trim();
       return token || null;
+    }
+
+    function targetUtilityFromReverseDelta(mapping, token) {
+      const strategy = String(mapping?.value_strategy || "design_token_suffix");
+      const prefix = String(mapping?.utility_prefix || "");
+      const text = String(token || "");
+      if (strategy === "display_keyword") return text;
+      if (strategy === "margin_token_suffix" && text.startsWith("-")) {
+        return `-${prefix}${text.slice(1)}`;
+      }
+      return `${prefix}${text}`;
+    }
+
+    function displayReverseDeltaToken(value) {
+      switch (String(value || "").trim()) {
+        case "block": return "block";
+        case "inline-block": return "inline-block";
+        case "inline": return "inline";
+        case "flex": return "flex";
+        case "inline-flex": return "inline-flex";
+        case "grid": return "grid";
+        case "inline-grid": return "inline-grid";
+        case "contents": return "contents";
+        case "flow-root": return "flow-root";
+        case "none": return "hidden";
+        default: return null;
+      }
     }
 
     function alignItemsReverseDeltaToken(value) {
@@ -754,6 +783,23 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
     }
 
+    function alignContentReverseDeltaToken(value) {
+      switch (String(value || "").trim()) {
+        case "normal": return "normal";
+        case "center": return "center";
+        case "flex-start":
+        case "start": return "start";
+        case "flex-end":
+        case "end": return "end";
+        case "space-between": return "between";
+        case "space-around": return "around";
+        case "space-evenly": return "evenly";
+        case "baseline": return "baseline";
+        case "stretch": return "stretch";
+        default: return null;
+      }
+    }
+
     function gridTrackRepeatCountToken(value) {
       const match = String(value || "").replace(/\s+/g, "").match(/^repeat\((\d{1,2}),minmax\(0,1fr\)\)$/);
       if (!match || match[1] === "0") return null;
@@ -768,11 +814,43 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
 
     function utilityMatchesReverseDeltaFamily(utility, utilityPrefix) {
       const text = String(utility || "");
+      if (!utilityPrefix) return isDisplayUtility(text);
+      if (utilityPrefix === "gap-") return isBaseGapUtility(text);
       if (utilityPrefix === "border-") return isBorderColorUtility(text);
       if (utilityPrefix === "shadow-") return isShadowEffectUtility(text);
       if (utilityPrefix === "text-shadow-") return isTextShadowEffectUtility(text);
       if (utilityPrefix === "drop-shadow-") return isDropShadowEffectUtility(text);
+      if (isMarginUtilityPrefix(utilityPrefix)) return isMarginUtility(text, utilityPrefix);
       return text.startsWith(utilityPrefix);
+    }
+
+    function isDisplayUtility(utility) {
+      return [
+        "block",
+        "inline-block",
+        "inline",
+        "flex",
+        "inline-flex",
+        "grid",
+        "inline-grid",
+        "contents",
+        "flow-root",
+        "hidden"
+      ].includes(utility);
+    }
+
+    function isMarginUtilityPrefix(utilityPrefix) {
+      return ["m-", "mx-", "my-", "mt-", "mr-", "mb-", "ml-"].includes(utilityPrefix);
+    }
+
+    function isMarginUtility(utility, utilityPrefix) {
+      const text = String(utility || "");
+      return text.startsWith(utilityPrefix) || text.replace(/^-/, "").startsWith(utilityPrefix);
+    }
+
+    function isBaseGapUtility(utility) {
+      const text = String(utility || "");
+      return text.startsWith("gap-") && !text.startsWith("gap-x-") && !text.startsWith("gap-y-");
     }
 
     function isBorderColorUtility(utility) {
@@ -850,6 +928,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         return { ...provenance, status: "no_generated_declarations", reason: "Current generator output has no simple CSS declarations to review." };
       }
       let firstUnsupportedValue = null;
+      let fallbackDisplayPreview = null;
       for (const declaration of declarations) {
         const mapping = reverseCssDeltaSupportedProperties.find((entry) =>
           String(entry.property || "").toLowerCase() === declaration.property.toLowerCase()
@@ -866,13 +945,13 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           };
           continue;
         }
-        const targetUtility = `${mapping.utility_prefix}${token}`;
+        const targetUtility = targetUtilityFromReverseDelta(mapping, token);
         const replacementUtilities = replacementUtilitiesForDelta(
           utilities,
           mapping.utility_prefix,
           targetUtility
         );
-        return {
+        const preview = {
           ...provenance,
           status: utilities.includes(targetUtility) ? "no_change" : "ready_for_review",
           property: declaration.property,
@@ -884,7 +963,13 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             : null,
           reason: "Generated declaration can be reviewed against source-owned grouped atomics."
         };
+        if (String(mapping.value_strategy || "") === "display_keyword") {
+          fallbackDisplayPreview ||= preview;
+          continue;
+        }
+        return preview;
       }
+      if (fallbackDisplayPreview) return fallbackDisplayPreview;
       if (firstUnsupportedValue) return firstUnsupportedValue;
       return { ...provenance, status: "unsupported_declaration", reason: "Current generator output has no declaration covered by the reverse CSS delta contract." };
     }

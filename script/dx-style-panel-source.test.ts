@@ -664,18 +664,31 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /is_border_color_utility/);
   assert.match(groupReverseCssDelta, /GroupedClassReverseCssDeltaValueStrategy/);
   assert.match(groupReverseCssDelta, /ArbitraryBracketValue/);
+  assert.match(groupReverseCssDelta, /MarginTokenSuffix/);
+  assert.match(groupReverseCssDelta, /DisplayKeyword/);
   assert.match(groupReverseCssDelta, /DropShadowFunction/);
   assert.match(groupReverseCssDelta, /BackdropBlurFunction/);
   assert.match(groupReverseCssDelta, /AlignItemsKeyword/);
   assert.match(groupReverseCssDelta, /JustifyContentKeyword/);
+  assert.match(groupReverseCssDelta, /AlignContentKeyword/);
   assert.match(groupReverseCssDelta, /GridTrackRepeatCount/);
   assert.match(groupReverseCssDelta, /arbitrary_bracket_token/);
+  assert.match(groupReverseCssDelta, /target_utility_from_token/);
+  assert.match(groupReverseCssDelta, /display_token_from_value/);
   assert.match(groupReverseCssDelta, /align_items_token_from_value/);
   assert.match(groupReverseCssDelta, /justify_content_token_from_value/);
+  assert.match(groupReverseCssDelta, /align_content_token_from_value/);
   assert.match(groupReverseCssDelta, /grid_track_repeat_count_token/);
+  assert.match(groupReverseCssDelta, /is_display_utility/);
+  assert.match(groupReverseCssDelta, /is_margin_utility/);
+  assert.match(groupReverseCssDelta, /is_base_gap_utility/);
   assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
+  assert.match(groupReverseCssDelta, /display/);
+  assert.match(groupReverseCssDelta, /margin-top/);
+  assert.match(groupReverseCssDelta, /width/);
   assert.match(groupReverseCssDelta, /align-items/);
+  assert.match(groupReverseCssDelta, /align-content/);
   assert.match(groupReverseCssDelta, /grid-template-columns/);
   assert.match(groupReverseCssDelta, /box-shadow/);
   assert.match(groupReverseCssDelta, /backdrop-filter/);
@@ -713,6 +726,30 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) =>
+        entry.property === "display" &&
+        entry.utility_prefix === "" &&
+        entry.value_strategy === "display_keyword",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "margin-top" &&
+        entry.utility_prefix === "mt-" &&
+        entry.value_strategy === "margin_token_suffix",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "width" &&
+        entry.utility_prefix === "w-" &&
+        entry.value_strategy === "design_token_suffix",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
         entry.property === "align-items" &&
         entry.utility_prefix === "items-" &&
         entry.value_strategy === "align_items_keyword",
@@ -724,6 +761,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
         entry.property === "justify-content" &&
         entry.utility_prefix === "justify-" &&
         entry.value_strategy === "justify_content_keyword",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "align-content" &&
+        entry.utility_prefix === "content-" &&
+        entry.value_strategy === "align_content_keyword",
     ),
   );
   assert.ok(
@@ -2083,16 +2128,27 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /reverse_css_delta_contract_missing_required_provenance_fields/);
   assert.match(surfaceScript, /reverse_css_delta_contract_unsupported_provenance_field/);
   assert.match(surfaceScript, /function tokenFromReverseDeltaValue\(value, mapping\)/);
+  assert.match(surfaceScript, /display_keyword/);
+  assert.match(surfaceScript, /margin_token_suffix/);
   assert.match(surfaceScript, /arbitrary_bracket_value/);
   assert.match(surfaceScript, /drop_shadow_function/);
   assert.match(surfaceScript, /backdrop_blur_function/);
   assert.match(surfaceScript, /align_items_keyword/);
   assert.match(surfaceScript, /justify_content_keyword/);
+  assert.match(surfaceScript, /align_content_keyword/);
   assert.match(surfaceScript, /grid_track_repeat_count/);
+  assert.match(surfaceScript, /function targetUtilityFromReverseDelta\(mapping, token\)/);
+  assert.match(surfaceScript, /function displayReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function alignItemsReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function justifyContentReverseDeltaToken\(value\)/);
+  assert.match(surfaceScript, /function alignContentReverseDeltaToken\(value\)/);
   assert.match(surfaceScript, /function gridTrackRepeatCountToken\(value\)/);
   assert.match(surfaceScript, /function arbitraryReverseDeltaToken\(value\)/);
+  assert.match(surfaceScript, /function isDisplayUtility\(utility\)/);
+  assert.match(surfaceScript, /function isMarginUtility\(utility, utilityPrefix\)/);
+  assert.match(surfaceScript, /function isBaseGapUtility\(utility\)/);
+  assert.match(surfaceScript, /let fallbackDisplayPreview = null/);
+  assert.match(surfaceScript, /if \(fallbackDisplayPreview\) return fallbackDisplayPreview/);
   assert.match(surfaceScript, /function isShadowEffectUtility\(utility\)/);
   assert.match(surfaceScript, /function isTextShadowEffectUtility\(utility\)/);
   assert.match(surfaceScript, /function isDropShadowEffectUtility\(utility\)/);

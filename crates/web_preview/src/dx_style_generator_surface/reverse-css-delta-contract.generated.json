@@ -33,6 +33,18 @@
       "value_strategy": "design_token_suffix"
     },
     {
+      "property": "display",
+      "utility_prefix": "",
+      "token_prefix": "",
+      "value_strategy": "display_keyword"
+    },
+    {
+      "property": "padding",
+      "utility_prefix": "p-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
       "property": "padding-inline",
       "utility_prefix": "px-",
       "token_prefix": "calc(var(--spacing) * ",
@@ -43,6 +55,72 @@
       "utility_prefix": "py-",
       "token_prefix": "calc(var(--spacing) * ",
       "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "padding-top",
+      "utility_prefix": "pt-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "padding-right",
+      "utility_prefix": "pr-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "padding-bottom",
+      "utility_prefix": "pb-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "padding-left",
+      "utility_prefix": "pl-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "margin",
+      "utility_prefix": "m-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
+    },
+    {
+      "property": "margin-inline",
+      "utility_prefix": "mx-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
+    },
+    {
+      "property": "margin-block",
+      "utility_prefix": "my-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
+    },
+    {
+      "property": "margin-top",
+      "utility_prefix": "mt-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
+    },
+    {
+      "property": "margin-right",
+      "utility_prefix": "mr-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
+    },
+    {
+      "property": "margin-bottom",
+      "utility_prefix": "mb-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
+    },
+    {
+      "property": "margin-left",
+      "utility_prefix": "ml-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "margin_token_suffix"
     },
     {
       "property": "gap",
@@ -75,6 +153,12 @@
       "value_strategy": "justify_content_keyword"
     },
     {
+      "property": "align-content",
+      "utility_prefix": "content-",
+      "token_prefix": "",
+      "value_strategy": "align_content_keyword"
+    },
+    {
       "property": "grid-template-columns",
       "utility_prefix": "grid-cols-",
       "token_prefix": "",
@@ -85,6 +169,42 @@
       "utility_prefix": "grid-rows-",
       "token_prefix": "",
       "value_strategy": "grid_track_repeat_count"
+    },
+    {
+      "property": "width",
+      "utility_prefix": "w-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "height",
+      "utility_prefix": "h-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "min-width",
+      "utility_prefix": "min-w-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "max-width",
+      "utility_prefix": "max-w-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "min-height",
+      "utility_prefix": "min-h-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "max-height",
+      "utility_prefix": "max-h-",
+      "token_prefix": "calc(var(--spacing) * ",
+      "value_strategy": "design_token_suffix"
     },
     {
       "property": "box-shadow",
