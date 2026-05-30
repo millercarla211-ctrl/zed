@@ -1741,6 +1741,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /validate_reverse_delta_preview_replacement_policy/);
   assert.match(sourceApply, /validate_reverse_delta_target_utility_contract/);
   assert.match(sourceApply, /target_utility_matches_reverse_delta_mapping/);
+  assert.match(sourceApply, /is_arbitrary_bracket_target/);
+  assert.match(sourceApply, /is_reverse_delta_display_target/);
+  assert.match(sourceApply, /is_reverse_delta_grid_track_target/);
+  assert.match(sourceApply, /is_reverse_delta_transition_property_target/);
+  assert.match(sourceApply, /is_reverse_delta_transition_timing_target/);
   assert.match(sourceApply, /validate_required_preview_provenance_field/);
   assert.match(sourceApply, /string_slice_contains_case_insensitive/);
   assert.match(sourceApply, /compare_required_str_or_null/);

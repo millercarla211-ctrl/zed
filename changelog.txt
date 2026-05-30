@@ -1,3 +1,15 @@
+[2026-05-31] - DX Style Strategy-Aware Target Utility Validation
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-strategy-aware-target-validation-plan.md` records the source-only plan for strategy-aware native target utility validation.
+
+CHANGED:
+- `crates/web_preview/src/dx_style_source_apply.rs` now validates reverse-delta `target_utility` values by `value_strategy`, including arbitrary bracket utilities, arbitrary CSS property utilities, keyword targets, grid counts, transition targets, display targets, and negative margins.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document strategy-aware native target utility validation.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Native Target Utility Contract
 
 ADDED:

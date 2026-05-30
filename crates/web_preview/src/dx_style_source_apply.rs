@@ -1700,30 +1700,120 @@ fn target_utility_matches_reverse_delta_mapping(target_utility: &str, mapping: &
         .and_then(Value::as_str)
         .unwrap_or("design_token_suffix");
 
-    if utility_prefix.is_empty() {
-        return value_strategy == "display_keyword"
-            && matches!(
-                target_utility,
-                "block"
-                    | "inline-block"
-                    | "inline"
-                    | "flex"
-                    | "inline-flex"
-                    | "grid"
-                    | "inline-grid"
-                    | "hidden"
-                    | "contents"
-                    | "flow-root"
-            );
+    match value_strategy {
+        "display_keyword" => is_reverse_delta_display_target(target_utility),
+        "margin_token_suffix" => {
+            is_prefixed_non_empty_target(target_utility, utility_prefix)
+                || target_utility
+                    .strip_prefix('-')
+                    .is_some_and(|utility| is_prefixed_non_empty_target(utility, utility_prefix))
+        }
+        "arbitrary_bracket_value" | "drop_shadow_function" | "backdrop_blur_function" => {
+            target_utility
+                .strip_prefix(utility_prefix)
+                .is_some_and(is_arbitrary_bracket_target)
+        }
+        "arbitrary_css_property_value" => {
+            let expected_prefix = format!("[{property}:");
+            target_utility.starts_with(&expected_prefix)
+                && target_utility.ends_with(']')
+                && target_utility.len() > expected_prefix.len() + 1
+        }
+        "align_items_keyword" => target_utility
+            .strip_prefix(utility_prefix)
+            .is_some_and(is_reverse_delta_align_items_target),
+        "justify_content_keyword" => target_utility
+            .strip_prefix(utility_prefix)
+            .is_some_and(is_reverse_delta_justify_content_target),
+        "align_content_keyword" => target_utility
+            .strip_prefix(utility_prefix)
+            .is_some_and(is_reverse_delta_align_content_target),
+        "grid_track_repeat_count" => target_utility
+            .strip_prefix(utility_prefix)
+            .is_some_and(is_reverse_delta_grid_track_target),
+        "transition_property_value" => target_utility
+            .strip_prefix(utility_prefix)
+            .is_some_and(is_reverse_delta_transition_property_target),
+        "transition_timing_function_value" => target_utility
+            .strip_prefix(utility_prefix)
+            .is_some_and(is_reverse_delta_transition_timing_target),
+        "design_token_suffix" => is_prefixed_non_empty_target(target_utility, utility_prefix),
+        _ => false,
     }
-    if target_utility.starts_with(utility_prefix) {
-        return true;
-    }
-    property.starts_with("margin")
-        && target_utility.starts_with('-')
+}
+
+fn is_prefixed_non_empty_target(target_utility: &str, utility_prefix: &str) -> bool {
+    !utility_prefix.is_empty()
         && target_utility
-            .get(1..)
-            .is_some_and(|utility| utility.starts_with(utility_prefix))
+            .strip_prefix(utility_prefix)
+            .is_some_and(|suffix| !suffix.is_empty())
+}
+
+fn is_arbitrary_bracket_target(suffix: &str) -> bool {
+    suffix.starts_with('[') && suffix.ends_with(']') && suffix.len() > 2
+}
+
+fn is_reverse_delta_display_target(target_utility: &str) -> bool {
+    matches!(
+        target_utility,
+        "block"
+            | "inline-block"
+            | "inline"
+            | "flex"
+            | "inline-flex"
+            | "grid"
+            | "inline-grid"
+            | "hidden"
+            | "contents"
+            | "flow-root"
+    )
+}
+
+fn is_reverse_delta_align_items_target(suffix: &str) -> bool {
+    matches!(
+        suffix,
+        "normal" | "stretch" | "center" | "start" | "end" | "baseline"
+    )
+}
+
+fn is_reverse_delta_justify_content_target(suffix: &str) -> bool {
+    matches!(
+        suffix,
+        "normal" | "center" | "start" | "end" | "between" | "around" | "evenly" | "stretch"
+    )
+}
+
+fn is_reverse_delta_align_content_target(suffix: &str) -> bool {
+    matches!(
+        suffix,
+        "normal"
+            | "center"
+            | "start"
+            | "end"
+            | "between"
+            | "around"
+            | "evenly"
+            | "baseline"
+            | "stretch"
+    )
+}
+
+fn is_reverse_delta_grid_track_target(suffix: &str) -> bool {
+    !suffix.is_empty()
+        && suffix.len() <= 2
+        && suffix != "0"
+        && suffix.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn is_reverse_delta_transition_property_target(suffix: &str) -> bool {
+    matches!(
+        suffix,
+        "none" | "all" | "colors" | "opacity" | "shadow" | "transform"
+    )
+}
+
+fn is_reverse_delta_transition_timing_target(suffix: &str) -> bool {
+    matches!(suffix, "linear" | "in" | "out" | "in-out")
 }
 
 fn validate_required_preview_provenance_field(
