@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Native Reverse Delta Policy Guard
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-native-reverse-delta-policy-plan.md` records the source-only plan for native replacement-policy review hardening.
+
+CHANGED:
+- `crates/web_preview/src/dx_style_generator_surface/reverse_css_delta_contract.rs` now passes DX Style's `fallback_review_properties` and `existing_utility_required_properties` through to the Web Preview contract JSON.
+- `crates/web_preview/src/dx_style_generator_surface/script.rs` now includes replacement-policy evidence in live reverse CSS delta previews.
+- `crates/web_preview/src/dx_style_source_apply.rs` now refuses ready high-risk reverse-delta previews that do not prove same-family source utility replacement and unchanged utility count.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the native policy checkpoint.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Reverse Delta Replacement Guard
 
 ADDED:

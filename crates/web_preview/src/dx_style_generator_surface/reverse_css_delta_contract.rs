@@ -63,6 +63,8 @@ fn reverse_css_delta_fixture_to_web_preview_json(
         "supported_properties": fixture.get("supported_properties")?.as_array()?,
         "required_editor_guards": fixture.get("required_editor_guards")?.as_array()?,
         "required_preview_provenance_fields": fixture.get("required_preview_provenance_fields")?.as_array()?,
+        "fallback_review_properties": fixture.get("fallback_review_properties")?.as_array()?,
+        "existing_utility_required_properties": fixture.get("existing_utility_required_properties")?.as_array()?,
         "example_preview": fixture.get("example_preview")?,
     }))
     .ok()

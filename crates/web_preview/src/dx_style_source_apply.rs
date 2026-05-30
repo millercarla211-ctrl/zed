@@ -315,6 +315,36 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "reverse CSS delta contract is missing required provenance identity fields".to_string(),
         );
     }
+    let reverse_css_delta_fallback_review_properties =
+        string_array_at(reverse_css_delta_contract, "/fallback_review_properties");
+    if reverse_css_delta_fallback_review_properties.is_empty() {
+        reasons
+            .push("reverse CSS delta contract has no fallback review property policy".to_string());
+    }
+    let reverse_css_delta_existing_utility_required_properties = string_array_at(
+        reverse_css_delta_contract,
+        "/existing_utility_required_properties",
+    );
+    if reverse_css_delta_existing_utility_required_properties.is_empty() {
+        reasons.push(
+            "reverse CSS delta contract has no existing-utility replacement policy".to_string(),
+        );
+    }
+    for property in [
+        "background",
+        "transition-property",
+        "transform",
+        "animation",
+    ] {
+        if !string_slice_contains_case_insensitive(
+            &reverse_css_delta_existing_utility_required_properties,
+            property,
+        ) {
+            reasons.push(format!(
+                "reverse CSS delta contract is missing existing-utility policy for {property}"
+            ));
+        }
+    }
     let reverse_css_delta_provenance_reason_start = reasons.len();
     validate_reverse_delta_preview_provenance(
         reverse_css_delta_preview,
@@ -324,6 +354,12 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     );
     let reverse_css_delta_provenance_matches_context =
         reasons.len() == reverse_css_delta_provenance_reason_start;
+    validate_reverse_delta_preview_replacement_policy(
+        reverse_css_delta_preview,
+        group_context,
+        &reverse_css_delta_existing_utility_required_properties,
+        &mut reasons,
+    );
     validate_contract_u64(
         contract,
         "max_class_name_bytes",
@@ -996,6 +1032,10 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "required_guard_count": reverse_css_delta_contract.get("required_editor_guards").and_then(Value::as_array).map(|guards| guards.len()),
             "required_provenance_field_count": reverse_css_delta_required_provenance_field_count,
             "required_provenance_fields": reverse_css_delta_required_provenance_fields,
+            "fallback_review_property_count": reverse_css_delta_fallback_review_properties.len(),
+            "fallback_review_properties": reverse_css_delta_fallback_review_properties,
+            "existing_utility_required_property_count": reverse_css_delta_existing_utility_required_properties.len(),
+            "existing_utility_required_properties": reverse_css_delta_existing_utility_required_properties,
             "example_target_utility": reverse_css_delta_contract.pointer("/example_preview/target_utility").and_then(Value::as_str),
         },
         "reverse_css_delta_preview": {
@@ -1014,6 +1054,8 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "value": reverse_css_delta_preview.get("value").and_then(Value::as_str),
             "target_utility": reverse_css_delta_preview.get("target_utility").and_then(Value::as_str),
             "replacement_utility_count": reverse_css_delta_preview.get("replacement_utilities").and_then(Value::as_array).map(|utilities| utilities.len()),
+            "replacement_existing_utility_required": reverse_css_delta_preview.get("replacement_existing_utility_required").and_then(Value::as_bool),
+            "replacement_existing_utility_found": reverse_css_delta_preview.get("replacement_existing_utility_found").and_then(Value::as_bool),
             "replacement_source_declaration": reverse_css_delta_preview.get("replacement_source_declaration").and_then(Value::as_str),
         },
         "apply_gate": {
@@ -1362,6 +1404,12 @@ fn string_array_at<'a>(root: &'a Value, pointer: &str) -> Vec<&'a str> {
         .unwrap_or_default()
 }
 
+fn string_slice_contains_case_insensitive(values: &[&str], expected: &str) -> bool {
+    values
+        .iter()
+        .any(|value| value.eq_ignore_ascii_case(expected))
+}
+
 fn optional_bounded_string_array(
     root: &Value,
     pointer: &str,
@@ -1458,6 +1506,86 @@ fn validate_reverse_delta_preview_provenance(
     {
         reasons
             .push("ready reverse CSS delta preview lacks reverse CSS map provenance".to_string());
+    }
+}
+
+fn validate_reverse_delta_preview_replacement_policy(
+    preview: &Value,
+    group_context: &Value,
+    existing_utility_required_properties: &[&str],
+    reasons: &mut Vec<String>,
+) {
+    if preview.get("status").and_then(Value::as_str) != Some("ready_for_review") {
+        return;
+    }
+
+    let target_utility = preview.get("target_utility").and_then(Value::as_str);
+    let replacement_utilities = preview
+        .get("replacement_utilities")
+        .and_then(Value::as_array);
+    if let Some(replacement_utilities) = replacement_utilities {
+        if replacement_utilities
+            .iter()
+            .any(|utility| utility.as_str().is_none())
+        {
+            reasons.push(
+                "ready reverse CSS delta preview has non-string replacement utilities".to_string(),
+            );
+        }
+        if let Some(target_utility) = target_utility
+            && !replacement_utilities
+                .iter()
+                .any(|utility| utility.as_str() == Some(target_utility))
+        {
+            reasons.push(
+                "ready reverse CSS delta preview replacement utilities do not contain target utility"
+                    .to_string(),
+            );
+        }
+    }
+
+    let Some(property) = preview.get("property").and_then(Value::as_str) else {
+        reasons.push("ready reverse CSS delta preview has no property".to_string());
+        return;
+    };
+    if !string_slice_contains_case_insensitive(existing_utility_required_properties, property) {
+        return;
+    }
+
+    if preview
+        .get("replacement_existing_utility_required")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        reasons.push(
+            "ready reverse CSS delta preview is missing required replacement policy evidence"
+                .to_string(),
+        );
+    }
+    if preview
+        .get("replacement_existing_utility_found")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        reasons.push(
+            "ready reverse CSS delta preview did not prove same-family source utility replacement"
+                .to_string(),
+        );
+    }
+
+    let replacement_utility_count = replacement_utilities.map_or(0, Vec::len);
+    let Some(group_utility_count) = group_context.get("utility_count").and_then(Value::as_u64)
+    else {
+        reasons.push(
+            "ready reverse CSS delta preview cannot verify replacement utility count".to_string(),
+        );
+        return;
+    };
+    if replacement_utility_count as u64 != group_utility_count {
+        reasons.push(
+            "ready reverse CSS delta preview changes utility count for replacement-only property"
+                .to_string(),
+        );
     }
 }
 

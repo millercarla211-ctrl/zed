@@ -1066,18 +1066,21 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             continue;
           }
           const targetUtility = targetUtilityFromReverseDelta(mapping, token);
+          const replacementExistingUtilityRequired = replacementRequiresExistingUtility(mapping);
           const replacement = replacementUtilitiesForDelta(
             utilities,
             mapping,
             targetUtility
           );
-          if (replacementRequiresExistingUtility(mapping) && !replacement.replaced) {
+          if (replacementExistingUtilityRequired && !replacement.replaced) {
             firstUnsupportedValue ||= {
               ...provenance,
               status: "unsupported_value",
               property: declaration.property,
               value: declaration.value,
               target_utility: targetUtility,
+              replacement_existing_utility_required: true,
+              replacement_existing_utility_found: false,
               reason: "Generated declaration requires an existing same-family source utility before review."
             };
             continue;
@@ -1090,6 +1093,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             value: declaration.value,
             target_utility: targetUtility,
             replacement_utilities: replacementUtilities,
+            replacement_existing_utility_required: replacementExistingUtilityRequired,
+            replacement_existing_utility_found: replacement.replaced,
             replacement_source_declaration: group?.alias
               ? `@${group.alias}(${replacementUtilities.join(" ")})`
               : null,
@@ -1732,6 +1737,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Group alias</dt><dd>${escapeHtml(deltaPreview?.group_alias || "none")}</dd>
           <dt>Registry receipt</dt><dd>${escapeHtml(deltaPreview?.group_registry_receipt || "not available")}</dd>
           <dt>Reverse map</dt><dd>${escapeHtml(deltaPreview?.reverse_css_map_status || "not available")}</dd>
+          <dt>Replacement policy</dt><dd>${deltaPreview?.replacement_existing_utility_required ? "existing utility required" : "append allowed"}${deltaPreview?.replacement_existing_utility_found ? ", existing utility found" : ""}</dd>
         </dl>
         ${livePreview}
         ${deltaPreview?.replacement_source_declaration ? `<span>${escapeHtml(deltaPreview.replacement_source_declaration)}</span>` : ""}
@@ -1939,6 +1945,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         reverseDeltaPreview.target_utility ? `reverse_css_delta_live_target: ${reverseDeltaPreview.target_utility}` : null,
         reverseDeltaPreview.replacement_source_declaration ? `reverse_css_delta_live_source: ${reverseDeltaPreview.replacement_source_declaration}` : null,
         Array.isArray(reverseDeltaPreview.replacement_utilities) ? `reverse_css_delta_live_utilities: ${reverseDeltaPreview.replacement_utilities.length}` : null,
+        reverseDeltaPreview.replacement_existing_utility_required !== undefined ? `reverse_css_delta_live_replacement_existing_utility_required: ${reverseDeltaPreview.replacement_existing_utility_required}` : null,
+        reverseDeltaPreview.replacement_existing_utility_found !== undefined ? `reverse_css_delta_live_replacement_existing_utility_found: ${reverseDeltaPreview.replacement_existing_utility_found}` : null,
         reverseDeltaPreview.group_alias ? `reverse_css_delta_live_group_alias: ${reverseDeltaPreview.group_alias}` : null,
         reverseDeltaPreview.group_registry_receipt ? `reverse_css_delta_live_group_registry_receipt: ${reverseDeltaPreview.group_registry_receipt}` : null,
         reverseDeltaPreview.reverse_css_map_status ? `reverse_css_delta_live_reverse_map_status: ${reverseDeltaPreview.reverse_css_map_status}` : null,
