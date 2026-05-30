@@ -1,3 +1,13 @@
+[2026-05-31] - DX Style Outline Hint Alignment
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\visual_generator_css_hint_catalog.rs` and its fixture now advertise `outline-color` as `outline-*` instead of `border-*`.
+- Zed's generated CSS declaration hint mirror now carries the corrected `outline-*` token hint.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the hint alignment.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Color Token Reverse Delta Review
 
 ADDED:

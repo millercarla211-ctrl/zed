@@ -968,6 +968,12 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.equal(generatorCssHintFixture.entry_count, 38);
   assert.equal(generatorCssHintFixture.entries.length, 38);
   assert.deepEqual(generatorCssHintFixture.entries, collectCssHintEntries(generatorCssHintCatalog));
+  assert.equal(
+    generatorCssHintFixture.entries.find(
+      (entry) => entry.property_pattern === "outline-color",
+    ).token_hint,
+    "outline-*",
+  );
   assert.match(engineMod, /pub mod css_declaration_dry_run/);
   assert.match(cssDeclarationDryRunContract, /CSS_DECLARATION_DRY_RUN_CONTRACT_SCHEMA/);
   assert.match(cssDeclarationDryRunContract, /dx\.style\.css-declaration-dry-run-contract/);

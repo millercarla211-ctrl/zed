@@ -86,7 +86,7 @@
       "property_pattern": "outline-color",
       "property_match": "exact",
       "value_contains": [],
-      "token_hint": "border-*",
+      "token_hint": "outline-*",
       "generator_id": "color-palette-token-mapper",
       "source_edit_safety": "safe-static-utility-source-edit"
     },
