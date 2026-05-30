@@ -1134,9 +1134,24 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /source_apply_session_refused_receipt/);
   assert.match(webPreviewView, /MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES: usize = 256 \* 1024/);
   assert.match(webPreviewView, /struct DxStyleSourceApplySessionSourceIdentity/);
+  assert.match(webPreviewView, /struct DxStyleSourceApplySessionNativeEditorIdentity/);
   assert.match(webPreviewView, /dx_style_source_apply_session_source_identity: Option<DxStyleSourceApplySessionSourceIdentity>/);
   assert.match(webPreviewView, /fn dx_style_source_apply_session_source_identity_from_context_json/);
-  assert.match(webPreviewView, /dx_style_source_apply_session_source_identity_from_context_json\(source_context_json\)/);
+  assert.match(
+    webPreviewView,
+    /dx_style_source_apply_session_source_identity_from_context_json\(\s*source_context_json\.as_deref\(\),\s*\)/,
+  );
+  assert.match(
+    webPreviewView,
+    /let session_source_identity =[\s\S]*dx_style_source_apply_session_source_identity_from_context_json[\s\S]*let view = Self::open_or_create\(workspace, window, cx\)/,
+  );
+  assert.match(webPreviewView, /fn dx_style_session_source_identity_with_native_editor/);
+  assert.match(webPreviewView, /workspace\.active_item\(cx\)/);
+  assert.match(webPreviewView, /active_item\.item_id\(\)\.as_u64\(\)/);
+  assert.match(webPreviewView, /active_item\.act_as::<Editor>\(cx\)/);
+  assert.match(webPreviewView, /editor\.active_buffer\(cx\)\?/);
+  assert.match(webPreviewView, /active_buffer\.read\(cx\)\.remote_id\(\)\.to_proto\(\)/);
+  assert.match(webPreviewView, /"native_editor": self\.native_editor\.as_ref\(\)\.map/);
   assert.match(webPreviewView, /DX_STYLE_SOURCE_APPLY_ACTIVE_CONTEXT_SCHEMA/);
   assert.match(webPreviewView, /DX_STYLE_SOURCE_DIGEST_PREFIX/);
   assert.match(webPreviewView, /fn dx_style_required_bounded_session_source_string/);
@@ -1154,6 +1169,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /session_source_span_mismatch/);
   assert.match(webPreviewView, /session_source_length_mismatch/);
   assert.match(webPreviewView, /session_source_digest_mismatch/);
+  assert.match(webPreviewView, /session_native_editor_identity_missing/);
+  assert.match(webPreviewView, /native_editor_identity_mismatch/);
+  assert.match(webPreviewView, /session_native_editor\.active_buffer_remote_id/);
   assert.match(webPreviewView, /"session_source": session_source_identity\.to_json\(\)/);
   assert.match(webPreviewView, /workspace\.items_of_type::<Editor>\(cx\)/);
   assert.match(webPreviewView, /editor\.active_project_path\(cx\)/);
@@ -1345,6 +1363,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /session-bound source identity digest does not match request source_digest/);
   assert.match(sourceApply, /session-bound source identity length does not match context source_len_bytes/);
   assert.match(sourceApply, /session-bound source identity span does not match request source_span/);
+  assert.match(sourceApply, /session-bound source identity is missing native editor identity/);
+  assert.match(sourceApply, /native editor identity is missing \{field\}/);
+  assert.match(sourceApply, /native editor identity workspace item does not match editor entity/);
+  assert.match(sourceApply, /native editor identity buffer_kind is not singleton/);
+  assert.match(sourceApply, /native editor identity is missing project_path/);
   assert.match(sourceApply, /"native_active_editor_source_revalidation": native_active_editor_source_revalidation/);
   assert.doesNotMatch(
     sourceApply,

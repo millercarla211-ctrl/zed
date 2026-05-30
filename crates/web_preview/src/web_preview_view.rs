@@ -110,6 +110,34 @@ struct DxStyleSourceApplySessionSourceIdentity {
     source_span_end: u64,
     workspace_root: Option<String>,
     context_kind: Option<String>,
+    native_editor: Option<DxStyleSourceApplySessionNativeEditorIdentity>,
+}
+
+#[derive(Clone, Debug)]
+struct DxStyleSourceApplySessionNativeEditorIdentity {
+    editor_entity_id: u64,
+    workspace_item_id: u64,
+    active_buffer_entity_id: u64,
+    active_buffer_remote_id: u64,
+    multi_buffer_entity_id: u64,
+    worktree_id: u64,
+    project_path: String,
+    buffer_kind: &'static str,
+}
+
+impl DxStyleSourceApplySessionNativeEditorIdentity {
+    fn to_json(&self) -> Value {
+        serde_json::json!({
+            "editor_entity_id": self.editor_entity_id,
+            "workspace_item_id": self.workspace_item_id,
+            "active_buffer_entity_id": self.active_buffer_entity_id,
+            "active_buffer_remote_id": self.active_buffer_remote_id,
+            "multi_buffer_entity_id": self.multi_buffer_entity_id,
+            "worktree_id": self.worktree_id,
+            "project_path": self.project_path.clone(),
+            "buffer_kind": self.buffer_kind,
+        })
+    }
 }
 
 impl DxStyleSourceApplySessionSourceIdentity {
@@ -124,6 +152,7 @@ impl DxStyleSourceApplySessionSourceIdentity {
             },
             "workspace_root": self.workspace_root.clone(),
             "context_kind": self.context_kind.clone(),
+            "native_editor": self.native_editor.as_ref().map(DxStyleSourceApplySessionNativeEditorIdentity::to_json),
         })
     }
 }
@@ -956,6 +985,13 @@ impl WebPreviewView {
         cx: &mut Context<Workspace>,
     ) {
         let source_context_json = source_context_json.map(str::to_string);
+        let session_source_identity =
+            dx_style_source_apply_session_source_identity_from_context_json(
+                source_context_json.as_deref(),
+            )
+            .and_then(|identity| {
+                dx_style_session_source_identity_with_native_editor(workspace, identity, cx)
+            });
         let view = Self::open_or_create(workspace, window, cx);
         let pane = workspace
             .find_pane_in_direction(workspace::SplitDirection::Right, cx)
@@ -973,7 +1009,12 @@ impl WebPreviewView {
                 view.clone()
             });
             preview.update(cx, |this, cx| {
-                this.load_dx_style_generator_url(source_context_json.as_deref(), window, cx);
+                this.load_dx_style_generator_url(
+                    source_context_json.as_deref(),
+                    session_source_identity.clone(),
+                    window,
+                    cx,
+                );
             });
             if let Some(existing_view_idx) = pane.index_for_item(&preview) {
                 pane.activate_item(existing_view_idx, true, true, window, cx);
@@ -1460,7 +1501,7 @@ impl WebPreviewView {
     fn navigate_to_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let requested_url = self.current_url_text(cx);
         if is_dx_style_generator_display_url(&requested_url) {
-            self.load_dx_style_generator_url(None, window, cx);
+            self.load_dx_style_generator_url(None, None, window, cx);
             return;
         }
 
@@ -1488,12 +1529,11 @@ impl WebPreviewView {
     fn load_dx_style_generator_url(
         &mut self,
         source_context_json: Option<&str>,
+        session_source_identity: Option<DxStyleSourceApplySessionSourceIdentity>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let session_token = self.next_dx_style_source_apply_session_token();
-        let session_source_identity =
-            dx_style_source_apply_session_source_identity_from_context_json(source_context_json);
         let url = dx_style_generator_url_with_context_and_source_apply_session(
             source_context_json,
             &session_token,
@@ -30632,6 +30672,20 @@ impl WebPreviewView {
                 },
             );
         }
+        let Some(session_native_editor) = session_source_identity.native_editor.as_ref() else {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "session_native_editor_identity_missing",
+                "DX Style source apply cannot revalidate source because the trusted generator session has no native editor identity",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len: Some(request_source_len),
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
+        };
 
         let Some(workspace) = self.workspace.upgrade() else {
             return dx_style_active_editor_source_revalidation_blocked(
@@ -30670,7 +30724,9 @@ impl WebPreviewView {
         }
 
         let mut matching_path_seen_in_unsupported_editor = false;
+        let mut matching_path_seen_with_native_identity_mismatch = false;
         for editor in editors {
+            let editor_entity_id = editor.entity_id().as_u64();
             let editor = editor.read(cx);
             let Some(project_path) = editor.active_project_path(cx) else {
                 continue;
@@ -30690,6 +30746,28 @@ impl WebPreviewView {
             }
             if editor.buffer_kind(cx) != ItemBufferKind::Singleton {
                 matching_path_seen_in_unsupported_editor = true;
+                continue;
+            }
+            let active_buffer_entity_id = editor.active_buffer(cx).map(|buffer| {
+                (
+                    buffer.entity_id().as_u64(),
+                    buffer.read(cx).remote_id().to_proto(),
+                )
+            });
+            let multi_buffer_entity_id = editor.buffer().entity_id().as_u64();
+            if editor_entity_id != session_native_editor.editor_entity_id
+                || editor_entity_id != session_native_editor.workspace_item_id
+                || active_buffer_entity_id
+                    != Some((
+                        session_native_editor.active_buffer_entity_id,
+                        session_native_editor.active_buffer_remote_id,
+                    ))
+                || multi_buffer_entity_id != session_native_editor.multi_buffer_entity_id
+                || project_path.worktree_id.to_proto() != session_native_editor.worktree_id
+                || project_path.path.as_unix_str() != session_native_editor.project_path
+                || session_native_editor.buffer_kind != "singleton"
+            {
+                matching_path_seen_with_native_identity_mismatch = true;
                 continue;
             }
 
@@ -30833,6 +30911,21 @@ impl WebPreviewView {
                     },
                 },
             });
+        }
+
+        if matching_path_seen_with_native_identity_mismatch {
+            return dx_style_active_editor_source_revalidation_blocked(
+                "native_editor_identity_mismatch",
+                "DX Style source apply cannot revalidate source because the live editor identity does not match the trusted generator session",
+                DxStyleActiveEditorSourceRevalidationEvidence {
+                    request_source_path: Some(request_source_path),
+                    request_source_digest,
+                    request_source_len: Some(request_source_len),
+                    request_source_span: Some(request_source_span),
+                    session_source_identity: Some(session_source_identity),
+                    ..Default::default()
+                },
+            );
         }
 
         let reason = if matching_path_seen_in_unsupported_editor {
@@ -37783,7 +37876,64 @@ fn dx_style_source_apply_session_source_identity_from_context_json(
         source_span_end,
         workspace_root: workspace_root.map(str::to_string),
         context_kind: context_kind.map(str::to_string),
+        native_editor: None,
     })
+}
+
+fn dx_style_session_source_identity_with_native_editor(
+    workspace: &Workspace,
+    mut identity: DxStyleSourceApplySessionSourceIdentity,
+    cx: &App,
+) -> Option<DxStyleSourceApplySessionSourceIdentity> {
+    let active_item = workspace.active_item(cx)?;
+    let workspace_item_id = active_item.item_id().as_u64();
+    let active_editor = active_item.act_as::<Editor>(cx)?;
+    let editor_entity_id = active_editor.entity_id().as_u64();
+    if workspace_item_id != editor_entity_id {
+        return None;
+    }
+
+    let project = workspace.project().clone();
+    let editor = active_editor.read(cx);
+    if editor.buffer_kind(cx) != ItemBufferKind::Singleton {
+        return None;
+    }
+    let project_path = editor.active_project_path(cx)?;
+    let editor_source_path = project
+        .read(cx)
+        .absolute_path(&project_path, cx)
+        .map(|path| path.display().to_string())?;
+    if !dx_style_source_paths_match(&editor_source_path, &identity.source_path) {
+        return None;
+    }
+
+    let source_len = editor.buffer().read(cx).len(cx).0;
+    if source_len > MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES {
+        return None;
+    }
+    let source = editor.text(cx);
+    if source.len() > MAX_DX_STYLE_ACTIVE_EDITOR_REVALIDATION_SOURCE_BYTES
+        || source.len() as u64 != identity.source_len_bytes
+    {
+        return None;
+    }
+    let source_digest = crate::dx_style_source_apply::active_source_digest(&source);
+    if source_digest != identity.source_digest {
+        return None;
+    }
+    let active_buffer = editor.active_buffer(cx)?;
+
+    identity.native_editor = Some(DxStyleSourceApplySessionNativeEditorIdentity {
+        editor_entity_id,
+        workspace_item_id,
+        active_buffer_entity_id: active_buffer.entity_id().as_u64(),
+        active_buffer_remote_id: active_buffer.read(cx).remote_id().to_proto(),
+        multi_buffer_entity_id: editor.buffer().entity_id().as_u64(),
+        worktree_id: project_path.worktree_id.to_proto(),
+        project_path: project_path.path.as_unix_str().to_string(),
+        buffer_kind: "singleton",
+    });
+    Some(identity)
 }
 
 fn dx_style_required_bounded_session_source_string<'a>(

@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Native Editor Identity Evidence
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-native-editor-identity-plan.md` records the source-only plan for same-session native editor/buffer identity evidence under the existing native active-editor revalidation guard.
+
+CHANGED:
+- `crates/web_preview/src/web_preview_view.rs` now captures native editor identity when opening a DX Style generator from active source context, including editor item/entity id, active buffer entity and remote id, multi-buffer id, worktree id, project path, and singleton buffer kind.
+- Native DX Style source-apply review now requires the trusted generator-session editor/buffer identity to still be open and matching, and refuses matched review when live editor/buffer identity no longer matches the stored session identity.
+- `crates/web_preview/src/dx_style_source_apply.rs` now validates the nested `session_source.native_editor` receipt evidence before preserving a matched native source revalidation receipt.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the native editor identity checkpoint while keeping the source-only proof boundary explicit.
+
+NOTES:
+- This keeps the existing source-owned `native active editor source revalidation` guard as the umbrella contract surface. Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Session-Bound Source Identity
 
 ADDED:

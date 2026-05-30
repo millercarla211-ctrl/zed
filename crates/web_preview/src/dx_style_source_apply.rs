@@ -535,6 +535,56 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "session-bound source identity span does not match request source_span".to_string(),
         );
     }
+    let native_editor_identity = native_session_source
+        .get("native_editor")
+        .unwrap_or(&Value::Null);
+    if native_revalidation_status == Some("matched") && !native_editor_identity.is_object() {
+        reasons.push("session-bound source identity is missing native editor identity".to_string());
+    }
+    for field in [
+        "editor_entity_id",
+        "workspace_item_id",
+        "active_buffer_entity_id",
+        "active_buffer_remote_id",
+        "multi_buffer_entity_id",
+        "worktree_id",
+    ] {
+        if native_revalidation_status == Some("matched")
+            && native_editor_identity
+                .get(field)
+                .and_then(Value::as_u64)
+                .is_none()
+        {
+            reasons.push(format!("native editor identity is missing {field}"));
+        }
+    }
+    if native_revalidation_status == Some("matched")
+        && native_editor_identity
+            .get("editor_entity_id")
+            .and_then(Value::as_u64)
+            != native_editor_identity
+                .get("workspace_item_id")
+                .and_then(Value::as_u64)
+    {
+        reasons
+            .push("native editor identity workspace item does not match editor entity".to_string());
+    }
+    if native_revalidation_status == Some("matched")
+        && native_editor_identity
+            .get("buffer_kind")
+            .and_then(Value::as_str)
+            != Some("singleton")
+    {
+        reasons.push("native editor identity buffer_kind is not singleton".to_string());
+    }
+    if native_revalidation_status == Some("matched")
+        && native_editor_identity
+            .get("project_path")
+            .and_then(Value::as_str)
+            .map_or(true, str::is_empty)
+    {
+        reasons.push("native editor identity is missing project_path".to_string());
+    }
 
     let context_schema = context.get("schema").and_then(Value::as_str);
     if context_schema != Some(ACTIVE_STYLE_CONTEXT_SCHEMA) {
