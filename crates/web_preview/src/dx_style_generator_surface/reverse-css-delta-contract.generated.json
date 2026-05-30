@@ -27,6 +27,24 @@
       "value_strategy": "design_token_suffix"
     },
     {
+      "property": "outline-color",
+      "utility_prefix": "outline-",
+      "token_prefix": "var(--color-",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "accent-color",
+      "utility_prefix": "accent-",
+      "token_prefix": "var(--color-",
+      "value_strategy": "design_token_suffix"
+    },
+    {
+      "property": "caret-color",
+      "utility_prefix": "caret-",
+      "token_prefix": "var(--color-",
+      "value_strategy": "design_token_suffix"
+    },
+    {
       "property": "border-radius",
       "utility_prefix": "rounded-",
       "token_prefix": "var(--radius-",

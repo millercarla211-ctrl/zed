@@ -683,8 +683,12 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupReverseCssDelta, /is_display_utility/);
   assert.match(groupReverseCssDelta, /is_margin_utility/);
   assert.match(groupReverseCssDelta, /is_base_gap_utility/);
+  assert.match(groupReverseCssDelta, /is_outline_color_utility/);
   assert.match(groupReverseCssDelta, /is_shadow_effect_utility/);
   assert.match(groupReverseCssDelta, /background-color/);
+  assert.match(groupReverseCssDelta, /outline-color/);
+  assert.match(groupReverseCssDelta, /accent-color/);
+  assert.match(groupReverseCssDelta, /caret-color/);
   assert.match(groupReverseCssDelta, /display/);
   assert.match(groupReverseCssDelta, /margin-top/);
   assert.match(groupReverseCssDelta, /width/);
@@ -722,6 +726,30 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupReverseCssDeltaFixture.supported_properties.some(
       (entry) => entry.property === "gap" && entry.utility_prefix === "gap-",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "outline-color" &&
+        entry.utility_prefix === "outline-" &&
+        entry.value_strategy === "design_token_suffix",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "accent-color" &&
+        entry.utility_prefix === "accent-" &&
+        entry.value_strategy === "design_token_suffix",
+    ),
+  );
+  assert.ok(
+    groupReverseCssDeltaFixture.supported_properties.some(
+      (entry) =>
+        entry.property === "caret-color" &&
+        entry.utility_prefix === "caret-" &&
+        entry.value_strategy === "design_token_suffix",
     ),
   );
   assert.ok(
@@ -2174,6 +2202,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /function isDisplayUtility\(utility\)/);
   assert.match(surfaceScript, /function isMarginUtility\(utility, utilityPrefix\)/);
   assert.match(surfaceScript, /function isBaseGapUtility\(utility\)/);
+  assert.match(surfaceScript, /function isOutlineColorUtility\(utility\)/);
   assert.match(surfaceScript, /let fallbackDisplayPreview = null/);
   assert.match(surfaceScript, /if \(fallbackDisplayPreview\) return fallbackDisplayPreview/);
   assert.match(surfaceScript, /function isShadowEffectUtility\(utility\)/);

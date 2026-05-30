@@ -817,6 +817,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (!utilityPrefix) return isDisplayUtility(text);
       if (utilityPrefix === "gap-") return isBaseGapUtility(text);
       if (utilityPrefix === "border-") return isBorderColorUtility(text);
+      if (utilityPrefix === "outline-") return isOutlineColorUtility(text);
       if (utilityPrefix === "shadow-") return isShadowEffectUtility(text);
       if (utilityPrefix === "text-shadow-") return isTextShadowEffectUtility(text);
       if (utilityPrefix === "drop-shadow-") return isDropShadowEffectUtility(text);
@@ -857,6 +858,13 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const suffix = String(utility || "").replace(/^border-/, "");
       if (!utility.startsWith("border-") || !suffix) return false;
       if (/^\d+$/.test(suffix)) return false;
+      return !["solid", "dashed", "dotted", "double", "hidden", "none"].includes(suffix);
+    }
+
+    function isOutlineColorUtility(utility) {
+      const suffix = String(utility || "").replace(/^outline-/, "");
+      if (!utility.startsWith("outline-") || !suffix) return false;
+      if (/^\d+$/.test(suffix) || suffix.startsWith("offset-")) return false;
       return !["solid", "dashed", "dotted", "double", "hidden", "none"].includes(suffix);
     }
 
