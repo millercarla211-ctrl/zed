@@ -1472,12 +1472,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           required_native_handler_capability_count: 0,
           required_review_receipt_field_count: 0,
           required_runtime_proof_count: 0,
+          required_runtime_validation_receipt_field_count: 0,
           required_receipts: [],
           required_editor_guards: [],
           required_native_handlers: [],
           required_native_handler_capabilities: [],
           required_source_apply_review_receipt_fields: [],
-          required_runtime_proofs: []
+          required_runtime_proofs: [],
+          runtime_validation_receipt_schema: null,
+          required_runtime_validation_receipt_fields: []
         };
       }
       const requiredReceipts = Array.isArray(bridge.required_receipts) ? bridge.required_receipts : [];
@@ -1492,6 +1495,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const requiredRuntimeProofs = Array.isArray(bridge.required_runtime_proofs)
         ? bridge.required_runtime_proofs
         : [];
+      const requiredRuntimeValidationReceiptFields =
+        Array.isArray(bridge.required_runtime_validation_receipt_fields)
+          ? bridge.required_runtime_validation_receipt_fields
+          : [];
       return {
         present: true,
         state: bridge.state || "not_enabled",
@@ -1515,12 +1522,16 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         required_native_handler_capability_count: requiredCapabilities.length,
         required_review_receipt_field_count: requiredReviewReceiptFields.length,
         required_runtime_proof_count: requiredRuntimeProofs.length,
+        required_runtime_validation_receipt_field_count:
+          requiredRuntimeValidationReceiptFields.length,
         required_receipts: requiredReceipts,
         required_editor_guards: requiredGuards,
         required_native_handlers: requiredHandlers,
         required_native_handler_capabilities: requiredCapabilities,
         required_source_apply_review_receipt_fields: requiredReviewReceiptFields,
-        required_runtime_proofs: requiredRuntimeProofs
+        required_runtime_proofs: requiredRuntimeProofs,
+        runtime_validation_receipt_schema: bridge.runtime_validation_receipt_schema || null,
+        required_runtime_validation_receipt_fields: requiredRuntimeValidationReceiptFields
       };
     }
 
@@ -1582,9 +1593,28 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         "successful native writer dry-run replay",
         "post-write source digest verification"
       ];
+      const knownRuntimeValidationReceiptFields = [
+        "schema",
+        "source_apply_receipt_schema",
+        "source_path",
+        "source_digest_before",
+        "source_digest_after",
+        "authorized_runtime_validation",
+        "webview_source_review_round_trip",
+        "native_writer_dry_run_replay",
+        "post_write_source_digest_verification",
+        "post_write_readback_digest",
+        "post_write_readback_digest_match",
+        "mutation_performed",
+        "verified_at"
+      ];
       const missingRequiredRuntimeProofs = bridge.required_runtime_proofs.filter((proof) =>
         !knownRuntimeProofs.includes(proof)
       );
+      const missingRequiredRuntimeValidationReceiptFields =
+        bridge.required_runtime_validation_receipt_fields.filter((field) =>
+          !knownRuntimeValidationReceiptFields.includes(field)
+        );
       const missingRequirements = [];
       if (!sourceApplyMutationEnabled) missingRequirements.push("source_mutation_contract_disabled");
       if (!sourceApplyContractHasGuard(reverseCssDeltaReplacementPolicyGuard)) {
@@ -1640,8 +1670,20 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (bridge.runtime_validation_required === true) {
         missingRequirements.push("runtime_webview_build_proof_missing");
       }
+      if (
+        bridge.runtime_validation_required === true
+        && bridge.runtime_validation_receipt_schema !== "zed.web_preview.dx_style.runtime_validation_receipt.v1"
+      ) {
+        missingRequirements.push("write_bridge_runtime_validation_receipt_schema_missing");
+      }
       if (bridge.runtime_validation_required === true && missingRequiredRuntimeProofs.length) {
         missingRequirements.push("write_bridge_required_runtime_proofs_missing");
+      }
+      if (
+        bridge.runtime_validation_required === true
+        && missingRequiredRuntimeValidationReceiptFields.length
+      ) {
+        missingRequirements.push("write_bridge_required_runtime_validation_receipt_fields_missing");
       }
       if (bridge.runtime_validation_required === true && !bridge.required_runtime_proofs.length) {
         missingRequirements.push("write_bridge_runtime_proofs_missing");
@@ -1700,6 +1742,11 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         missing_required_review_receipt_fields: missingRequiredReviewReceiptFields,
         required_runtime_proof_count: bridge.required_runtime_proof_count,
         missing_required_runtime_proofs: missingRequiredRuntimeProofs,
+        runtime_validation_receipt_schema: bridge.runtime_validation_receipt_schema,
+        required_runtime_validation_receipt_field_count:
+          bridge.required_runtime_validation_receipt_field_count,
+        missing_required_runtime_validation_receipt_fields:
+          missingRequiredRuntimeValidationReceiptFields,
         runtime_validation_required: bridge.runtime_validation_required,
         web_preview_declared_mutation_capability: webPreviewDeclaredMutationCapability,
         native_handler_state: handlerState,
@@ -1818,6 +1865,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const runtimeProofs = Array.isArray(bridge.required_runtime_proofs)
         ? bridge.required_runtime_proofs.map((proof) => `<li>${escapeHtml(proof)}</li>`).join("")
         : "";
+      const runtimeReceiptFields =
+        Array.isArray(bridge.required_runtime_validation_receipt_fields)
+          ? bridge.required_runtime_validation_receipt_fields.map((field) => `<li>${escapeHtml(field)}</li>`).join("")
+          : "";
       return `
         ${sourceApplyContractReview}
         <strong>Write bridge preflight</strong>
@@ -1826,6 +1877,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Summary</dt><dd>${escapeHtml(bridge.summary || "preflight not ready")}</dd>
           <dt>Schema</dt><dd>${escapeHtml(bridge.preflight_schema || "unknown")}</dd>
           <dt>Runtime</dt><dd>${bridge.runtime_validation_required ? "validation required" : "not required"}</dd>
+          <dt>Runtime receipt</dt><dd>${escapeHtml(bridge.runtime_validation_receipt_schema || "missing")}</dd>
         </dl>
         ${receipts ? `<span>Required receipts</span><ul>${receipts}</ul>` : ""}
         ${guards ? `<span>Required guards</span><ul>${guards}</ul>` : ""}
@@ -1833,6 +1885,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         ${handlerCapabilities ? `<span>Required handler capabilities</span><ul>${handlerCapabilities}</ul>` : ""}
         ${reviewReceiptFields ? `<span>Required source-apply receipt fields</span><ul>${reviewReceiptFields}</ul>` : ""}
         ${runtimeProofs ? `<span>Required runtime proofs</span><ul>${runtimeProofs}</ul>` : ""}
+        ${runtimeReceiptFields ? `<span>Required runtime receipt fields</span><ul>${runtimeReceiptFields}</ul>` : ""}
       `;
     }
 

@@ -21,6 +21,8 @@ const DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA: &str =
     "zed.web_preview.dx_style.native_writer_commit_plan.v1";
 const DX_STYLE_POST_WRITE_DIGEST_VERIFICATION_PLAN_SCHEMA: &str =
     "zed.web_preview.dx_style.post_write_digest_verification_plan.v1";
+const DX_STYLE_RUNTIME_VALIDATION_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.dx_style.runtime_validation_receipt.v1";
 const DX_STYLE_USER_APPLY_ACTION_SCHEMA: &str = "zed.web_preview.dx_style.user_apply_action.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
@@ -76,6 +78,21 @@ const SOURCE_APPLY_RUNTIME_PROOFS: &[&str] = &[
     "successful WebView source-review round trip",
     "successful native writer dry-run replay",
     "post-write source digest verification",
+];
+const SOURCE_APPLY_RUNTIME_VALIDATION_RECEIPT_FIELDS: &[&str] = &[
+    "schema",
+    "source_apply_receipt_schema",
+    "source_path",
+    "source_digest_before",
+    "source_digest_after",
+    "authorized_runtime_validation",
+    "webview_source_review_round_trip",
+    "native_writer_dry_run_replay",
+    "post_write_source_digest_verification",
+    "post_write_readback_digest",
+    "post_write_readback_digest_match",
+    "mutation_performed",
+    "verified_at",
 ];
 
 pub(crate) fn active_source_digest(source: &str) -> String {
@@ -1465,10 +1482,15 @@ fn source_write_readiness(
     let runtime_validation_required = editor_write_bridge
         .get("runtime_validation_required")
         .and_then(Value::as_bool);
+    let runtime_validation_receipt_schema = editor_write_bridge
+        .get("runtime_validation_receipt_schema")
+        .and_then(Value::as_str);
     let dry_run_edit_review_status = dry_run_edit_review.get("status").and_then(Value::as_str);
     let missing_required_review_receipt_fields =
         missing_required_review_receipt_fields(editor_write_bridge);
     let missing_required_runtime_proofs = missing_required_runtime_proofs(editor_write_bridge);
+    let missing_required_runtime_validation_receipt_fields =
+        missing_required_runtime_validation_receipt_fields(editor_write_bridge);
 
     let mut missing_requirements = Vec::new();
     if contract_source_mutation_enabled != Some(true) {
@@ -1587,8 +1609,19 @@ fn source_write_readiness(
     if runtime_validation_required == Some(true) {
         missing_requirements.push("runtime_webview_build_proof_missing");
     }
+    if runtime_validation_required == Some(true)
+        && runtime_validation_receipt_schema != Some(DX_STYLE_RUNTIME_VALIDATION_RECEIPT_SCHEMA)
+    {
+        missing_requirements.push("write_bridge_runtime_validation_receipt_schema_missing");
+    }
     if runtime_validation_required == Some(true) && !missing_required_runtime_proofs.is_empty() {
         missing_requirements.push("write_bridge_required_runtime_proofs_missing");
+    }
+    if runtime_validation_required == Some(true)
+        && !missing_required_runtime_validation_receipt_fields.is_empty()
+    {
+        missing_requirements
+            .push("write_bridge_required_runtime_validation_receipt_fields_missing");
     }
     if runtime_validation_required == Some(true)
         && !string_array_contains(
@@ -1651,6 +1684,9 @@ fn source_write_readiness(
         "missing_required_review_receipt_fields": missing_required_review_receipt_fields,
         "required_runtime_proofs": string_array_at(editor_write_bridge, "/required_runtime_proofs"),
         "missing_required_runtime_proofs": missing_required_runtime_proofs,
+        "runtime_validation_receipt_schema": runtime_validation_receipt_schema,
+        "required_runtime_validation_receipt_fields": string_array_at(editor_write_bridge, "/required_runtime_validation_receipt_fields"),
+        "missing_required_runtime_validation_receipt_fields": missing_required_runtime_validation_receipt_fields,
         "runtime_validation_required": runtime_validation_required,
         "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
         "native_can_mutate_source": native_can_mutate_source,
@@ -1686,6 +1722,16 @@ fn missing_required_runtime_proofs(editor_write_bridge: &Value) -> Vec<&str> {
         .into_iter()
         .filter(|proof| !SOURCE_APPLY_RUNTIME_PROOFS.contains(proof))
         .collect()
+}
+
+fn missing_required_runtime_validation_receipt_fields(editor_write_bridge: &Value) -> Vec<&str> {
+    string_array_at(
+        editor_write_bridge,
+        "/required_runtime_validation_receipt_fields",
+    )
+    .into_iter()
+    .filter(|field| !SOURCE_APPLY_RUNTIME_VALIDATION_RECEIPT_FIELDS.contains(field))
+    .collect()
 }
 
 fn user_apply_action_review(
