@@ -531,6 +531,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(readModel, /GroupedClassGroupingEfficiency/);
   assert.match(readModel, /GroupedClassRecommendedRepresentation/);
   assert.match(readModel, /GroupedClassRecommendationMatch/);
+  assert.match(readModel, /impl GroupedClassRecommendedRepresentation/);
+  assert.match(readModel, /impl GroupedClassRecommendationMatch/);
+  assert.match(readModel, /pub const fn as_str/);
   assert.match(readModel, /grouped_class_grouping_efficiency/);
   assert.match(readModel, /grouped_class_recommendation_match/);
   assert.match(readModel, /raw_atomic_bytes/);
@@ -886,6 +889,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupWebPreviewContext, /source_declaration/);
   assert.match(groupWebPreviewContext, /source_group_declaration/);
   assert.match(groupWebPreviewContext, /recommendation_match_values/);
+  assert.match(groupWebPreviewContext, /GroupedClassRecommendedRepresentation::GroupedReference\.as_str\(\)/);
+  assert.match(groupWebPreviewContext, /GroupedClassRecommendationMatch::MissingSourceRecommendation\.as_str\(\)/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_ALIAS_BYTES: usize = 128/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_COUNT: usize = 32/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_BYTES: usize = 256/);

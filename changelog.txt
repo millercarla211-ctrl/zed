@@ -1,3 +1,15 @@
+[2026-05-31] - DX Style Typed Recommendation Labels
+
+ADDED:
+- DX Style grouped recommendation and match-state enums now expose typed `as_str()` labels in `G:\Dx\style\src\core\engine\grouped_class_read_model.rs`.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` now derives recommendation and match-state contract vocabulary from typed enum labels instead of duplicated string lists.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the typed label source.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Typed Recommendation Match Helper
 
 ADDED:
