@@ -2180,6 +2180,7 @@ impl WebPreviewView {
             "dry_run_review": receipt.get("dry_run_review").cloned(),
             "native_writer_dry_run_replay": receipt.get("native_writer_dry_run_replay").cloned(),
             "native_writer_commit_plan": receipt.get("native_writer_commit_plan").cloned(),
+            "user_apply_action": receipt.get("user_apply_action").cloned(),
             "native_handler": receipt.get("native_handler").cloned(),
             "apply_gate": receipt.get("apply_gate").cloned(),
         }))

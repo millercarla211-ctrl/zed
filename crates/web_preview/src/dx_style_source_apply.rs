@@ -19,6 +19,7 @@ pub(crate) const DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA: &str =
     "zed.web_preview.dx_style.native_writer_dry_run_replay.v1";
 const DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA: &str =
     "zed.web_preview.dx_style.native_writer_commit_plan.v1";
+const DX_STYLE_USER_APPLY_ACTION_SCHEMA: &str = "zed.web_preview.dx_style.user_apply_action.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_SOURCE_PATH_BYTES: usize = 4096;
@@ -110,6 +111,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let native_writer_dry_run_replay = request
         .get("native_writer_dry_run_replay")
         .unwrap_or(&Value::Null);
+    let user_apply_action = request.get("user_apply_action").unwrap_or(&Value::Null);
     let group_context = context.get("group_context").unwrap_or(&Value::Null);
     let apply_gate = context.get("apply_gate").unwrap_or(&Value::Null);
     let editor_write_bridge = apply_gate
@@ -276,6 +278,10 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push(
             "source-apply contract is missing native writer commit plan receipt field".to_string(),
         );
+    }
+    if !string_array_contains(contract, "/review_receipt_fields", "user_apply_action") {
+        reasons
+            .push("source-apply contract is missing user apply action receipt field".to_string());
     }
     if !string_array_contains(contract, "/review_receipt_fields", "source_write_readiness") {
         reasons.push(
@@ -769,6 +775,14 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let native_writer_commit_plan_status = native_writer_commit_plan
         .get("status")
         .and_then(Value::as_str);
+    let user_apply_action_evidence = user_apply_action_review(
+        user_apply_action,
+        contract_source_mutation_enabled,
+        &mut reasons,
+    );
+    let user_apply_action_status = user_apply_action_evidence
+        .get("status")
+        .and_then(Value::as_str);
     if native_writer_dry_run_replay_status != Some("matched") {
         reasons.push("native writer dry-run replay did not match active source".to_string());
     }
@@ -1150,6 +1164,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         native_revalidation_status,
         native_writer_dry_run_replay_status,
         native_writer_commit_plan_status,
+        user_apply_action_status,
         reasons.len(),
         web_preview_declared_mutation_capability,
         can_mutate_source,
@@ -1318,6 +1333,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "dry_run_edit_review": dry_run_edit_review_evidence,
         "native_writer_dry_run_replay": native_writer_dry_run_replay,
         "native_writer_commit_plan": native_writer_commit_plan,
+        "user_apply_action": user_apply_action_evidence,
         "source_write_readiness": source_write_readiness_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
@@ -1362,6 +1378,7 @@ fn source_write_readiness(
     native_revalidation_status: Option<&str>,
     native_writer_dry_run_replay_status: Option<&str>,
     native_writer_commit_plan_status: Option<&str>,
+    user_apply_action_status: Option<&str>,
     native_review_reason_count: usize,
     web_preview_declared_mutation_capability: bool,
     native_can_mutate_source: bool,
@@ -1425,6 +1442,17 @@ fn source_write_readiness(
     if !native_writer_commit_plan_ready {
         missing_requirements.push("native_writer_commit_plan_missing");
     }
+    let user_apply_action_ready = if contract_source_mutation_enabled == Some(true) {
+        user_apply_action_status == Some("mutate_source_confirmed")
+    } else {
+        matches!(
+            user_apply_action_status,
+            Some("review_source_confirmed" | "mutate_source_confirmed")
+        )
+    };
+    if !user_apply_action_ready {
+        missing_requirements.push("explicit_user_apply_action_missing");
+    }
     if native_review_reason_count > 0 {
         missing_requirements.push("native_review_reasons_present");
     }
@@ -1455,6 +1483,13 @@ fn source_write_readiness(
         "native_writer_commit_plan",
     ) {
         missing_requirements.push("write_bridge_missing_native_writer_commit_plan_receipt_field");
+    }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "user_apply_action",
+    ) {
+        missing_requirements.push("write_bridge_missing_user_apply_action_receipt_field");
     }
     if !web_preview_declared_mutation_capability {
         missing_requirements.push("web_preview_mutation_capability_missing");
@@ -1498,6 +1533,7 @@ fn source_write_readiness(
         "native_revalidation_status": native_revalidation_status,
         "native_writer_dry_run_replay_status": native_writer_dry_run_replay_status,
         "native_writer_commit_plan_status": native_writer_commit_plan_status,
+        "user_apply_action_status": user_apply_action_status,
         "native_review_reason_count": native_review_reason_count,
         "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
         "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,
@@ -1521,6 +1557,108 @@ fn source_write_readiness_refused(reason: &str) -> Value {
             "source_apply_session_refused",
         ],
         "reason": reason,
+    })
+}
+
+fn user_apply_action_review(
+    user_apply_action: &Value,
+    contract_source_mutation_enabled: Option<bool>,
+    reasons: &mut Vec<String>,
+) -> Value {
+    let schema = user_apply_action.get("schema").and_then(Value::as_str);
+    let action = user_apply_action.get("action").and_then(Value::as_str);
+    let button_id = user_apply_action.get("button_id").and_then(Value::as_str);
+    let event_kind = user_apply_action.get("event_kind").and_then(Value::as_str);
+    let explicit_user_action = user_apply_action
+        .get("explicit_user_action")
+        .and_then(Value::as_bool);
+    let mutation_requested = user_apply_action
+        .get("mutation_requested")
+        .and_then(Value::as_bool);
+    let session_token_present = user_apply_action
+        .get("source_apply_session_token_present")
+        .and_then(Value::as_bool);
+
+    let mut diagnostics = Vec::new();
+    if schema != Some(DX_STYLE_USER_APPLY_ACTION_SCHEMA) {
+        diagnostics.push("user apply action schema is missing or invalid");
+    }
+    if explicit_user_action != Some(true) {
+        diagnostics.push("user apply action is not marked explicit");
+    }
+    if event_kind != Some("click") {
+        diagnostics.push("user apply action did not come from a click event");
+    }
+    if session_token_present != Some(true) {
+        diagnostics.push("user apply action is missing the source-apply session token marker");
+    }
+    match action {
+        Some("review_source") => {
+            if button_id != Some("reviewApplyButton") {
+                diagnostics.push("review source action did not come from the review button");
+            }
+            if mutation_requested != Some(false) {
+                diagnostics.push("review source action cannot request mutation");
+            }
+        }
+        Some("mutate_source") => {
+            if button_id != Some("applyButton") {
+                diagnostics.push("mutate source action did not come from the apply button");
+            }
+            if mutation_requested != Some(true) {
+                diagnostics.push("mutate source action must request mutation");
+            }
+        }
+        _ => diagnostics.push("user apply action is missing a supported action"),
+    }
+
+    if !diagnostics.is_empty() {
+        reasons.extend(diagnostics.iter().map(|diagnostic| diagnostic.to_string()));
+        return json!({
+            "schema": DX_STYLE_USER_APPLY_ACTION_SCHEMA,
+            "status": "missing_or_invalid",
+            "action": action,
+            "button_id": button_id,
+            "event_kind": event_kind,
+            "explicit_user_action": explicit_user_action,
+            "mutation_requested": mutation_requested,
+            "source_apply_session_token_present": session_token_present,
+            "diagnostics": diagnostics,
+        });
+    }
+
+    if action == Some("mutate_source") && contract_source_mutation_enabled != Some(true) {
+        reasons.push(
+            "mutate source user action is blocked while the source-apply contract is review-only"
+                .to_string(),
+        );
+        return json!({
+            "schema": DX_STYLE_USER_APPLY_ACTION_SCHEMA,
+            "status": "mutate_source_blocked_review_only",
+            "action": action,
+            "button_id": button_id,
+            "event_kind": event_kind,
+            "explicit_user_action": explicit_user_action,
+            "mutation_requested": mutation_requested,
+            "source_apply_session_token_present": session_token_present,
+            "diagnostics": [],
+        });
+    }
+
+    json!({
+        "schema": DX_STYLE_USER_APPLY_ACTION_SCHEMA,
+        "status": if action == Some("mutate_source") {
+            "mutate_source_confirmed"
+        } else {
+            "review_source_confirmed"
+        },
+        "action": action,
+        "button_id": button_id,
+        "event_kind": event_kind,
+        "explicit_user_action": explicit_user_action,
+        "mutation_requested": mutation_requested,
+        "source_apply_session_token_present": session_token_present,
+        "diagnostics": [],
     })
 }
 

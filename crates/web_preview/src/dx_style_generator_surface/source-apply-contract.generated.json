@@ -63,6 +63,7 @@
     "dry_run_edit_review",
     "native_writer_dry_run_replay",
     "native_writer_commit_plan",
+    "user_apply_action",
     "source_write_readiness",
     "native_active_editor_source_revalidation",
     "native_handler"

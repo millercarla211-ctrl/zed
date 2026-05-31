@@ -1238,7 +1238,21 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       return { ...provenance, status: "unsupported_declaration", reason: "Current generator output has no declaration covered by the reverse CSS delta contract." };
     }
 
-    function sourceApplyRequest(output) {
+    function userApplyActionPacket(action, buttonId) {
+      return {
+        schema: "zed.web_preview.dx_style.user_apply_action.v1",
+        action,
+        button_id: buttonId,
+        event_kind: "click",
+        explicit_user_action: true,
+        mutation_requested: action === "mutate_source",
+        source_apply_session_kind: sourceApplySessionKind,
+        source_apply_session_token_present: typeof sourceApplySessionToken === "string"
+          && sourceApplySessionToken.length > 0
+      };
+    }
+
+    function sourceApplyRequest(output, userApplyAction) {
       const cssDeclarationPreview = cssDeclarationDryRunPreview(output, zedStyleContext);
       const reverseDeltaPreview = reverseCssDeltaPreview(output);
       return {
@@ -1251,6 +1265,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           kind: sourceApplySessionKind,
           token: sourceApplySessionToken
         },
+        user_apply_action: userApplyAction,
         output,
         context: zedStyleContext,
         metadata: metadataDiagnostics,
@@ -1277,7 +1292,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
 
       try {
-        handler(sourceApplyRequest(output));
+        handler(sourceApplyRequest(output, userApplyActionPacket("review_source", "reviewApplyButton")));
         sourceStatusEl.textContent = "Source apply review request sent to the native handler.";
       } catch (error) {
         sourceStatusEl.textContent = `Source review failed before native handoff: ${error?.message || error}`;
@@ -1295,7 +1310,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
 
       try {
-        handler(sourceApplyRequest(output));
+        handler(sourceApplyRequest(output, userApplyActionPacket("mutate_source", "applyButton")));
         sourceStatusEl.textContent = "Source apply request sent to the native handler.";
       } catch (error) {
         sourceStatusEl.textContent = `Source apply failed before native handoff: ${error?.message || error}`;
@@ -1560,6 +1575,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (bridge.can_mutate_source !== true) {
         missingRequirements.push("mutation_capable_editor_write_bridge_missing");
       }
+      missingRequirements.push("explicit_user_apply_action_missing");
       if (!bridge.required_source_apply_review_receipt_fields.includes("reverse_css_delta_replacement_payload_diagnostics")) {
         missingRequirements.push("write_bridge_missing_replacement_payload_diagnostics_receipt_field");
       }
@@ -1568,6 +1584,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
       if (!bridge.required_source_apply_review_receipt_fields.includes("native_writer_commit_plan")) {
         missingRequirements.push("write_bridge_missing_native_writer_commit_plan_receipt_field");
+      }
+      if (!bridge.required_source_apply_review_receipt_fields.includes("user_apply_action")) {
+        missingRequirements.push("write_bridge_missing_user_apply_action_receipt_field");
       }
       if (!webPreviewDeclaredMutationCapability) {
         missingRequirements.push("web_preview_mutation_capability_missing");
@@ -1617,6 +1636,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         reverse_delta_replacement_policy_diagnostics: reverseDeltaReplacementPolicyDiagnostics,
         native_revalidation_status: "not_performed_in_web_preview",
         native_writer_commit_plan_status: "not_performed_in_web_preview",
+        user_apply_action_status: "not_performed_in_preview",
         editor_write_bridge_state: bridge.state,
         editor_write_bridge_summary: bridge.summary,
         editor_write_bridge_can_apply: bridge.can_apply,

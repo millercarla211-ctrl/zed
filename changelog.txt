@@ -11730,3 +11730,24 @@ PASSED:
 
 NOTES:
 - This remains review-only. It does not enable Apply, mutate source, run Cargo, run `just run`, start a server, or perform live WebView/runtime proof.
+
+[2026-05-31] - DX Style Explicit User Apply Action Evidence
+
+ADDED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now emits a bounded `user_apply_action` packet from the Review Source button path and the future Apply path, distinguishing `review_source` from `mutate_source` without enabling mutation.
+- `crates\web_preview\src\dx_style_source_apply.rs` now validates the user action schema, button id, click event marker, explicit-action flag, mutation intent, and source-apply session token marker before preserving `user_apply_action` in native review receipts.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs`, `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json`, `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`, and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now require `user_apply_action` as source-owned review evidence.
+- Web Preview and native source-write readiness now report missing explicit user action evidence and missing bridge receipt-field evidence as separate blockers.
+- `crates\web_preview\src\web_preview_view.rs` includes the user action packet in latest source-apply receipt summaries.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs crates\web_preview\src\web_preview_view.rs G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `git diff --check`
+- Focused conflict-marker scan across changed Zed and DX Style source/fixture/docs files.
+
+NOTES:
+- This remains review-only. It does not enable Apply, mutate source, run Cargo, run `just run`, start a server, or perform live WebView/runtime proof.

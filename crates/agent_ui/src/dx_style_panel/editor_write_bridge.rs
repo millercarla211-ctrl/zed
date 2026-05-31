@@ -206,6 +206,7 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "dry_run_edit_review".to_string(),
             "native_writer_dry_run_replay".to_string(),
             "native_writer_commit_plan".to_string(),
+            "user_apply_action".to_string(),
             "source_write_readiness".to_string(),
             "native_active_editor_source_revalidation".to_string(),
             "native_handler".to_string(),
