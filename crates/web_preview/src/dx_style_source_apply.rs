@@ -1533,6 +1533,15 @@ fn source_write_readiness(
         && !string_array_contains(
             editor_write_bridge,
             "/required_runtime_proofs",
+            "authorized runtime validation",
+        )
+    {
+        missing_requirements.push("write_bridge_missing_authorized_runtime_validation_proof");
+    }
+    if runtime_validation_required == Some(true)
+        && !string_array_contains(
+            editor_write_bridge,
+            "/required_runtime_proofs",
             "successful WebView source-review round trip",
         )
     {

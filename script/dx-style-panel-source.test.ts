@@ -2134,6 +2134,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"missing_required_review_receipt_fields": missing_required_review_receipt_fields/);
   assert.match(sourceApply, /native_writer_can_mutate_false/);
   assert.match(sourceApply, /runtime_webview_build_proof_missing/);
+  assert.match(sourceApply, /write_bridge_missing_authorized_runtime_validation_proof/);
   assert.match(sourceApply, /write_bridge_missing_webview_review_round_trip_runtime_proof/);
   assert.match(sourceApply, /write_bridge_missing_native_writer_replay_runtime_proof/);
   assert.match(sourceApply, /write_bridge_missing_post_write_digest_runtime_proof/);
@@ -2953,6 +2954,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /write_bridge_missing_user_apply_action_receipt_field/);
   assert.match(surfaceScript, /write_bridge_required_review_receipt_fields_missing/);
   assert.match(surfaceScript, /write_bridge_runtime_proofs_missing/);
+  assert.match(surfaceScript, /write_bridge_missing_authorized_runtime_validation_proof/);
   assert.match(surfaceScript, /write_bridge_missing_webview_review_round_trip_runtime_proof/);
   assert.match(surfaceScript, /write_bridge_missing_native_writer_replay_runtime_proof/);
   assert.match(surfaceScript, /write_bridge_missing_post_write_digest_runtime_proof/);

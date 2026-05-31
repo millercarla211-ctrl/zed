@@ -1629,6 +1629,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (bridge.runtime_validation_required === true && !bridge.required_runtime_proofs.length) {
         missingRequirements.push("write_bridge_runtime_proofs_missing");
       }
+      if (bridge.runtime_validation_required === true && !bridge.required_runtime_proofs.includes("authorized runtime validation")) {
+        missingRequirements.push("write_bridge_missing_authorized_runtime_validation_proof");
+      }
       if (bridge.runtime_validation_required === true && !bridge.required_runtime_proofs.includes("successful WebView source-review round trip")) {
         missingRequirements.push("write_bridge_missing_webview_review_round_trip_runtime_proof");
       }

@@ -11782,3 +11782,18 @@ PASSED:
 
 NOTES:
 - This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.
+
+[2026-05-31] - DX Style Authorized Runtime Proof Readiness
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` and `crates\web_preview\src\dx_style_source_apply.rs` now require the source-owned runtime proof list to include `authorized runtime validation` before future source-write readiness can pass.
+- `script\dx-style-panel-source.test.ts` guards the Web Preview and native blocker code `write_bridge_missing_authorized_runtime_validation_proof`.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Focused conflict-marker scan across changed source/docs files.
+
+NOTES:
+- This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.
