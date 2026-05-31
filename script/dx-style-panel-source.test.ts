@@ -869,6 +869,10 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupWebPreviewContext, /alias\(\)/);
   assert.match(groupWebPreviewContext, /alias\(atomic utilities\)/);
   assert.match(groupWebPreviewContext, /static atomic utility list/);
+  assert.match(groupWebPreviewContext, /group_call_syntax_values/);
+  assert.match(groupWebPreviewContext, /group_call_status_values/);
+  assert.match(groupWebPreviewContext, /source_declaration/);
+  assert.match(groupWebPreviewContext, /source_group_declaration/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_ALIAS_BYTES: usize = 128/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_COUNT: usize = 32/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_BYTES: usize = 256/);
@@ -887,6 +891,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.equal(groupWebPreviewContextFixture.max_utility_bytes, 256);
   assert.equal(groupWebPreviewContextFixture.candidate_min_utility_count, 4);
   assert.ok(groupWebPreviewContextFixture.supported_token_shapes.includes("alias()"));
+  assert.ok(groupWebPreviewContextFixture.group_call_syntax_values.includes("inline_utilities"));
+  assert.ok(groupWebPreviewContextFixture.group_call_syntax_values.includes("source_declaration"));
+  assert.ok(
+    groupWebPreviewContextFixture.group_call_status_values.includes("source_group_declaration"),
+  );
   assert.ok(groupWebPreviewContextFixture.context_fields.includes("group_context.utilities"));
   assert.ok(
     groupWebPreviewContextFixture.context_fields.includes("group_context.registry_receipt"),
@@ -2822,6 +2831,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   );
   assert.match(surfaceGroupContextContract, /dx_style_group_context_fixture_path/);
   assert.match(surfaceGroupContextContract, /group_context_fixture_to_web_preview_json/);
+  assert.match(surfaceGroupContextContract, /group_call_syntax_values/);
+  assert.match(surfaceGroupContextContract, /group_call_status_values/);
   assert.match(surfaceGroupContextContract, /max_alias_bytes/);
   assert.match(surfaceGroupContextContract, /max_utility_count/);
   assert.match(surfaceGroupContextContract, /candidate_min_utility_count/);
@@ -3495,6 +3506,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_max_alias_bytes/);
   assert.match(surfaceScript, /group_context_max_utility_count/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
+  assert.match(surfaceScript, /group_context_syntax_values/);
+  assert.match(surfaceScript, /group_context_status_values/);
   assert.match(surfaceScript, /reverse_css_delta_contract_schema/);
   assert.match(surfaceScript, /reverse_css_delta_contract_source/);
   assert.match(surfaceScript, /reverse_css_delta_supported_properties/);

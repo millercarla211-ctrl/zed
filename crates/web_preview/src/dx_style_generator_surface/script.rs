@@ -71,6 +71,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextMaxUtilityCount = Number(groupContextContract.max_utility_count || 0);
     const groupContextMaxUtilityBytes = Number(groupContextContract.max_utility_bytes || 0);
     const groupContextCandidateMin = Number(groupContextContract.candidate_min_utility_count || 0);
+    const groupContextSyntaxValues = Array.isArray(groupContextContract.group_call_syntax_values)
+      ? groupContextContract.group_call_syntax_values
+      : [];
+    const groupContextStatusValues = Array.isArray(groupContextContract.group_call_status_values)
+      ? groupContextContract.group_call_status_values
+      : [];
     const reverseCssDeltaContractSchema = reverseCssDeltaContract.__schema || "unknown";
     const reverseCssDeltaContractSource = reverseCssDeltaContract.__source || "embedded:dx-style-reverse-css-delta-contract-fixture";
     const reverseCssDeltaMutationEnabled = reverseCssDeltaContract.source_mutation_enabled === true;
@@ -2461,6 +2467,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_max_utility_count: ${groupContextMaxUtilityCount || "unknown"}`,
         `group_context_max_utility_bytes: ${groupContextMaxUtilityBytes || "unknown"}`,
         `group_context_candidate_min_utility_count: ${groupContextCandidateMin || "unknown"}`,
+        `group_context_syntax_values: ${groupContextSyntaxValues.length}`,
+        `group_context_status_values: ${groupContextStatusValues.length}`,
         `reverse_css_delta_contract_schema: ${reverseCssDeltaContractSchema}`,
         `reverse_css_delta_contract_source: ${reverseCssDeltaContractSource}`,
         `reverse_css_delta_mutation_enabled: ${reverseCssDeltaMutationEnabled}`,

@@ -11,6 +11,19 @@
     "@alias(atomic utilities)",
     "static atomic utility list"
   ],
+  "group_call_syntax_values": [
+    "alias_reference",
+    "inline_utilities",
+    "source_declaration",
+    "static_atomic_utility_list"
+  ],
+  "group_call_status_values": [
+    "alias_reference",
+    "alias_reference_expanded",
+    "inline_group_declaration",
+    "source_group_declaration",
+    "atomic_list_candidate"
+  ],
   "context_fields": [
     "group_context.schema",
     "group_context.status",
