@@ -1,3 +1,16 @@
+[2026-05-31] - DX Style Recommendation Match Vocabulary
+
+ADDED:
+- DX Style now source-owns grouped recommendation match values in `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` and `G:\Dx\style\fixtures\grouped-class-web-preview-context.json`.
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs` now mirrors `recommendation_match_values` from the DX Style grouped-class context fixture.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now reports missing or unsupported recommendation match vocabularies and emits the source-owned match-state vocabulary count.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the source-owned recommendation match vocabulary.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Recommendation Match Surface
 
 ADDED:

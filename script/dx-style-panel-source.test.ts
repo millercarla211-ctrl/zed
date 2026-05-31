@@ -880,6 +880,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupWebPreviewContext, /GroupedClassGroupCallStatusRule/);
   assert.match(groupWebPreviewContext, /source_declaration/);
   assert.match(groupWebPreviewContext, /source_group_declaration/);
+  assert.match(groupWebPreviewContext, /recommendation_match_values/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_ALIAS_BYTES: usize = 128/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_COUNT: usize = 32/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_BYTES: usize = 256/);
@@ -974,6 +975,13 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     "grouped_reference",
     "atomic_utilities",
     "group_candidate_needs_alias",
+  ]);
+  assert.deepEqual(groupWebPreviewContextFixture.recommendation_match_values, [
+    "matched",
+    "mismatch",
+    "missing_source_recommendation",
+    "expected_unavailable",
+    "not_available",
   ]);
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_SCHEMA/);
   assert.match(groupRegistryReceipt, /dx\.style\.grouped-class-registry-receipt/);
@@ -2913,6 +2921,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceGroupContextContract, /max_utility_count/);
   assert.match(surfaceGroupContextContract, /diagnostic_codes/);
   assert.match(surfaceGroupContextContract, /recommended_representation_values/);
+  assert.match(surfaceGroupContextContract, /recommendation_match_values/);
   assert.match(surfaceGroupContextContract, /utility_preview_max_chars/);
   assert.match(surfaceGroupContextContract, /candidate_min_utility_count/);
   assert.match(surfaceReverseCssDeltaContract, /DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_SCHEMA/);
@@ -3614,9 +3623,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_recommended_representation_mismatch/);
   assert.match(surfaceScript, /groupContextRecommendedRepresentationValues/);
   assert.match(surfaceScript, /groupContextRecommendedRepresentationSet/);
+  assert.match(surfaceScript, /groupContextRecommendationMatchValues/);
+  assert.match(surfaceScript, /groupContextRecommendationMatchSet/);
+  assert.match(surfaceScript, /group_context_recommendation_match_values_missing/);
+  assert.match(surfaceScript, /group_context_recommendation_match_unsupported/);
   assert.match(surfaceScript, /groupContextExpectedRecommendation/);
   assert.match(surfaceScript, /groupContextRecommendationMatchState/);
   assert.match(surfaceScript, /group_context_recommended_representation_values/);
+  assert.match(surfaceScript, /group_context_recommendation_match_values/);
   assert.match(surfaceScript, /group_raw_atomic_bytes/);
   assert.match(surfaceScript, /group_grouped_reference_bytes/);
   assert.match(surfaceScript, /group_grouping_savings_bytes/);

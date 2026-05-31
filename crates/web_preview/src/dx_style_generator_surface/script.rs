@@ -97,6 +97,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         : [];
     const groupContextRecommendedRepresentationSet =
       new Set(groupContextRecommendedRepresentationValues);
+    const groupContextRecommendationMatchValues =
+      Array.isArray(groupContextContract.recommendation_match_values)
+        ? normalizedStringValues(groupContextContract.recommendation_match_values)
+        : [];
+    const groupContextRecommendationMatchSet =
+      new Set(groupContextRecommendationMatchValues);
     const groupContextRequiredFlagFields = [
       "group_context.requires_registry_receipt",
       "group_context.source_owned",
@@ -638,6 +644,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && expectedRecommendedRepresentation
         && group.recommended_representation !== expectedRecommendedRepresentation) {
         diagnostics.push("group_context_recommended_representation_mismatch");
+      }
+      const recommendationMatch = groupContextRecommendationMatchState(group);
+      if (!groupContextRecommendationMatchSet.size) {
+        diagnostics.push("group_context_recommendation_match_values_missing");
+      } else if (recommendationMatch && !groupContextRecommendationMatchSet.has(recommendationMatch)) {
+        diagnostics.push("group_context_recommendation_match_unsupported");
       }
       if (Array.isArray(group.utilities) && group.utilities.length
         && group.can_expand_inline !== true) {
@@ -2779,6 +2791,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_contract_fields: ${groupContextContractFields.length}`,
         `group_context_diagnostic_codes: ${groupContextDiagnosticCodes.length}`,
         `group_context_recommended_representation_values: ${groupContextRecommendedRepresentationValues.length}`,
+        `group_context_recommendation_match_values: ${groupContextRecommendationMatchValues.length}`,
         `group_context_required_flag_fields: ${groupContextRequiredFlagFields.length}`,
         `group_context_syntax_values: ${groupContextSyntaxValues.length}`,
         `group_context_status_values: ${groupContextStatusValues.length}`,

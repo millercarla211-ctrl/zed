@@ -100,12 +100,21 @@
     "group_context_recommended_representation_missing",
     "group_context_recommended_representation_unsupported",
     "group_context_recommended_representation_mismatch",
+    "group_context_recommendation_match_values_missing",
+    "group_context_recommendation_match_unsupported",
     "group_context_inline_expansion_missing"
   ],
   "recommended_representation_values": [
     "grouped_reference",
     "atomic_utilities",
     "group_candidate_needs_alias"
+  ],
+  "recommendation_match_values": [
+    "matched",
+    "mismatch",
+    "missing_source_recommendation",
+    "expected_unavailable",
+    "not_available"
   ],
   "max_alias_bytes": 128,
   "max_utility_count": 32,

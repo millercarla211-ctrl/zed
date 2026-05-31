@@ -62,6 +62,9 @@ fn group_context_fixture_to_web_preview_json(fixture: Value, source_path: &str) 
         "recommended_representation_values": fixture
             .get("recommended_representation_values")?
             .as_array()?,
+        "recommendation_match_values": fixture
+            .get("recommendation_match_values")?
+            .as_array()?,
         "max_alias_bytes": fixture.get("max_alias_bytes")?.as_u64()?,
         "max_utility_count": fixture.get("max_utility_count")?.as_u64()?,
         "max_utility_bytes": fixture.get("max_utility_bytes")?.as_u64()?,
