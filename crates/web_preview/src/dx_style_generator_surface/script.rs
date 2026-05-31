@@ -1570,6 +1570,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const dryRun = dryRunReviewPacket(applyGate);
       const handlerState = sourceApplyHandlerState();
       const webPreviewDeclaredMutationCapability = sourceApplyMutationCapabilityDeclared();
+      const runtimeValidationReceipt = runtimeValidationReceiptPacket(applyGate);
       const reviewBlocker = sourceApplyReviewBlocker(metadataAligned, context, output);
       const mutationBlocker = sourceApplyBlocker(applyGate, metadataAligned, context, output);
       const reverseDeltaPreview = reverseCssDeltaPreview(output);
@@ -1657,6 +1658,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         bridge.required_runtime_validation_receipt_fields.filter((field) =>
           !knownRuntimeValidationReceiptFields.includes(field)
         );
+      const missingRuntimeValidationReceiptFields =
+        bridge.required_runtime_validation_receipt_fields.filter((field) =>
+          !(field in runtimeValidationReceipt)
+        );
       const missingRequiredMutationWriteReceiptFields =
         bridge.required_mutation_write_receipt_fields.filter((field) =>
           !knownMutationWriteReceiptFields.includes(field)
@@ -1688,6 +1693,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       missingRequirements.push("post_write_digest_verification_plan_missing");
       missingRequirements.push("runtime_validation_receipt_template_missing");
       missingRequirements.push("runtime_validation_receipt_missing");
+      if (missingRuntimeValidationReceiptFields.length) {
+        missingRequirements.push("runtime_validation_receipt_required_fields_missing");
+      }
       missingRequirements.push("mutation_write_receipt_template_missing");
       missingRequirements.push("native_mutation_writer_preflight_missing");
       if (bridge.can_apply !== true) missingRequirements.push("editor_write_bridge_not_ready");
@@ -1806,6 +1814,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         post_write_digest_verification_plan_status: "not_performed_in_web_preview",
         runtime_validation_receipt_template_status: "not_performed_in_web_preview",
         runtime_validation_receipt_status: "not_performed_in_web_preview",
+        missing_runtime_validation_receipt_fields:
+          missingRuntimeValidationReceiptFields,
         mutation_write_receipt_template_status: "not_performed_in_web_preview",
         native_mutation_writer_preflight_status: "not_performed_in_web_preview",
         native_writer_dispatch_status: "not_performed_in_web_preview",

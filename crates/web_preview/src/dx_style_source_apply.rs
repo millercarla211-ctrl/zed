@@ -930,6 +930,8 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let runtime_validation_receipt_status = runtime_validation_receipt
         .get("status")
         .and_then(Value::as_str);
+    let missing_runtime_validation_receipt_fields =
+        missing_runtime_validation_receipt_fields(editor_write_bridge, &runtime_validation_receipt);
     let mutation_write_receipt_template = mutation_write_receipt_template(
         editor_write_bridge,
         &native_writer_commit_plan,
@@ -1341,6 +1343,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         post_write_digest_verification_plan_status,
         runtime_validation_receipt_template_status,
         runtime_validation_receipt_status,
+        &missing_runtime_validation_receipt_fields,
         mutation_write_receipt_template_status,
         native_mutation_writer_preflight_status,
         user_apply_action_status,
@@ -1572,6 +1575,7 @@ fn source_write_readiness(
     post_write_digest_verification_plan_status: Option<&str>,
     runtime_validation_receipt_template_status: Option<&str>,
     runtime_validation_receipt_status: Option<&str>,
+    missing_runtime_validation_receipt_fields: &[&str],
     mutation_write_receipt_template_status: Option<&str>,
     native_mutation_writer_preflight_status: Option<&str>,
     user_apply_action_status: Option<&str>,
@@ -1685,6 +1689,9 @@ fn source_write_readiness(
     };
     if !runtime_validation_receipt_ready {
         missing_requirements.push("runtime_validation_receipt_missing");
+    }
+    if !missing_runtime_validation_receipt_fields.is_empty() {
+        missing_requirements.push("runtime_validation_receipt_required_fields_missing");
     }
     let mutation_write_receipt_template_ready = if contract_source_mutation_enabled == Some(true) {
         mutation_write_receipt_template_status == Some("ready")
@@ -1886,6 +1893,7 @@ fn source_write_readiness(
         "post_write_digest_verification_plan_status": post_write_digest_verification_plan_status,
         "runtime_validation_receipt_template_status": runtime_validation_receipt_template_status,
         "runtime_validation_receipt_status": runtime_validation_receipt_status,
+        "missing_runtime_validation_receipt_fields": missing_runtime_validation_receipt_fields,
         "mutation_write_receipt_template_status": mutation_write_receipt_template_status,
         "native_mutation_writer_preflight_status": native_mutation_writer_preflight_status,
         "user_apply_action_status": user_apply_action_status,
@@ -2002,6 +2010,19 @@ fn missing_required_runtime_validation_receipt_fields(editor_write_bridge: &Valu
     )
     .into_iter()
     .filter(|field| !SOURCE_APPLY_RUNTIME_VALIDATION_RECEIPT_FIELDS.contains(field))
+    .collect()
+}
+
+fn missing_runtime_validation_receipt_fields<'a>(
+    editor_write_bridge: &'a Value,
+    runtime_validation_receipt: &Value,
+) -> Vec<&'a str> {
+    string_array_at(
+        editor_write_bridge,
+        "/required_runtime_validation_receipt_fields",
+    )
+    .into_iter()
+    .filter(|field| runtime_validation_receipt.get(*field).is_none())
     .collect()
 }
 

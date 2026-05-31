@@ -1,3 +1,22 @@
+[2026-05-31] - DX Style Runtime Receipt Field Coverage
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-runtime-receipt-field-coverage-plan.md` records the source-only plan for checking actual runtime validation receipt field coverage.
+
+CHANGED:
+- Native source-write readiness now compares the emitted `runtime_validation_receipt` object against the bridge's `required_runtime_validation_receipt_fields` and reports `runtime_validation_receipt_required_fields_missing` when the actual receipt shape drifts.
+- Web Preview copied readiness now performs the same field coverage check before reporting source-write readiness.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the actual runtime receipt field coverage gate.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\web_preview\src\dx_style_generator_surface\script.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed runtime receipt field coverage files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Runtime Validation Receipt Gate
 
 ADDED:

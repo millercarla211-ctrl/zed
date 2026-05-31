@@ -2291,6 +2291,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /fn missing_required_review_receipt_fields/);
   assert.match(sourceApply, /fn missing_required_runtime_proofs/);
   assert.match(sourceApply, /fn missing_required_runtime_validation_receipt_fields/);
+  assert.match(sourceApply, /fn missing_runtime_validation_receipt_fields/);
   assert.match(sourceApply, /fn missing_required_mutation_write_receipt_fields/);
   assert.match(sourceApply, /"mutation_ready": safe_to_mutate/);
   assert.match(sourceApply, /source_mutation_contract_disabled/);
@@ -2309,6 +2310,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /runtime_validation_receipt_template_status/);
   assert.match(sourceApply, /runtime_validation_receipt_ready/);
   assert.match(sourceApply, /runtime_validation_receipt_missing/);
+  assert.match(sourceApply, /runtime_validation_receipt_required_fields_missing/);
   assert.match(sourceApply, /runtime_validation_receipt_status/);
   assert.match(sourceApply, /mutation_write_receipt_template_ready/);
   assert.match(sourceApply, /mutation_write_receipt_template_missing/);
@@ -2341,6 +2343,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /write_bridge_required_runtime_validation_receipt_fields_missing/);
   assert.match(sourceApply, /"runtime_validation_receipt_schema": runtime_validation_receipt_schema/);
   assert.match(sourceApply, /"missing_required_runtime_validation_receipt_fields": missing_required_runtime_validation_receipt_fields/);
+  assert.match(sourceApply, /"missing_runtime_validation_receipt_fields": missing_runtime_validation_receipt_fields/);
   assert.match(sourceApply, /"mutation_write_receipt_schema": mutation_write_receipt_schema/);
   assert.match(sourceApply, /"missing_required_mutation_write_receipt_fields": missing_required_mutation_write_receipt_fields/);
   assert.match(sourceApply, /native_writer_can_mutate_false/);
@@ -3214,9 +3217,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /const missingRequiredReviewReceiptFields =/);
   assert.match(surfaceScript, /const knownRuntimeProofs = \[/);
   assert.match(surfaceScript, /const knownRuntimeValidationReceiptFields = \[/);
+  assert.match(surfaceScript, /const runtimeValidationReceipt = runtimeValidationReceiptPacket\(applyGate\)/);
   assert.match(surfaceScript, /const knownMutationWriteReceiptFields = \[/);
   assert.match(surfaceScript, /const missingRequiredRuntimeProofs =/);
   assert.match(surfaceScript, /const missingRequiredRuntimeValidationReceiptFields =/);
+  assert.match(surfaceScript, /const missingRuntimeValidationReceiptFields =/);
+  assert.match(surfaceScript, /!\(field in runtimeValidationReceipt\)/);
   assert.match(surfaceScript, /const missingRequiredMutationWriteReceiptFields =/);
   assert.match(surfaceScript, /schema: "zed\.web_preview\.dx_style\.source_write_readiness\.v1"/);
   assert.match(surfaceScript, /safe_to_mutate: safeToMutate/);
@@ -3228,6 +3234,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /post_write_digest_verification_plan_missing/);
   assert.match(surfaceScript, /runtime_validation_receipt_template_missing/);
   assert.match(surfaceScript, /runtime_validation_receipt_missing/);
+  assert.match(surfaceScript, /runtime_validation_receipt_required_fields_missing/);
   assert.match(surfaceScript, /mutation_write_receipt_template_missing/);
   assert.match(surfaceScript, /native_mutation_writer_preflight_missing/);
   assert.match(surfaceScript, /explicit_user_apply_action_missing/);
@@ -3260,6 +3267,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /missing_required_runtime_proofs: missingRequiredRuntimeProofs/);
   assert.match(surfaceScript, /runtime_validation_receipt_schema: bridge\.runtime_validation_receipt_schema/);
   assert.match(surfaceScript, /missing_required_runtime_validation_receipt_fields:/);
+  assert.match(surfaceScript, /missing_runtime_validation_receipt_fields:/);
   assert.match(surfaceScript, /mutation_write_receipt_schema: bridge\.mutation_write_receipt_schema/);
   assert.match(surfaceScript, /missing_required_mutation_write_receipt_fields:/);
   assert.match(surfaceScript, /reverse_delta_replacement_policy_guard_present/);
