@@ -11638,3 +11638,21 @@ PASSED:
 NOTES:
 - Native source mutation remains disabled; this slice improves Web Preview/native review trust before any mutation-capable bridge is enabled.
 - Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.
+
+[2026-05-31] - DX Style Native Replacement Diagnostics Receipt
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now include `reverse_css_delta_replacement_payload_diagnostics` in the source-owned review receipt fields.
+- `crates\web_preview\src\dx_style_generator_surface\source-apply-contract.generated.json` now mirrors that updated source-apply contract for Zed's embedded fallback.
+- `crates\web_preview\src\dx_style_source_apply.rs` now accepts bounded replacement payload diagnostics from Web Preview, preserves them in native receipts, and blocks review when they are non-empty.
+- `crates\web_preview\src\web_preview_view.rs` now includes replacement payload diagnostics in the latest DX Style source-apply receipt summary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\web_preview\src\web_preview_view.rs`
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+
+NOTES:
+- Native source mutation remains disabled; this slice only makes review receipts stricter and more explainable.
+- Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.

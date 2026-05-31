@@ -556,6 +556,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(sourceApplyContract, /CSS declaration dry-run receipt for CSS contexts/);
   assert.match(sourceApplyContract, /reverse CSS delta preview provenance match/);
   assert.match(sourceApplyContract, /reverse CSS delta replacement policy match/);
+  assert.match(sourceApplyContract, /reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(sourceApplyContract, /cursor-scoped dry-run structured edit preview/);
   assert.match(sourceApplyContract, /trusted grouped-class dry-run receipt/);
   assert.match(
@@ -632,6 +633,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     sourceApplyFixture.required_editor_guards.includes(
       "cursor-scoped dry-run structured edit preview",
+    ),
+  );
+  assert.ok(
+    sourceApplyFixture.review_receipt_fields.includes(
+      "reverse_css_delta_replacement_payload_diagnostics",
     ),
   );
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
@@ -1675,6 +1681,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /latest_dx_style_source_apply_receipt_summary/);
   assert.match(webPreviewView, /"reverse_css_delta_contract": receipt\.get\("reverse_css_delta_contract"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"reverse_css_delta_preview": receipt\.get\("reverse_css_delta_preview"\)\.cloned\(\)/);
+  assert.match(webPreviewView, /"reverse_css_delta_replacement_payload_diagnostics": receipt\.get\("reverse_css_delta_replacement_payload_diagnostics"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"dry_run_review": receipt\.get\("dry_run_review"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"review_status": receipt\.get\("review_status"\)\.and_then\(Value::as_str\)/);
   assert.match(webPreviewView, /"mutation_ready": receipt\.get\("mutation_ready"\)\.and_then\(Value::as_bool\)/);
@@ -1822,6 +1829,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES: usize = 256/);
   assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES: usize = 1024/);
   assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096/);
+  assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTICS: usize = 8/);
+  assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTIC_BYTES: usize = 160/);
   assert.match(sourceApply, /SOURCE_DIGEST_PREFIX: &str = "fnv1a64:"/);
   assert.match(sourceApply, /DX_STYLE_REVERSE_CSS_DELTA_REPLACEMENT_POLICY_GUARD/);
   assert.match(sourceApply, /source_apply_review_receipt/);
@@ -1841,6 +1850,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source-apply contract is missing CSS declaration dry-run guard/);
   assert.match(sourceApply, /source-apply contract is missing reverse-delta provenance guard/);
   assert.match(sourceApply, /source-apply contract is missing reverse-delta replacement policy guard/);
+  assert.match(sourceApply, /source-apply contract is missing reverse-delta replacement payload diagnostics receipt field/);
+  assert.match(sourceApply, /reverse CSS delta replacement payload diagnostics are not empty/);
   assert.match(sourceApply, /missing DX Style reverse CSS delta contract schema/);
   assert.match(sourceApply, /reverse CSS delta contract is not review-only/);
   assert.match(sourceApply, /reverse CSS delta contract is missing provenance guard/);
@@ -1910,6 +1921,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"max_replacement_source_declaration_bytes"/);
   assert.match(sourceApply, /"example_target_utility"/);
   assert.match(sourceApply, /"reverse_css_delta_preview":/);
+  assert.match(sourceApply, /"reverse_css_delta_replacement_payload_diagnostics": reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(sourceApply, /"provenance_matches_context"/);
   assert.match(sourceApply, /"group_alias"/);
   assert.match(sourceApply, /"group_registry_receipt"/);
@@ -2105,6 +2117,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     styleSourceApplyFixture.review_receipt_fields.includes(
       "css_declaration_dry_run_contract",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.review_receipt_fields.includes(
+      "reverse_css_delta_replacement_payload_diagnostics",
     ),
   );
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("mutation_ready"));

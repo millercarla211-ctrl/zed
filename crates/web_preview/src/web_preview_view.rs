@@ -2176,6 +2176,7 @@ impl WebPreviewView {
             "css_declaration_dry_run_preview_diagnostics": receipt.get("css_declaration_dry_run_preview_diagnostics").cloned(),
             "reverse_css_delta_contract": receipt.get("reverse_css_delta_contract").cloned(),
             "reverse_css_delta_preview": receipt.get("reverse_css_delta_preview").cloned(),
+            "reverse_css_delta_replacement_payload_diagnostics": receipt.get("reverse_css_delta_replacement_payload_diagnostics").cloned(),
             "dry_run_review": receipt.get("dry_run_review").cloned(),
             "native_handler": receipt.get("native_handler").cloned(),
             "apply_gate": receipt.get("apply_gate").cloned(),

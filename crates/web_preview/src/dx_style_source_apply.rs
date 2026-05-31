@@ -36,6 +36,8 @@ const CSS_DECLARATION_DRY_RUN_MAX_DECLARATION_BYTES: usize = 4096;
 const MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES: usize = 256;
 const MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES: usize = 1024;
 const MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096;
+const MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTICS: usize = 8;
+const MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTIC_BYTES: usize = 160;
 const SOURCE_DIGEST_PREFIX: &str = "fnv1a64:";
 
 pub(crate) fn active_source_digest(source: &str) -> String {
@@ -89,6 +91,14 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let reverse_css_delta_preview = request
         .get("reverse_css_delta_preview")
         .unwrap_or(&Value::Null);
+    let reverse_css_delta_replacement_payload_diagnostics = optional_bounded_string_array(
+        request,
+        "/reverse_css_delta_replacement_payload_diagnostics",
+        "reverse CSS delta replacement payload diagnostics",
+        MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTICS,
+        MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTIC_BYTES,
+        &mut reasons,
+    );
     let context = request.get("context").unwrap_or(&Value::Null);
     let native_active_editor_source_revalidation = request
         .get("native_active_editor_source_revalidation")
@@ -255,6 +265,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     ) {
         reasons.push("source-apply contract is missing reverse-delta provenance guard".to_string());
     }
+    if !string_array_contains(
+        contract,
+        "/review_receipt_fields",
+        "reverse_css_delta_replacement_payload_diagnostics",
+    ) {
+        reasons.push(
+            "source-apply contract is missing reverse-delta replacement payload diagnostics receipt field"
+                .to_string(),
+        );
+    }
     let reverse_css_delta_replacement_policy_guard_present = string_array_contains(
         contract,
         "/required_editor_guards",
@@ -397,6 +417,9 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         &reverse_css_delta_existing_utility_required_properties,
         &mut reasons,
     );
+    if !reverse_css_delta_replacement_payload_diagnostics.is_empty() {
+        reasons.push("reverse CSS delta replacement payload diagnostics are not empty".to_string());
+    }
     validate_contract_u64(
         contract,
         "max_class_name_bytes",
@@ -1099,6 +1122,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "replacement_existing_utility_found": reverse_css_delta_preview.get("replacement_existing_utility_found").and_then(Value::as_bool),
             "replacement_source_declaration": reverse_css_delta_preview.get("replacement_source_declaration").and_then(Value::as_str),
         },
+        "reverse_css_delta_replacement_payload_diagnostics": reverse_css_delta_replacement_payload_diagnostics,
         "apply_gate": {
             "state": apply_gate.get("state").and_then(Value::as_str),
             "reason": apply_gate.get("reason").and_then(Value::as_str),

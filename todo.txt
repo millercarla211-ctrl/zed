@@ -1367,6 +1367,7 @@ COMPLETED:
 - Added a DX Style source-side mirror sync/check helper for the Zed embedded visual-generator catalog, control, and recipe fixture fallbacks.
 - Added source-owned reverse CSS delta replacement payload caps in `G:\Dx\style`, mirrored them into Zed, and made native source-apply review reject oversized or malformed replacement utility arrays before source declaration comparison.
 - Added Web Preview replacement payload diagnostics so oversized reverse CSS delta replacement utilities are visible in the generator cockpit and copied source-review packets before native IPC.
+- Added native source-apply receipt preservation for Web Preview reverse CSS delta replacement payload diagnostics, with review blocked when those diagnostics are non-empty.
 
 BLOCKED:
 - None
