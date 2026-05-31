@@ -3544,6 +3544,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_requires_registry_receipt/);
   assert.match(surfaceScript, /group_can_expand_inline/);
   assert.match(surfaceScript, /group_utilities_preview/);
+  assert.match(surfaceScript, /Requires registry receipt/);
+  assert.match(surfaceScript, /Can expand inline/);
   assert.match(surfaceScript, /reverse_css_delta_contract_schema/);
   assert.match(surfaceScript, /reverse_css_delta_contract_source/);
   assert.match(surfaceScript, /reverse_css_delta_supported_properties/);

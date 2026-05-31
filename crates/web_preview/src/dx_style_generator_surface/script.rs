@@ -2219,6 +2219,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Alias</dt><dd>${escapeHtml(group?.alias || "none")}</dd>
           <dt>Syntax</dt><dd>${escapeHtml(group?.syntax || "not_grouped")}</dd>
           <dt>Expansion</dt><dd>${escapeHtml(group?.expansion_status || "not_available")}</dd>
+          <dt>Requires registry receipt</dt><dd>${group?.requires_registry_receipt === true}</dd>
+          <dt>Source owned</dt><dd>${group?.source_owned === true}</dd>
+          <dt>Can expand inline</dt><dd>${group?.can_expand_inline === true}</dd>
           <dt>Registry</dt><dd>${escapeHtml(group?.registry_receipt || "not available")}</dd>
           <dt>Reverse CSS map</dt><dd>${escapeHtml(group?.reverse_css_map_receipt || "not available")}</dd>
           <dt>Reverse CSS status</dt><dd>${escapeHtml(group?.reverse_css_map_status || "not available")}</dd>
