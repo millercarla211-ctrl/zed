@@ -3615,13 +3615,16 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /groupContextRecommendedRepresentationValues/);
   assert.match(surfaceScript, /groupContextRecommendedRepresentationSet/);
   assert.match(surfaceScript, /groupContextExpectedRecommendation/);
+  assert.match(surfaceScript, /groupContextRecommendationMatchState/);
   assert.match(surfaceScript, /group_context_recommended_representation_values/);
   assert.match(surfaceScript, /group_raw_atomic_bytes/);
   assert.match(surfaceScript, /group_grouped_reference_bytes/);
   assert.match(surfaceScript, /group_grouping_savings_bytes/);
   assert.match(surfaceScript, /group_recommended_representation/);
   assert.match(surfaceScript, /group_expected_recommended_representation/);
+  assert.match(surfaceScript, /group_recommendation_match/);
   assert.match(surfaceScript, /Expected recommendation/);
+  assert.match(surfaceScript, /Recommendation match/);
   assert.match(surfaceScript, /reportedUtilityCount/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);

@@ -681,6 +681,18 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         : null;
     }
 
+    function groupContextRecommendationMatchState(group) {
+      const expectedRecommendation = groupContextExpectedRecommendation(group);
+      const activeRecommendation = typeof group?.recommended_representation === "string"
+        && group.recommended_representation.length
+        ? group.recommended_representation
+        : null;
+      if (!expectedRecommendation && !activeRecommendation) return "not_available";
+      if (!activeRecommendation) return "missing_source_recommendation";
+      if (!expectedRecommendation) return "expected_unavailable";
+      return activeRecommendation === expectedRecommendation ? "matched" : "mismatch";
+    }
+
     function groupContextDiagnosticCode(diagnostic) {
       return String(diagnostic || "").split(":")[0];
     }
@@ -2371,6 +2383,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const group = zedStyleContext?.group_context || null;
       const totalUtilityCount = Array.isArray(group?.utilities) ? group.utilities.length : 0;
       const expectedRecommendation = groupContextExpectedRecommendation(group);
+      const recommendationMatch = groupContextRecommendationMatchState(group);
       const reportedUtilityCount = Number.isInteger(group?.utility_count)
         ? group.utility_count
         : totalUtilityCount;
@@ -2396,6 +2409,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Utilities</dt><dd>${reportedUtilityCount} / ${groupContextMaxUtilityCount || "unknown"}</dd>
           <dt>Recommendation</dt><dd>${escapeHtml(group?.recommended_representation || "not available")}</dd>
           <dt>Expected recommendation</dt><dd>${escapeHtml(expectedRecommendation || "not available")}</dd>
+          <dt>Recommendation match</dt><dd>${escapeHtml(recommendationMatch)}</dd>
           <dt>Grouping bytes</dt><dd>${Number.isInteger(group?.grouped_reference_bytes) ? group.grouped_reference_bytes : "n/a"} / ${Number.isInteger(group?.raw_atomic_bytes) ? group.raw_atomic_bytes : "n/a"}</dd>
           <dt>Grouping savings</dt><dd>${Number.isInteger(group?.grouping_savings_bytes) ? group.grouping_savings_bytes : "n/a"}</dd>
         </dl>
@@ -2639,6 +2653,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const groupUtilityPreviewInfo = groupContextUtilityPreviewInfo(groupContext);
       const groupUtilityPreview = groupUtilityPreviewInfo.preview;
       const groupContextExpectedRecommendedRepresentation = groupContextExpectedRecommendation(groupContext);
+      const groupContextRecommendationMatch = groupContext
+        ? groupContextRecommendationMatchState(groupContext)
+        : null;
       const generatorMetadata = catalogMetadataForGenerator(state.generator);
       const contextLines = zedStyleContext ? [
         `context_schema: ${zedStyleContext.schema || "unknown"}`,
@@ -2665,6 +2682,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         Number.isInteger(groupContext?.grouping_savings_bytes) ? `group_grouping_savings_bytes: ${groupContext.grouping_savings_bytes}` : null,
         groupContext?.recommended_representation ? `group_recommended_representation: ${groupContext.recommended_representation}` : null,
         groupContextExpectedRecommendedRepresentation ? `group_expected_recommended_representation: ${groupContextExpectedRecommendedRepresentation}` : null,
+        groupContextRecommendationMatch ? `group_recommendation_match: ${groupContextRecommendationMatch}` : null,
         groupContext?.expansion_status ? `group_expansion_status: ${groupContext.expansion_status}` : null,
         groupContext?.registry_receipt ? `group_registry_receipt: ${groupContext.registry_receipt}` : null,
         groupContext?.reverse_css_map_receipt ? `reverse_css_map_receipt: ${groupContext.reverse_css_map_receipt}` : null,
