@@ -2964,9 +2964,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunSchema = cssDeclarationDryRunContract\.__schema/);
   assert.match(surfaceCssDeclarationDryRunScript, /const cssDeclarationDryRunAcceptedSafety = Array\.isArray\(cssDeclarationDryRunContract\.accepted_source_edit_safety\)/);
   assert.match(surfaceScript, /const groupContextContractSchema = groupContextContract\.__schema/);
-  assert.match(surfaceScript, /const groupContextMaxAliasBytes = Number\(groupContextContract\.max_alias_bytes/);
-  assert.match(surfaceScript, /const groupContextMaxUtilityCount = Number\(groupContextContract\.max_utility_count/);
-  assert.match(surfaceScript, /const groupContextCandidateMin = Number\(groupContextContract\.candidate_min_utility_count/);
+  assert.match(surfaceScript, /const groupContextMaxAliasBytes = contractNumberLimit\(groupContextContract, "max_alias_bytes"\)/);
+  assert.match(surfaceScript, /const groupContextMaxUtilityCount = contractNumberLimit\(groupContextContract, "max_utility_count"\)/);
+  assert.match(surfaceScript, /const groupContextMaxUtilityBytes = contractNumberLimit\(groupContextContract, "max_utility_bytes"\)/);
+  assert.match(surfaceScript, /const groupContextCandidateMin = contractNumberLimit\(groupContextContract, "candidate_min_utility_count"\)/);
   assert.match(surfaceScript, /const reverseCssDeltaContractSchema = reverseCssDeltaContract\.__schema/);
   assert.match(surfaceScript, /const reverseCssDeltaSupportedProperties = Array\.isArray\(reverseCssDeltaContract\.supported_properties\)/);
   assert.match(surfaceScript, /const reverseCssDeltaRequiredGuards = Array\.isArray\(reverseCssDeltaContract\.required_editor_guards\)/);
@@ -3533,6 +3534,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /contractNumberLimit\(groupContextContract, "utility_preview_max_chars"\)/);
   assert.doesNotMatch(surfaceScript, /utility_preview_max_chars \|\| 512/);
   assert.match(surfaceScript, /group_context_utility_preview_cap_missing/);
+  assert.match(surfaceScript, /group_context_alias_cap_missing/);
+  assert.match(surfaceScript, /group_context_utility_count_cap_missing/);
+  assert.match(surfaceScript, /group_context_utility_byte_cap_missing/);
+  assert.match(surfaceScript, /group_context_candidate_min_missing/);
+  assert.match(surfaceScript, /group_context_alias_exceeds_contract_limit/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);
   assert.match(surfaceScript, /groupContextUtilityPreview/);

@@ -67,12 +67,12 @@ __DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__
 __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextContractSchema = groupContextContract.__schema || "unknown";
     const groupContextContractSource = groupContextContract.__source || "embedded:dx-style-group-context-fixture";
-    const groupContextMaxAliasBytes = Number(groupContextContract.max_alias_bytes || 0);
-    const groupContextMaxUtilityCount = Number(groupContextContract.max_utility_count || 0);
-    const groupContextMaxUtilityBytes = Number(groupContextContract.max_utility_bytes || 0);
+    const groupContextMaxAliasBytes = contractNumberLimit(groupContextContract, "max_alias_bytes");
+    const groupContextMaxUtilityCount = contractNumberLimit(groupContextContract, "max_utility_count");
+    const groupContextMaxUtilityBytes = contractNumberLimit(groupContextContract, "max_utility_bytes");
     const groupContextUtilityPreviewMaxChars =
       contractNumberLimit(groupContextContract, "utility_preview_max_chars");
-    const groupContextCandidateMin = Number(groupContextContract.candidate_min_utility_count || 0);
+    const groupContextCandidateMin = contractNumberLimit(groupContextContract, "candidate_min_utility_count");
     const groupContextSyntaxValues = Array.isArray(groupContextContract.group_call_syntax_values)
       ? normalizedStringValues(groupContextContract.group_call_syntax_values)
       : [];
@@ -522,8 +522,25 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       if (!Number.isInteger(groupContextUtilityPreviewMaxChars)) {
         diagnostics.push("group_context_utility_preview_cap_missing");
       }
+      if (!Number.isInteger(groupContextMaxAliasBytes)) {
+        diagnostics.push("group_context_alias_cap_missing");
+      }
+      if (!Number.isInteger(groupContextMaxUtilityCount)) {
+        diagnostics.push("group_context_utility_count_cap_missing");
+      }
+      if (!Number.isInteger(groupContextMaxUtilityBytes)) {
+        diagnostics.push("group_context_utility_byte_cap_missing");
+      }
+      if (!Number.isInteger(groupContextCandidateMin)) {
+        diagnostics.push("group_context_candidate_min_missing");
+      }
       const syntax = String(group.syntax || "");
       const status = String(group.status || "");
+      const alias = String(group.alias || "");
+      if (alias && Number.isInteger(groupContextMaxAliasBytes)
+        && utf8ByteLength(alias) > groupContextMaxAliasBytes) {
+        diagnostics.push("group_context_alias_exceeds_contract_limit");
+      }
       if (!syntax) {
         diagnostics.push("group_context_syntax_missing");
       } else if (groupContextSyntaxSet.size && !groupContextSyntaxSet.has(syntax)) {
@@ -588,14 +605,17 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
 
     function boundedGroupContextUtilities(group) {
       const utilities = Array.isArray(group?.utilities) ? group.utilities : [];
-      const maxCount = groupContextMaxUtilityCount || utilities.length;
+      if (!Number.isInteger(groupContextMaxUtilityCount)
+        || !Number.isInteger(groupContextMaxUtilityBytes)) {
+        return [];
+      }
       return utilities
         .filter((utility) =>
           typeof utility === "string"
           && utility.length
-          && (!groupContextMaxUtilityBytes || utf8ByteLength(utility) <= groupContextMaxUtilityBytes)
+          && utf8ByteLength(utility) <= groupContextMaxUtilityBytes
         )
-        .slice(0, maxCount);
+        .slice(0, groupContextMaxUtilityCount);
     }
 
     function exceedsContractLimit(value, limit) {
