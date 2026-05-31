@@ -19,6 +19,17 @@
     "css_hint_property_pattern",
     "css_hint_property_match"
   ],
+  "required_css_declaration_hint_fields": [
+    "schema",
+    "hint_ordinal",
+    "property",
+    "property_pattern",
+    "property_match",
+    "value_contains",
+    "token_hint",
+    "generator_id",
+    "source_edit_safety"
+  ],
   "required_review_guards": [
     "active context schema match",
     "css declaration context kind",

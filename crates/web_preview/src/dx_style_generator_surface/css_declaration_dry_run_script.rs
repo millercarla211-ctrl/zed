@@ -5,6 +5,10 @@ const DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS_SCRIPT: &str = r##"    const cs
     const cssDeclarationDryRunRequiredFields = Array.isArray(cssDeclarationDryRunContract.required_context_fields)
       ? cssDeclarationDryRunContract.required_context_fields
       : [];
+    const cssDeclarationDryRunRequiredHintFields =
+      Array.isArray(cssDeclarationDryRunContract.required_css_declaration_hint_fields)
+        ? cssDeclarationDryRunContract.required_css_declaration_hint_fields
+        : [];
     const cssDeclarationDryRunAcceptedSafety = Array.isArray(cssDeclarationDryRunContract.accepted_source_edit_safety)
       ? cssDeclarationDryRunContract.accepted_source_edit_safety
       : [];

@@ -1,3 +1,19 @@
+[2026-05-31] - DX Style CSS Declaration Hint Match Guard
+
+CHANGED:
+- `G:\Dx\style` source-apply and CSS declaration dry-run contracts now source-own required CSS declaration hint packet fields.
+- `crates\web_preview\src\dx_style_generator_surface` now reports CSS hint field contract drift and active-context mismatch before sending native source-apply review IPC.
+- `crates\web_preview\src\dx_style_source_apply.rs` now validates CSS declaration hint schema, ordinal, property, pattern, match rule, value filters, token, generator, and source-edit safety against the active Zed context.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the stronger hint provenance match.
+
+PASSED:
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\css_declaration_dry_run.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\web_preview\src\dx_style_generator_surface\css_declaration_dry_run_script.rs crates\web_preview\src\dx_style_source_apply.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts`
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style CSS Declaration Hint Provenance
 
 CHANGED:

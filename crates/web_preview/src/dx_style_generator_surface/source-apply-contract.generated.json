@@ -47,6 +47,17 @@
     "editor write bridge can_apply",
     "explicit user apply action"
   ],
+  "required_css_declaration_hint_fields": [
+    "schema",
+    "hint_ordinal",
+    "property",
+    "property_pattern",
+    "property_match",
+    "value_contains",
+    "token_hint",
+    "generator_id",
+    "source_edit_safety"
+  ],
   "review_receipt_fields": [
     "review_status",
     "mutation_ready",

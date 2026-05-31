@@ -66,6 +66,10 @@ __DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__
     const sourceApplyRequiredEditorGuards = Array.isArray(sourceApplyContract.required_editor_guards)
       ? sourceApplyContract.required_editor_guards
       : [];
+    const sourceApplyRequiredCssDeclarationHintFields =
+      Array.isArray(sourceApplyContract.required_css_declaration_hint_fields)
+        ? sourceApplyContract.required_css_declaration_hint_fields
+        : [];
     const reverseCssDeltaReplacementPolicyGuard = "reverse CSS delta replacement policy match";
 __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextContractSchema = groupContextContract.__schema || "unknown";
@@ -825,6 +829,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
 
     function sourceApplyPayloadDiagnostics(context, output) {
       const diagnostics = [];
+      diagnostics.push(...cssDeclarationHintDiagnostics(context));
       if (exceedsContractLimit(state.generator, sourceApplyByteLimits.generator)) {
         diagnostics.push("generator_id_exceeds_contract_limit");
       }
@@ -1625,6 +1630,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         contract: sourceApplyContract,
         css_declaration_dry_run_contract: cssDeclarationDryRunContract,
         css_declaration_hint: cssDeclarationHintPacket(zedStyleContext),
+        css_declaration_hint_diagnostics: cssDeclarationHintDiagnostics(zedStyleContext),
         css_declaration_dry_run_diagnostics: cssDeclarationDryRunContextDiagnostics(zedStyleContext),
         css_declaration_dry_run_preview: cssDeclarationPreview,
         css_declaration_dry_run_preview_diagnostics: cssDeclarationDryRunContextPreviewDiagnostics(cssDeclarationPreview),
@@ -1652,6 +1658,82 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         generator_id: context.css_generator || null,
         source_edit_safety: context.css_source_edit_safety || null
       };
+    }
+
+    function cssDeclarationHintDiagnostics(context = zedStyleContext) {
+      if (context?.context_kind !== "css_declaration") return [];
+      const diagnostics = [];
+      const packet = cssDeclarationHintPacket(context);
+      const sourceApplyFields = normalizedStringValues(sourceApplyRequiredCssDeclarationHintFields);
+      const dryRunFields = normalizedStringValues(cssDeclarationDryRunRequiredHintFields);
+      const requiredFields = sourceApplyFields.length ? sourceApplyFields : dryRunFields;
+      const supportedFields = new Set([
+        "schema",
+        "hint_ordinal",
+        "property",
+        "property_pattern",
+        "property_match",
+        "value_contains",
+        "token_hint",
+        "generator_id",
+        "source_edit_safety"
+      ]);
+
+      if (!sourceApplyFields.length) {
+        diagnostics.push("source_apply_contract_missing_css_declaration_hint_fields");
+      }
+      if (!dryRunFields.length) {
+        diagnostics.push("css_declaration_dry_run_contract_missing_hint_fields");
+      }
+      if (sourceApplyFields.length
+        && dryRunFields.length
+        && sourceApplyFields.join("\u0000") !== dryRunFields.join("\u0000")) {
+        diagnostics.push("css_declaration_hint_field_contract_mismatch");
+      }
+      if (!packet) {
+        diagnostics.push("css_declaration_hint_missing");
+        return diagnostics;
+      }
+
+      const expected = {
+        schema: "zed.dx_style.css_declaration_hint.v1",
+        hint_ordinal: Number.isInteger(context.css_hint_ordinal) ? context.css_hint_ordinal : null,
+        property: context.css_property || null,
+        property_pattern: context.css_hint_property_pattern || null,
+        property_match: context.css_hint_property_match || null,
+        value_contains: Array.isArray(context.css_hint_value_contains)
+          ? context.css_hint_value_contains
+          : [],
+        token_hint: context.token || null,
+        generator_id: context.css_generator || null,
+        source_edit_safety: context.css_source_edit_safety || null
+      };
+
+      for (const field of requiredFields) {
+        if (!supportedFields.has(field)) {
+          diagnostics.push(`css_declaration_hint_unsupported_required_field:${field}`);
+          continue;
+        }
+        if (!(field in packet)) {
+          diagnostics.push(`css_declaration_hint_missing_field:${field}`);
+          continue;
+        }
+        if (field === "value_contains") {
+          const packetValues = Array.isArray(packet.value_contains) ? packet.value_contains : [];
+          const expectedValues = Array.isArray(expected.value_contains) ? expected.value_contains : [];
+          if (packetValues.length !== expectedValues.length
+            || packetValues.some((value, index) => value !== expectedValues[index])) {
+            diagnostics.push("css_declaration_hint_value_contains_mismatch");
+          }
+          continue;
+        }
+        if (packet[field] === null || packet[field] === undefined) {
+          diagnostics.push(`css_declaration_hint_missing_value:${field}`);
+        } else if (packet[field] !== expected[field]) {
+          diagnostics.push(`css_declaration_hint_mismatch:${field}`);
+        }
+      }
+      return diagnostics;
     }
 
     function handleReviewApplyClick() {
@@ -1775,6 +1857,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             accepted_source_edit_safety: cssDeclarationDryRunAcceptedSafety
           },
           css_declaration_hint: cssDeclarationHintPacket(zedStyleContext),
+          css_declaration_hint_diagnostics: cssDeclarationHintDiagnostics(zedStyleContext),
           css_declaration_dry_run_diagnostics: cssDeclarationDiagnostics,
           css_declaration_dry_run_preview: cssDeclarationPreview,
           css_declaration_dry_run_preview_diagnostics: cssDeclarationPreviewDiagnostics,
@@ -2742,6 +2825,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const applyGate = zedStyleContext?.apply_gate || null;
       const metadataAligned = metadataDiagnostics.status === "aligned";
       const payloadDiagnostics = sourceApplyPayloadDiagnostics(zedStyleContext, output);
+      const cssDeclarationHintDiagnosticList = cssDeclarationHintDiagnostics(zedStyleContext);
       const cssDeclarationDiagnostics = cssDeclarationDryRunContextDiagnostics(zedStyleContext);
       const cssDeclarationPreview = cssDeclarationDryRunPreview(output);
       const cssDeclarationPreviewDiagnostics = cssDeclarationDryRunContextPreviewDiagnostics(cssDeclarationPreview);
@@ -2844,6 +2928,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             ? "Source apply payload exceeds DX Style contract limits."
             : groupContextDiagnostics.length
               ? "Grouped class context is outside the DX Style contract vocabulary."
+            : cssDeclarationHintDiagnosticList.length
+              ? "CSS declaration source review is gated by hint provenance mismatch."
             : cssDeclarationDiagnostics.length || cssDeclarationPreviewDiagnostics.length
               ? "CSS declaration source review is gated by the DX Style dry-run contract."
               : applyGate?.reason || "Source apply is gated.";
@@ -2938,14 +3024,18 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `source_apply_review_context_kinds: ${sourceApplyReviewContextKinds.length}`,
         `source_apply_mutation_context_kinds: ${sourceApplyMutationContextKinds.length}`,
         `source_apply_review_receipt_fields: ${sourceApplyReviewReceiptFields.length}`,
+        `source_apply_required_css_declaration_hint_fields: ${sourceApplyRequiredCssDeclarationHintFields.length}`,
         `css_declaration_dry_run_contract_schema: ${cssDeclarationDryRunSchema}`,
         `css_declaration_dry_run_contract_source: ${cssDeclarationDryRunSource}`,
         `css_declaration_dry_run_context_kind: ${cssDeclarationDryRunContextKind}`,
         `css_declaration_dry_run_mutation_enabled: ${cssDeclarationDryRunMutationEnabled}`,
         `css_declaration_dry_run_required_context_fields: ${cssDeclarationDryRunRequiredFields.length}`,
+        `css_declaration_dry_run_required_hint_fields: ${cssDeclarationDryRunRequiredHintFields.length}`,
         `css_declaration_dry_run_accepted_safety: ${cssDeclarationDryRunAcceptedSafety.length}`,
         `css_declaration_dry_run_review_receipt_fields: ${cssDeclarationDryRunReviewReceiptFields.length}`,
         `css_declaration_hint_present: ${cssDeclarationHintPacket(zedStyleContext) ? "true" : "false"}`,
+        `css_declaration_hint_diagnostics: ${cssDeclarationHintDiagnosticList.length}`,
+        ...cssDeclarationHintDiagnosticList.map((diagnostic) => `css_declaration_hint_diagnostic: ${diagnostic}`),
         `css_declaration_dry_run_max_declaration_bytes: ${cssDeclarationDryRunMaxDeclarationBytes || "unknown"}`,
         `css_declaration_dry_run_max_diagnostic_count: ${cssDeclarationDryRunMaxDiagnosticCount || "unknown"}`,
         `css_declaration_dry_run_max_diagnostic_bytes: ${cssDeclarationDryRunMaxDiagnosticBytes || "unknown"}`,

@@ -5,6 +5,7 @@ const DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_SCHEMA: &str =
     "dx.style.grouped-class-reverse-css-delta-contract";
 const DX_STYLE_CSS_DECLARATION_DRY_RUN_CONTRACT_SCHEMA: &str =
     "dx.style.css-declaration-dry-run-contract";
+const DX_STYLE_CSS_DECLARATION_HINT_SCHEMA: &str = "zed.dx_style.css_declaration_hint.v1";
 pub(crate) const DX_STYLE_SOURCE_APPLY_RECEIPT_SCHEMA: &str =
     "zed.web_preview.dx_style_source_apply_receipt.v1";
 
@@ -478,6 +479,13 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if !string_array_contains(contract, "/review_receipt_fields", "css_declaration_hint") {
         reasons.push(
             "source-apply contract is missing CSS declaration hint receipt field".to_string(),
+        );
+    }
+    let source_apply_required_css_declaration_hint_fields =
+        string_array_at(contract, "/required_css_declaration_hint_fields");
+    if source_apply_required_css_declaration_hint_fields.is_empty() {
+        reasons.push(
+            "source-apply contract is missing CSS declaration hint required fields".to_string(),
         );
     }
     let reverse_css_delta_replacement_policy_guard_present = string_array_contains(
@@ -1180,6 +1188,31 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
                 ));
             }
         }
+        let css_declaration_dry_run_required_hint_fields = string_array_at(
+            css_declaration_dry_run_contract,
+            "/required_css_declaration_hint_fields",
+        );
+        if css_declaration_dry_run_required_hint_fields.is_empty() {
+            reasons.push(
+                "CSS declaration dry-run contract is missing hint required fields".to_string(),
+            );
+        }
+        if !css_declaration_dry_run_required_hint_fields.is_empty()
+            && !source_apply_required_css_declaration_hint_fields.is_empty()
+            && css_declaration_dry_run_required_hint_fields
+                != source_apply_required_css_declaration_hint_fields
+        {
+            reasons.push(
+                "CSS declaration hint required fields do not match source-apply contract"
+                    .to_string(),
+            );
+        }
+        validate_css_declaration_hint_provenance(
+            &css_declaration_hint,
+            context,
+            &source_apply_required_css_declaration_hint_fields,
+            &mut reasons,
+        );
         for field in [
             "css_declaration_hint",
             "css_declaration_dry_run_diagnostics",
@@ -1457,6 +1490,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "reverse_delta_replacement_policy_guard_present": reverse_css_delta_replacement_policy_guard_present,
             "review_context_kinds": string_array_at(contract, "/review_context_kinds"),
             "mutation_context_kinds_when_enabled": string_array_at(contract, "/mutation_context_kinds_when_enabled"),
+            "required_css_declaration_hint_fields": source_apply_required_css_declaration_hint_fields.clone(),
             "max_source_path_bytes": contract.get("max_source_path_bytes").and_then(Value::as_u64),
             "max_class_name_bytes": contract.get("max_class_name_bytes").and_then(Value::as_u64),
             "max_css_bytes": contract.get("max_css_bytes").and_then(Value::as_u64),
@@ -1490,7 +1524,9 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "max_source_digest_bytes": css_declaration_dry_run_contract.get("max_source_digest_bytes").and_then(Value::as_u64),
             "accepted_source_edit_safety": string_array_at(css_declaration_dry_run_contract, "/accepted_source_edit_safety"),
             "review_receipt_fields": string_array_at(css_declaration_dry_run_contract, "/review_receipt_fields"),
+            "required_css_declaration_hint_fields": string_array_at(css_declaration_dry_run_contract, "/required_css_declaration_hint_fields"),
             "required_context_field_count": css_declaration_dry_run_contract.get("required_context_fields").and_then(Value::as_array).map(|fields| fields.len()),
+            "required_hint_field_count": css_declaration_dry_run_contract.get("required_css_declaration_hint_fields").and_then(Value::as_array).map(|fields| fields.len()),
             "review_receipt_field_count": css_declaration_dry_run_contract.get("review_receipt_fields").and_then(Value::as_array).map(|fields| fields.len()),
         },
         "css_declaration_dry_run_diagnostics": css_declaration_dry_run_diagnostics,
@@ -2859,6 +2895,182 @@ fn css_declaration_hint_evidence(value: &Value, reasons: &mut Vec<String>) -> Va
             reasons,
         ),
     })
+}
+
+fn validate_css_declaration_hint_provenance(
+    hint: &Value,
+    context: &Value,
+    required_fields: &[&str],
+    reasons: &mut Vec<String>,
+) {
+    if hint.is_null() || required_fields.is_empty() {
+        return;
+    }
+
+    for field in required_fields {
+        if hint.get(field).is_none() {
+            reasons.push(format!(
+                "CSS declaration hint required field {field} is missing"
+            ));
+            continue;
+        }
+        match *field {
+            "schema" => compare_css_hint_fixed_str(
+                hint,
+                "schema",
+                DX_STYLE_CSS_DECLARATION_HINT_SCHEMA,
+                "schema",
+                reasons,
+            ),
+            "hint_ordinal" => compare_css_hint_u64(
+                hint,
+                "hint_ordinal",
+                context,
+                "css_hint_ordinal",
+                "ordinal",
+                reasons,
+            ),
+            "property" => compare_css_hint_str(
+                hint,
+                "property",
+                context,
+                "css_property",
+                "property",
+                reasons,
+            ),
+            "property_pattern" => compare_css_hint_str(
+                hint,
+                "property_pattern",
+                context,
+                "css_hint_property_pattern",
+                "property pattern",
+                reasons,
+            ),
+            "property_match" => compare_css_hint_str(
+                hint,
+                "property_match",
+                context,
+                "css_hint_property_match",
+                "property match",
+                reasons,
+            ),
+            "value_contains" => compare_css_hint_string_array(
+                hint,
+                "value_contains",
+                context,
+                "css_hint_value_contains",
+                "value filters",
+                reasons,
+            ),
+            "token_hint" => {
+                compare_css_hint_str(hint, "token_hint", context, "token", "token", reasons)
+            }
+            "generator_id" => compare_css_hint_str(
+                hint,
+                "generator_id",
+                context,
+                "css_generator",
+                "generator",
+                reasons,
+            ),
+            "source_edit_safety" => compare_css_hint_str(
+                hint,
+                "source_edit_safety",
+                context,
+                "css_source_edit_safety",
+                "source edit safety",
+                reasons,
+            ),
+            unsupported => reasons.push(format!(
+                "CSS declaration hint contract requires unsupported field {unsupported}"
+            )),
+        }
+    }
+}
+
+fn compare_css_hint_fixed_str(
+    hint: &Value,
+    hint_field: &str,
+    expected: &str,
+    label: &str,
+    reasons: &mut Vec<String>,
+) {
+    match hint.get(hint_field).and_then(Value::as_str) {
+        Some(actual) if actual == expected => {}
+        Some(_) => reasons.push(format!("CSS declaration hint {label} does not match")),
+        None => reasons.push(format!("CSS declaration hint {label} is missing")),
+    }
+}
+
+fn compare_css_hint_str(
+    hint: &Value,
+    hint_field: &str,
+    context: &Value,
+    context_field: &str,
+    label: &str,
+    reasons: &mut Vec<String>,
+) {
+    let hint_value = hint.get(hint_field).and_then(Value::as_str);
+    let context_value = context.get(context_field).and_then(Value::as_str);
+    match (hint_value, context_value) {
+        (Some(hint_value), Some(context_value)) if hint_value == context_value => {}
+        (None, _) => reasons.push(format!("CSS declaration hint {label} is missing")),
+        (_, None) => reasons.push(format!("active CSS declaration context {label} is missing")),
+        (Some(_), Some(_)) => reasons.push(format!(
+            "CSS declaration hint {label} does not match active context"
+        )),
+    }
+}
+
+fn compare_css_hint_u64(
+    hint: &Value,
+    hint_field: &str,
+    context: &Value,
+    context_field: &str,
+    label: &str,
+    reasons: &mut Vec<String>,
+) {
+    let hint_value = hint.get(hint_field).and_then(Value::as_u64);
+    let context_value = context.get(context_field).and_then(Value::as_u64);
+    match (hint_value, context_value) {
+        (Some(hint_value), Some(context_value)) if hint_value == context_value => {}
+        (None, _) => reasons.push(format!("CSS declaration hint {label} is missing")),
+        (_, None) => reasons.push(format!("active CSS declaration context {label} is missing")),
+        (Some(_), Some(_)) => reasons.push(format!(
+            "CSS declaration hint {label} does not match active context"
+        )),
+    }
+}
+
+fn compare_css_hint_string_array(
+    hint: &Value,
+    hint_field: &str,
+    context: &Value,
+    context_field: &str,
+    label: &str,
+    reasons: &mut Vec<String>,
+) {
+    if hint.get(hint_field).and_then(Value::as_array).is_none() {
+        reasons.push(format!("CSS declaration hint {label} are missing"));
+        return;
+    }
+    if context
+        .get(context_field)
+        .and_then(Value::as_array)
+        .is_none()
+    {
+        reasons.push(format!(
+            "active CSS declaration context {label} are missing"
+        ));
+        return;
+    }
+    let hint_values = string_array_at(hint, &format!("/{hint_field}"));
+    let context_values = string_array_at(context, &format!("/{context_field}"));
+    if hint_values != context_values {
+        reasons.push(format!(
+            "CSS declaration hint {label} do not match active context"
+        ));
+    }
 }
 
 fn string_slice_contains_case_insensitive(values: &[&str], expected: &str) -> bool {
