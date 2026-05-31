@@ -871,6 +871,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupWebPreviewContext, /static atomic utility list/);
   assert.match(groupWebPreviewContext, /group_call_syntax_values/);
   assert.match(groupWebPreviewContext, /group_call_status_values/);
+  assert.match(groupWebPreviewContext, /group_call_status_by_syntax/);
+  assert.match(groupWebPreviewContext, /GroupedClassGroupCallStatusRule/);
   assert.match(groupWebPreviewContext, /source_declaration/);
   assert.match(groupWebPreviewContext, /source_group_declaration/);
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_ALIAS_BYTES: usize = 128/);
@@ -895,6 +897,12 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(groupWebPreviewContextFixture.group_call_syntax_values.includes("source_declaration"));
   assert.ok(
     groupWebPreviewContextFixture.group_call_status_values.includes("source_group_declaration"),
+  );
+  assert.deepEqual(
+    groupWebPreviewContextFixture.group_call_status_by_syntax.find(
+      (rule) => rule.syntax === "source_declaration",
+    )?.statuses,
+    ["source_group_declaration"],
   );
   assert.ok(groupWebPreviewContextFixture.context_fields.includes("group_context.utilities"));
   assert.ok(
@@ -2833,6 +2841,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceGroupContextContract, /group_context_fixture_to_web_preview_json/);
   assert.match(surfaceGroupContextContract, /group_call_syntax_values/);
   assert.match(surfaceGroupContextContract, /group_call_status_values/);
+  assert.match(surfaceGroupContextContract, /group_call_status_by_syntax/);
   assert.match(surfaceGroupContextContract, /max_alias_bytes/);
   assert.match(surfaceGroupContextContract, /max_utility_count/);
   assert.match(surfaceGroupContextContract, /candidate_min_utility_count/);
@@ -3508,6 +3517,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /group_context_syntax_values/);
   assert.match(surfaceScript, /group_context_status_values/);
+  assert.match(surfaceScript, /groupContextStatusRulesBySyntax/);
+  assert.match(surfaceScript, /Object\.create\(null\)/);
+  assert.match(surfaceScript, /groupContextVocabularyDiagnostics/);
+  assert.match(surfaceScript, /group_context_status_rules/);
+  assert.match(surfaceScript, /group_context_vocabulary_diagnostics/);
+  assert.match(surfaceScript, /group_context_status_mismatch/);
   assert.match(surfaceScript, /reverse_css_delta_contract_schema/);
   assert.match(surfaceScript, /reverse_css_delta_contract_source/);
   assert.match(surfaceScript, /reverse_css_delta_supported_properties/);

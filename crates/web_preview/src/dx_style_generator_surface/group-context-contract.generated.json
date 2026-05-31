@@ -24,6 +24,33 @@
     "source_group_declaration",
     "atomic_list_candidate"
   ],
+  "group_call_status_by_syntax": [
+    {
+      "syntax": "alias_reference",
+      "statuses": [
+        "alias_reference",
+        "alias_reference_expanded"
+      ]
+    },
+    {
+      "syntax": "inline_utilities",
+      "statuses": [
+        "inline_group_declaration"
+      ]
+    },
+    {
+      "syntax": "source_declaration",
+      "statuses": [
+        "source_group_declaration"
+      ]
+    },
+    {
+      "syntax": "static_atomic_utility_list",
+      "statuses": [
+        "atomic_list_candidate"
+      ]
+    }
+  ],
   "context_fields": [
     "group_context.schema",
     "group_context.status",

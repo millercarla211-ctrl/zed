@@ -72,11 +72,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextMaxUtilityBytes = Number(groupContextContract.max_utility_bytes || 0);
     const groupContextCandidateMin = Number(groupContextContract.candidate_min_utility_count || 0);
     const groupContextSyntaxValues = Array.isArray(groupContextContract.group_call_syntax_values)
-      ? groupContextContract.group_call_syntax_values
+      ? normalizedStringValues(groupContextContract.group_call_syntax_values)
       : [];
     const groupContextStatusValues = Array.isArray(groupContextContract.group_call_status_values)
-      ? groupContextContract.group_call_status_values
+      ? normalizedStringValues(groupContextContract.group_call_status_values)
       : [];
+    const groupContextSyntaxSet = new Set(groupContextSyntaxValues);
+    const groupContextStatusSet = new Set(groupContextStatusValues);
+    const groupContextStatusBySyntax =
+      groupContextStatusRulesBySyntax(groupContextContract.group_call_status_by_syntax);
     const reverseCssDeltaContractSchema = reverseCssDeltaContract.__schema || "unknown";
     const reverseCssDeltaContractSource = reverseCssDeltaContract.__source || "embedded:dx-style-reverse-css-delta-contract-fixture";
     const reverseCssDeltaMutationEnabled = reverseCssDeltaContract.source_mutation_enabled === true;
@@ -263,6 +267,25 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       return Object.keys(source || {}).filter((id) =>
         id !== "default" && !id.startsWith("__")
       );
+    }
+
+    function normalizedStringValues(values) {
+      return values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+    }
+
+    function groupContextStatusRulesBySyntax(rules) {
+      const bySyntax = Object.create(null);
+      if (!Array.isArray(rules)) return bySyntax;
+      for (const rule of rules) {
+        const syntax = String(rule?.syntax || "").trim();
+        if (!syntax) continue;
+        bySyntax[syntax] = Array.isArray(rule?.statuses)
+          ? normalizedStringValues(rule.statuses)
+          : [];
+      }
+      return bySyntax;
     }
 
     function templatePlaceholderKeys(template) {
@@ -474,6 +497,37 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       if (start > end) return false;
       if (!sourceLengthReady(context)) return false;
       return end <= context.source_len_bytes;
+    }
+
+    function groupContextVocabularyDiagnostics(context) {
+      const group = context?.group_context;
+      if (!group || group.status === "none" || group.syntax === "not_grouped") return [];
+      const diagnostics = [];
+      const syntax = String(group.syntax || "");
+      const status = String(group.status || "");
+      if (!syntax) {
+        diagnostics.push("group_context_syntax_missing");
+      } else if (groupContextSyntaxSet.size && !groupContextSyntaxSet.has(syntax)) {
+        diagnostics.push(`group_context_syntax_unsupported:${syntax}`);
+      }
+      if (!status) {
+        diagnostics.push("group_context_status_missing");
+      } else if (groupContextStatusSet.size && !groupContextStatusSet.has(status)) {
+        diagnostics.push(`group_context_status_unsupported:${status}`);
+      }
+      const expectedStatuses = groupContextStatusBySyntax[syntax] || [];
+      if (expectedStatuses.length && status && !expectedStatuses.includes(status)) {
+        diagnostics.push(`group_context_status_mismatch:${syntax}:${status}`);
+      }
+      if ((syntax === "inline_utilities" || syntax === "source_declaration")
+        && !Array.isArray(group.utilities)) {
+        diagnostics.push("group_context_utilities_missing");
+      }
+      if ((syntax === "inline_utilities" || syntax === "source_declaration")
+        && Array.isArray(group.utilities) && !group.utilities.length) {
+        diagnostics.push("group_context_utilities_empty");
+      }
+      return [...new Set(diagnostics)];
     }
 
     function exceedsContractLimit(value, limit) {
@@ -719,6 +773,8 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
       if (!sourceLengthReady(context)) return "missing_source_length";
       if (!sourceSpanReady(context)) return "invalid_source_span";
       if (!sourceDigestReady(context)) return "missing_or_invalid_source_digest";
+      const groupContextDiagnostics = groupContextVocabularyDiagnostics(context);
+      if (groupContextDiagnostics.length) return groupContextDiagnostics[0];
       const payloadDiagnostics = sourceApplyPayloadDiagnostics(context, output);
       if (payloadDiagnostics.length) return payloadDiagnostics[0];
       const cssDeclarationPreviewDiagnostics = cssDeclarationDryRunContextPreviewDiagnostics(
@@ -794,6 +850,8 @@ __DX_STYLE_SOURCE_APPLY_SESSION_HANDLER__
       if (!sourceLengthReady(context)) return "missing_source_length";
       if (!sourceSpanReady(context)) return "invalid_source_span";
       if (!sourceDigestReady(context)) return "missing_or_invalid_source_digest";
+      const groupContextDiagnostics = groupContextVocabularyDiagnostics(context);
+      if (groupContextDiagnostics.length) return groupContextDiagnostics[0];
       const payloadDiagnostics = sourceApplyPayloadDiagnostics(context, output);
       if (payloadDiagnostics.length) return payloadDiagnostics[0];
       const cssDeclarationDiagnostics = cssDeclarationDryRunContextDiagnostics(context);
@@ -2362,6 +2420,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const applyReady = sourceApplyReady(applyGate, metadataAligned, zedStyleContext, output);
       const applyBlocker = sourceApplyBlocker(applyGate, metadataAligned, zedStyleContext, output);
       const groupContext = zedStyleContext?.group_context || null;
+      const groupContextDiagnostics = groupContextVocabularyDiagnostics(zedStyleContext);
       const generatorMetadata = catalogMetadataForGenerator(state.generator);
       const contextLines = zedStyleContext ? [
         `context_schema: ${zedStyleContext.schema || "unknown"}`,
@@ -2424,6 +2483,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           ? "Zed Style context schema is unsupported."
           : payloadDiagnostics.length
             ? "Source apply payload exceeds DX Style contract limits."
+            : groupContextDiagnostics.length
+              ? "Grouped class context is outside the DX Style contract vocabulary."
             : cssDeclarationDiagnostics.length || cssDeclarationPreviewDiagnostics.length
               ? "CSS declaration source review is gated by the DX Style dry-run contract."
               : applyGate?.reason || "Source apply is gated.";
@@ -2469,6 +2530,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_candidate_min_utility_count: ${groupContextCandidateMin || "unknown"}`,
         `group_context_syntax_values: ${groupContextSyntaxValues.length}`,
         `group_context_status_values: ${groupContextStatusValues.length}`,
+        `group_context_status_rules: ${Object.keys(groupContextStatusBySyntax).length}`,
         `reverse_css_delta_contract_schema: ${reverseCssDeltaContractSchema}`,
         `reverse_css_delta_contract_source: ${reverseCssDeltaContractSource}`,
         `reverse_css_delta_mutation_enabled: ${reverseCssDeltaMutationEnabled}`,
@@ -2543,6 +2605,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `source_apply_max_preview_anatomy_parts: ${sourceApplyByteLimits.previewAnatomyParts || "unknown"}`,
         `source_apply_payload_diagnostics: ${payloadDiagnostics.length}`,
         ...payloadDiagnostics.map((diagnostic) => `source_apply_payload_diagnostic: ${diagnostic}`),
+        `group_context_vocabulary_diagnostics: ${groupContextDiagnostics.length}`,
+        ...groupContextDiagnostics.map((diagnostic) => `group_context_vocabulary_diagnostic: ${diagnostic}`),
         `metadata_status: ${metadataDiagnostics.status}`,
         `metadata_generators: ${metadataDiagnostics.generatorCount}`,
         `metadata_missing_controls: ${metadataDiagnostics.missingControls.length}`,

@@ -56,6 +56,7 @@ fn group_context_fixture_to_web_preview_json(fixture: Value, source_path: &str) 
         "supported_token_shapes": fixture.get("supported_token_shapes")?.as_array()?,
         "group_call_syntax_values": fixture.get("group_call_syntax_values")?.as_array()?,
         "group_call_status_values": fixture.get("group_call_status_values")?.as_array()?,
+        "group_call_status_by_syntax": fixture.get("group_call_status_by_syntax")?.as_array()?,
         "context_fields": fixture.get("context_fields")?.as_array()?,
         "max_alias_bytes": fixture.get("max_alias_bytes")?.as_u64()?,
         "max_utility_count": fixture.get("max_utility_count")?.as_u64()?,

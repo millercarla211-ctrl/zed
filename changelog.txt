@@ -1,3 +1,24 @@
+[2026-05-31] - DX Style Group Context Vocabulary Validation
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-group-context-vocabulary-validation-plan.md` records the source-only plan for validating active grouped-class vocabulary in Web Preview.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` and `G:\Dx\style\fixtures\grouped-class-web-preview-context.json` now source-own the allowed status set for each grouped-class syntax.
+- `crates\web_preview\src\dx_style_generator_surface\group-context-contract.generated.json` mirrors the updated source-owned fixture.
+- `crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs` passes the syntax-to-status rules into the Web Preview contract.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` validates active group context syntax/status before source review or apply readiness can pass, with explicit vocabulary diagnostics.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the source-owned validation boundary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its source/fixture changes are changed on disk and mirrored/guarded through the Zed commit.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Group Context Vocabulary Fixture
 
 ADDED:
