@@ -44,6 +44,30 @@ const MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096;
 const MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTICS: usize = 8;
 const MAX_REVERSE_DELTA_REPLACEMENT_PAYLOAD_DIAGNOSTIC_BYTES: usize = 160;
 const SOURCE_DIGEST_PREFIX: &str = "fnv1a64:";
+const SOURCE_APPLY_REVIEW_RECEIPT_FIELDS: &[&str] = &[
+    "review_status",
+    "mutation_ready",
+    "dry_run_review",
+    "context_kind",
+    "css_source_edit_safety",
+    "source_apply_session",
+    "preview_output",
+    "css_declaration_dry_run_contract",
+    "css_declaration_dry_run_diagnostics",
+    "css_declaration_dry_run_preview",
+    "css_declaration_dry_run_preview_diagnostics",
+    "reverse_css_delta_contract",
+    "reverse_css_delta_preview",
+    "reverse_css_delta_replacement_payload_diagnostics",
+    "apply_gate",
+    "dry_run_edit_review",
+    "native_writer_dry_run_replay",
+    "native_writer_commit_plan",
+    "user_apply_action",
+    "source_write_readiness",
+    "native_active_editor_source_revalidation",
+    "native_handler",
+];
 
 pub(crate) fn active_source_digest(source: &str) -> String {
     let mut hash = 0xcbf29ce484222325u64;
@@ -1405,6 +1429,8 @@ fn source_write_readiness(
         .get("runtime_validation_required")
         .and_then(Value::as_bool);
     let dry_run_edit_review_status = dry_run_edit_review.get("status").and_then(Value::as_str);
+    let missing_required_review_receipt_fields =
+        missing_required_review_receipt_fields(editor_write_bridge);
 
     let mut missing_requirements = Vec::new();
     if contract_source_mutation_enabled != Some(true) {
@@ -1497,6 +1523,9 @@ fn source_write_readiness(
     if !native_can_mutate_source {
         missing_requirements.push("native_writer_can_mutate_false");
     }
+    if !missing_required_review_receipt_fields.is_empty() {
+        missing_requirements.push("write_bridge_required_review_receipt_fields_missing");
+    }
     if runtime_validation_required == Some(true) {
         missing_requirements.push("runtime_webview_build_proof_missing");
     }
@@ -1548,6 +1577,7 @@ fn source_write_readiness(
         "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,
         "editor_write_bridge_state": editor_write_bridge.get("state").and_then(Value::as_str),
         "required_source_apply_review_receipt_fields": string_array_at(editor_write_bridge, "/required_source_apply_review_receipt_fields"),
+        "missing_required_review_receipt_fields": missing_required_review_receipt_fields,
         "required_runtime_proofs": string_array_at(editor_write_bridge, "/required_runtime_proofs"),
         "runtime_validation_required": runtime_validation_required,
         "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
@@ -1567,6 +1597,16 @@ fn source_write_readiness_refused(reason: &str) -> Value {
         ],
         "reason": reason,
     })
+}
+
+fn missing_required_review_receipt_fields(editor_write_bridge: &Value) -> Vec<&str> {
+    string_array_at(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+    )
+    .into_iter()
+    .filter(|field| !SOURCE_APPLY_REVIEW_RECEIPT_FIELDS.contains(field))
+    .collect()
 }
 
 fn user_apply_action_review(

@@ -1547,6 +1547,34 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           reverseDeltaPreview,
           context?.group_context || null
         );
+      const emittedReviewReceiptFields = [
+        "review_status",
+        "mutation_ready",
+        "dry_run_review",
+        "context_kind",
+        "css_source_edit_safety",
+        "source_apply_session",
+        "preview_output",
+        "css_declaration_dry_run_contract",
+        "css_declaration_dry_run_diagnostics",
+        "css_declaration_dry_run_preview",
+        "css_declaration_dry_run_preview_diagnostics",
+        "reverse_css_delta_contract",
+        "reverse_css_delta_preview",
+        "reverse_css_delta_replacement_payload_diagnostics",
+        "apply_gate",
+        "dry_run_edit_review",
+        "native_writer_dry_run_replay",
+        "native_writer_commit_plan",
+        "user_apply_action",
+        "source_write_readiness",
+        "native_active_editor_source_revalidation",
+        "native_handler"
+      ];
+      const missingRequiredReviewReceiptFields =
+        bridge.required_source_apply_review_receipt_fields.filter((field) =>
+          !emittedReviewReceiptFields.includes(field)
+        );
       const missingRequirements = [];
       if (!sourceApplyMutationEnabled) missingRequirements.push("source_mutation_contract_disabled");
       if (!sourceApplyContractHasGuard(reverseCssDeltaReplacementPolicyGuard)) {
@@ -1592,6 +1620,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         missingRequirements.push("web_preview_mutation_capability_missing");
       }
       if (handlerState !== "ready") missingRequirements.push("native_writer_can_mutate_false");
+      if (missingRequiredReviewReceiptFields.length) {
+        missingRequirements.push("write_bridge_required_review_receipt_fields_missing");
+      }
       if (bridge.runtime_validation_required === true) {
         missingRequirements.push("runtime_webview_build_proof_missing");
       }
@@ -1645,6 +1676,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         editor_write_bridge_can_apply: bridge.can_apply,
         editor_write_bridge_can_mutate_source: bridge.can_mutate_source,
         required_review_receipt_field_count: bridge.required_review_receipt_field_count,
+        missing_required_review_receipt_fields: missingRequiredReviewReceiptFields,
         required_runtime_proof_count: bridge.required_runtime_proof_count,
         runtime_validation_required: bridge.runtime_validation_required,
         web_preview_declared_mutation_capability: webPreviewDeclaredMutationCapability,

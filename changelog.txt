@@ -11766,3 +11766,19 @@ PASSED:
 
 NOTES:
 - This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.
+
+[2026-05-31] - DX Style Review Receipt Field Coverage
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now compares the source-owned editor write-bridge required review receipt fields against the review receipt fields Web Preview/Zed can emit, exposing unsupported field names in source-write readiness.
+- `crates\web_preview\src\dx_style_source_apply.rs` now performs the same coverage check in native source-write readiness with `write_bridge_required_review_receipt_fields_missing` as the generic drift blocker.
+- `script\dx-style-panel-source.test.ts` guards both Web Preview and native coverage checks so new source-owned required fields cannot silently bypass readiness.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Focused conflict-marker scan across changed source/docs files.
+
+NOTES:
+- This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.
