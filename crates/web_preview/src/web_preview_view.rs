@@ -2182,6 +2182,7 @@ impl WebPreviewView {
             "native_writer_commit_plan": receipt.get("native_writer_commit_plan").cloned(),
             "post_write_digest_verification_plan": receipt.get("post_write_digest_verification_plan").cloned(),
             "runtime_validation_receipt_template": receipt.get("runtime_validation_receipt_template").cloned(),
+            "runtime_validation_receipt": receipt.get("runtime_validation_receipt").cloned(),
             "mutation_write_receipt_template": receipt.get("mutation_write_receipt_template").cloned(),
             "native_mutation_writer_preflight": receipt.get("native_mutation_writer_preflight").cloned(),
             "user_apply_action": receipt.get("user_apply_action").cloned(),

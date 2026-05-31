@@ -46,7 +46,7 @@ const parseableDxStyleGeneratorScript = (source: string) => {
         "review_context_kinds":["class_token","class_list","css_declaration"],
         "mutation_context_kinds_when_enabled":["class_token"],
         "required_editor_guards":["trusted Web Preview source-apply session","cursor-scoped dry-run structured edit preview"],
-        "review_receipt_fields":["source_apply_session","dry_run_edit_review","native_mutation_writer_preflight","source_write_readiness","native_writer_dispatch"],
+        "review_receipt_fields":["source_apply_session","dry_run_edit_review","runtime_validation_receipt","native_mutation_writer_preflight","source_write_readiness","native_writer_dispatch"],
         "max_source_apply_session_token_bytes":256,
         "max_dry_run_edit_previews":3,
         "max_dry_run_replacement_text_bytes":4096
@@ -125,6 +125,7 @@ const expectedEditorWriteBridgeGuards = [
   "cursor-scoped dry-run structured edit preview",
   "native writer commit plan",
   "post-write source digest verification plan",
+  "runtime validation receipt verification",
   "reverse CSS delta preview provenance match",
   "reverse CSS delta replacement policy match",
   "CSS declaration dry-run receipt for CSS contexts",
@@ -148,6 +149,7 @@ const expectedEditorWriteBridgeReviewReceiptFields = [
   "native_writer_commit_plan",
   "post_write_digest_verification_plan",
   "runtime_validation_receipt_template",
+  "runtime_validation_receipt",
   "mutation_write_receipt_template",
   "native_mutation_writer_preflight",
   "user_apply_action",
@@ -534,6 +536,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /cursor-scoped dry-run structured edit preview/);
   assert.match(editorWriteBridgePreflight, /native writer commit plan/);
   assert.match(editorWriteBridgePreflight, /post-write source digest verification plan/);
+  assert.match(editorWriteBridgePreflight, /runtime validation receipt verification/);
   assert.match(editorWriteBridgePreflight, /reverse CSS delta replacement policy match/);
   assert.match(editorWriteBridgePreflight, /authorized runtime validation/);
   assert.match(editorWriteBridgePreflight, /required_native_handlers/);
@@ -548,6 +551,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /native_writer_commit_plan/);
   assert.match(editorWriteBridgePreflight, /post_write_digest_verification_plan/);
   assert.match(editorWriteBridgePreflight, /runtime_validation_receipt_template/);
+  assert.match(editorWriteBridgePreflight, /runtime_validation_receipt/);
   assert.match(editorWriteBridgePreflight, /mutation_write_receipt_template/);
   assert.match(editorWriteBridgePreflight, /native_mutation_writer_preflight/);
   assert.match(editorWriteBridgePreflight, /native_writer_dispatch/);
@@ -687,10 +691,12 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(sourceApplyContract, /native writer dry-run replay/);
   assert.match(sourceApplyContract, /native writer commit plan/);
   assert.match(sourceApplyContract, /post-write source digest verification plan/);
+  assert.match(sourceApplyContract, /runtime validation receipt verification/);
   assert.match(sourceApplyContract, /native_writer_dry_run_replay/);
   assert.match(sourceApplyContract, /native_writer_commit_plan/);
   assert.match(sourceApplyContract, /post_write_digest_verification_plan/);
   assert.match(sourceApplyContract, /runtime_validation_receipt_template/);
+  assert.match(sourceApplyContract, /runtime_validation_receipt/);
   assert.match(sourceApplyContract, /mutation_write_receipt_template/);
   assert.match(sourceApplyContract, /native_mutation_writer_preflight/);
   assert.match(sourceApplyContract, /native_writer_dispatch/);
@@ -787,6 +793,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     ),
   );
   assert.ok(
+    sourceApplyFixture.required_editor_guards.includes(
+      "runtime validation receipt verification",
+    ),
+  );
+  assert.ok(
     sourceApplyFixture.review_receipt_fields.includes(
       "reverse_css_delta_replacement_payload_diagnostics",
     ),
@@ -797,6 +808,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("native_writer_commit_plan"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("post_write_digest_verification_plan"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("runtime_validation_receipt_template"));
+  assert.ok(sourceApplyFixture.review_receipt_fields.includes("runtime_validation_receipt"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("mutation_write_receipt_template"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("native_mutation_writer_preflight"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("native_writer_dispatch"));
@@ -1848,6 +1860,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /"native_writer_commit_plan": receipt\.get\("native_writer_commit_plan"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"post_write_digest_verification_plan": receipt\.get\("post_write_digest_verification_plan"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"runtime_validation_receipt_template": receipt\.get\("runtime_validation_receipt_template"\)\.cloned\(\)/);
+  assert.match(webPreviewView, /"runtime_validation_receipt": receipt\.get\("runtime_validation_receipt"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"mutation_write_receipt_template": receipt\.get\("mutation_write_receipt_template"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"native_mutation_writer_preflight": receipt\.get\("native_mutation_writer_preflight"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"native_writer_dispatch": receipt\.get\("native_writer_dispatch"\)\.cloned\(\)/);
@@ -2211,10 +2224,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA/);
   assert.match(sourceApply, /DX_STYLE_POST_WRITE_DIGEST_VERIFICATION_PLAN_SCHEMA/);
   assert.match(sourceApply, /DX_STYLE_RUNTIME_VALIDATION_RECEIPT_TEMPLATE_SCHEMA/);
+  assert.match(sourceApply, /DX_STYLE_RUNTIME_VALIDATION_RECEIPT_SCHEMA/);
   assert.match(sourceApply, /DX_STYLE_MUTATION_WRITE_RECEIPT_TEMPLATE_SCHEMA/);
   assert.match(sourceApply, /fn native_writer_commit_plan/);
   assert.match(sourceApply, /fn post_write_digest_verification_plan/);
   assert.match(sourceApply, /fn runtime_validation_receipt_template/);
+  assert.match(sourceApply, /fn runtime_validation_receipt/);
   assert.match(sourceApply, /fn mutation_write_receipt_template/);
   assert.match(sourceApply, /blocked_review_only/);
   assert.match(sourceApply, /blocked_runtime_unverified/);
@@ -2225,6 +2240,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /replacement_text_redacted/);
   assert.match(sourceApply, /post_write_source_digest_verification_missing/);
   assert.match(sourceApply, /blocked_template_incomplete/);
+  assert.match(sourceApply, /runtime_validation_receipt_unverified/);
   assert.match(sourceApply, /expected_post_write_readback_digest/);
   assert.match(sourceApply, /blocked_mutation_disabled/);
   assert.match(sourceApply, /pre_write_digest_match/);
@@ -2240,6 +2256,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"native_writer_commit_plan": native_writer_commit_plan/);
   assert.match(sourceApply, /"post_write_digest_verification_plan": post_write_digest_verification_plan/);
   assert.match(sourceApply, /"runtime_validation_receipt_template": runtime_validation_receipt_template/);
+  assert.match(sourceApply, /"runtime_validation_receipt": runtime_validation_receipt/);
   assert.match(sourceApply, /"mutation_write_receipt_template": mutation_write_receipt_template/);
   assert.match(sourceApply, /"native_mutation_writer_preflight": native_mutation_writer_preflight/);
   assert.match(sourceApply, /"user_apply_action": user_apply_action_evidence/);
@@ -2290,6 +2307,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /runtime_validation_receipt_template_ready/);
   assert.match(sourceApply, /runtime_validation_receipt_template_missing/);
   assert.match(sourceApply, /runtime_validation_receipt_template_status/);
+  assert.match(sourceApply, /runtime_validation_receipt_ready/);
+  assert.match(sourceApply, /runtime_validation_receipt_missing/);
+  assert.match(sourceApply, /runtime_validation_receipt_status/);
   assert.match(sourceApply, /mutation_write_receipt_template_ready/);
   assert.match(sourceApply, /mutation_write_receipt_template_missing/);
   assert.match(sourceApply, /mutation_write_receipt_template_status/);
@@ -2309,6 +2329,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /write_bridge_missing_native_writer_commit_plan_receipt_field/);
   assert.match(sourceApply, /write_bridge_missing_post_write_digest_verification_plan_receipt_field/);
   assert.match(sourceApply, /write_bridge_missing_runtime_validation_receipt_template_field/);
+  assert.match(sourceApply, /write_bridge_missing_runtime_validation_receipt_field/);
   assert.match(sourceApply, /write_bridge_missing_mutation_write_receipt_template_field/);
   assert.match(sourceApply, /write_bridge_missing_native_mutation_writer_preflight_field/);
   assert.match(sourceApply, /write_bridge_missing_user_apply_action_receipt_field/);
@@ -2439,6 +2460,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     styleSourceApplyFixture.review_receipt_fields.includes(
       "runtime_validation_receipt_template",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.review_receipt_fields.includes(
+      "runtime_validation_receipt",
     ),
   );
   assert.ok(
@@ -3135,6 +3161,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /source_write_readiness: sourceWriteReadinessPacket\(applyGate, output\)/);
   assert.match(surfaceScript, /runtime_validation_receipt_template:/);
   assert.match(surfaceScript, /function runtimeValidationReceiptTemplatePacket\(applyGate\)/);
+  assert.match(surfaceScript, /runtime_validation_receipt:/);
+  assert.match(surfaceScript, /function runtimeValidationReceiptPacket\(applyGate\)/);
   assert.match(surfaceScript, /mutation_write_receipt_template:/);
   assert.match(surfaceScript, /function mutationWriteReceiptTemplatePacket\(applyGate\)/);
   assert.match(surfaceScript, /native_mutation_writer_preflight:/);
@@ -3199,6 +3227,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /native_writer_commit_plan_missing/);
   assert.match(surfaceScript, /post_write_digest_verification_plan_missing/);
   assert.match(surfaceScript, /runtime_validation_receipt_template_missing/);
+  assert.match(surfaceScript, /runtime_validation_receipt_missing/);
   assert.match(surfaceScript, /mutation_write_receipt_template_missing/);
   assert.match(surfaceScript, /native_mutation_writer_preflight_missing/);
   assert.match(surfaceScript, /explicit_user_apply_action_missing/);
@@ -3211,6 +3240,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /write_bridge_missing_native_writer_commit_plan_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_post_write_digest_verification_plan_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_runtime_validation_receipt_template_field/);
+  assert.match(surfaceScript, /write_bridge_missing_runtime_validation_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_mutation_write_receipt_template_field/);
   assert.match(surfaceScript, /write_bridge_missing_native_mutation_writer_preflight_field/);
   assert.match(surfaceScript, /write_bridge_missing_user_apply_action_receipt_field/);
@@ -3238,6 +3268,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /native_writer_commit_plan_status: "not_performed_in_web_preview"/);
   assert.match(surfaceScript, /post_write_digest_verification_plan_status: "not_performed_in_web_preview"/);
   assert.match(surfaceScript, /runtime_validation_receipt_template_status: "not_performed_in_web_preview"/);
+  assert.match(surfaceScript, /runtime_validation_receipt_status: "not_performed_in_web_preview"/);
   assert.match(surfaceScript, /mutation_write_receipt_template_status: "not_performed_in_web_preview"/);
   assert.match(surfaceScript, /native_mutation_writer_preflight_status: "not_performed_in_web_preview"/);
   assert.match(surfaceScript, /native_writer_dispatch_status: "not_performed_in_web_preview"/);
@@ -3791,10 +3822,12 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /cursor-scoped dry-run structured edit preview/);
   assert.match(editorWriteBridge, /native writer commit plan/);
   assert.match(editorWriteBridge, /post-write source digest verification plan/);
+  assert.match(editorWriteBridge, /runtime validation receipt verification/);
   assert.match(editorWriteBridge, /reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(editorWriteBridge, /native_writer_commit_plan/);
   assert.match(editorWriteBridge, /post_write_digest_verification_plan/);
   assert.match(editorWriteBridge, /runtime_validation_receipt_template/);
+  assert.match(editorWriteBridge, /runtime_validation_receipt/);
   assert.match(editorWriteBridge, /mutation_write_receipt_template/);
   assert.match(editorWriteBridge, /native_mutation_writer_preflight/);
   assert.match(editorWriteBridge, /native_writer_dispatch/);

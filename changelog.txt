@@ -1,3 +1,26 @@
+[2026-05-31] - DX Style Runtime Validation Receipt Gate
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-runtime-validation-receipt-plan.md` records the source-only plan for adding an actual runtime validation receipt gate.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now require `runtime_validation_receipt` as review evidence.
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now require the same receipt before any future editor write bridge can graduate.
+- Zed native source-apply review now emits a fail-closed `runtime_validation_receipt` with no authorized runtime validation, no WebView round-trip proof, no post-write readback digest, no mutation, and no verification timestamp.
+- Web Preview copied review packets now include the same receipt as `not_performed_in_web_preview`, and readiness reports `runtime_validation_receipt_missing` plus a bridge-field blocker if the source-owned bridge stops naming it.
+- `crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs`, the generated source-apply contract mirror, `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the runtime validation receipt gate.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\web_preview\src\web_preview_view.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed runtime validation receipt files returned no matches.
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its source-owned files are changed on disk but cannot be included in the Zed commit. The Zed commit includes the generated mirror and bridge/readiness code that consumes those changes.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Native Writer Implementation Gate
 
 ADDED:
