@@ -246,6 +246,7 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "native_writer_commit_plan".to_string(),
             "post_write_digest_verification_plan".to_string(),
             "runtime_validation_receipt_template".to_string(),
+            "mutation_write_receipt_template".to_string(),
             "user_apply_action".to_string(),
             "source_write_readiness".to_string(),
             "native_active_editor_source_revalidation".to_string(),

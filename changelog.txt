@@ -1,3 +1,25 @@
+[2026-05-31] - DX Style Mutation Write Template
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-mutation-template-plan.md` records the source-only plan for mutation write receipt template evidence.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and its fixture now include `mutation_write_receipt_template` in source-apply review receipt fields.
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and its fixture now require that mutation template field before future editor writes can graduate.
+- Native source-apply review now emits a review-only mutation write receipt template derived from the native writer commit plan, runtime validation template, and bridge mutation writer checklist.
+- Web Preview copied review packets now emit the same template shape with `not_performed_in_web_preview`, and readiness reports `mutation_write_receipt_template_missing` plus a bridge-field blocker if it is absent.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the mutation write template checkpoint.
+
+PASSED:
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\web_preview\src\web_preview_view.rs crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed Zed and DX Style mutation template files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Mutation Writer Contract
 
 ADDED:
