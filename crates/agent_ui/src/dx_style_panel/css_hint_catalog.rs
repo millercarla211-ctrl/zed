@@ -8,13 +8,18 @@ const CSS_DECLARATION_HINT_CATALOG_JSON: &str =
     include_str!("css-declaration-hint-catalog.generated.json");
 
 pub(super) struct CssDeclarationGeneratorHint {
+    pub(super) ordinal: u64,
     pub(super) token: String,
     pub(super) generator_id: String,
     pub(super) source_edit_safety: String,
+    pub(super) property_pattern: String,
+    pub(super) property_match: String,
+    pub(super) value_contains: Vec<String>,
 }
 
 #[derive(Clone)]
 struct CssHintEntry {
+    ordinal: u64,
     property_pattern: String,
     property_match: String,
     value_contains: Vec<String>,
@@ -36,9 +41,13 @@ pub(super) fn css_declaration_generator_hint(
             return None;
         }
         Some(CssDeclarationGeneratorHint {
+            ordinal: hint.ordinal,
             token: hint.token_hint.clone(),
             generator_id: hint.generator_id.clone(),
             source_edit_safety: hint.source_edit_safety.clone(),
+            property_pattern: hint.property_pattern.clone(),
+            property_match: hint.property_match.clone(),
+            value_contains: hint.value_contains.clone(),
         })
     })
 }
@@ -64,7 +73,12 @@ fn load_css_hints() -> Vec<CssHintEntry> {
 }
 
 fn css_hint_entry(value: &Value) -> Option<CssHintEntry> {
+    let ordinal = value.get("ordinal")?.as_u64()?;
+    if ordinal == 0 {
+        return None;
+    }
     Some(CssHintEntry {
+        ordinal,
         property_pattern: value
             .get("property_pattern")?
             .as_str()?

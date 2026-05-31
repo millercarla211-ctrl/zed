@@ -27,6 +27,10 @@ pub(super) struct ActiveStyleContextSnapshot {
     pub(super) css_property: Option<String>,
     pub(super) css_generator: Option<String>,
     pub(super) css_source_edit_safety: Option<String>,
+    pub(super) css_hint_ordinal: Option<u64>,
+    pub(super) css_hint_property_pattern: Option<String>,
+    pub(super) css_hint_property_match: Option<String>,
+    pub(super) css_hint_value_contains: Vec<String>,
     pub(super) attribute_tokens: Vec<String>,
     pub(super) group_context: ActiveGroupContext,
     pub(super) span: Option<String>,
@@ -50,6 +54,10 @@ impl ActiveStyleContextSnapshot {
             css_property: None,
             css_generator: None,
             css_source_edit_safety: None,
+            css_hint_ordinal: None,
+            css_hint_property_pattern: None,
+            css_hint_property_match: None,
+            css_hint_value_contains: Vec::new(),
             attribute_tokens: Vec::new(),
             group_context: ActiveGroupContext::none(),
             span: None,
@@ -149,6 +157,10 @@ impl ActiveStyleContextSnapshot {
         property: impl Into<String>,
         generator_id: impl Into<String>,
         source_edit_safety: impl Into<String>,
+        hint_ordinal: u64,
+        hint_property_pattern: impl Into<String>,
+        hint_property_match: impl Into<String>,
+        hint_value_contains: Vec<String>,
         start: usize,
         end: usize,
         source_path: &str,
@@ -162,6 +174,10 @@ impl ActiveStyleContextSnapshot {
         self.css_property = Some(property.into());
         self.css_generator = Some(generator_id.into());
         self.css_source_edit_safety = Some(source_edit_safety.into());
+        self.css_hint_ordinal = Some(hint_ordinal);
+        self.css_hint_property_pattern = Some(hint_property_pattern.into());
+        self.css_hint_property_match = Some(hint_property_match.into());
+        self.css_hint_value_contains = hint_value_contains;
         self.span = Some(format!("{start}..{end}"));
         self.span_start = Some(start);
         self.span_end = Some(end);
@@ -190,6 +206,10 @@ impl ActiveStyleContextSnapshot {
             "css_property": self.css_property,
             "css_generator": self.css_generator,
             "css_source_edit_safety": self.css_source_edit_safety,
+            "css_hint_ordinal": self.css_hint_ordinal,
+            "css_hint_property_pattern": self.css_hint_property_pattern,
+            "css_hint_property_match": self.css_hint_property_match,
+            "css_hint_value_contains": self.css_hint_value_contains,
             "attribute_tokens": self.attribute_tokens,
             "group_context": self.group_context.to_json(),
             "span": self.span,
@@ -335,6 +355,10 @@ pub(super) fn active_style_context(
                         hint.property,
                         hint.generator_id,
                         hint.source_edit_safety,
+                        hint.ordinal,
+                        hint.property_pattern,
+                        hint.property_match,
+                        hint.value_contains,
                         hint.start,
                         hint.end,
                         &source_path,

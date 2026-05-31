@@ -128,6 +128,7 @@ const expectedEditorWriteBridgeGuards = [
   "runtime validation receipt verification",
   "reverse CSS delta preview provenance match",
   "reverse CSS delta replacement policy match",
+  "CSS declaration hint provenance match",
   "CSS declaration dry-run receipt for CSS contexts",
   "editor write bridge can_apply",
   "explicit user apply action",
@@ -141,6 +142,7 @@ const expectedEditorWriteBridgeCapabilities = ["can_review_request", "can_mutate
 const expectedEditorWriteBridgeReviewReceiptFields = [
   "source_apply_session",
   "preview_output",
+  "css_declaration_hint",
   "css_declaration_dry_run_diagnostics",
   "css_declaration_dry_run_preview_diagnostics",
   "reverse_css_delta_contract",
@@ -575,6 +577,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     /dispatch-time explicit mutation action revalidation/,
   );
   assert.match(editorWriteBridgePreflight, /reverse CSS delta replacement policy match/);
+  assert.match(editorWriteBridgePreflight, /CSS declaration hint provenance match/);
   assert.match(editorWriteBridgePreflight, /authorized runtime validation/);
   assert.match(editorWriteBridgePreflight, /required_native_handlers/);
   assert.match(editorWriteBridgePreflight, /required_native_handler_capabilities/);
@@ -584,6 +587,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /required_runtime_validation_receipt_fields/);
   assert.match(editorWriteBridgePreflight, /mutation_write_receipt_schema/);
   assert.match(editorWriteBridgePreflight, /required_mutation_write_receipt_fields/);
+  assert.match(editorWriteBridgePreflight, /css_declaration_hint/);
   assert.match(editorWriteBridgePreflight, /reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(editorWriteBridgePreflight, /native_writer_commit_plan/);
   assert.match(editorWriteBridgePreflight, /post_write_digest_verification_plan/);
@@ -720,10 +724,12 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(sourceApplyContract, /GROUPED_CLASS_SOURCE_APPLY_MAX_SOURCE_DIGEST_BYTES/);
   assert.match(sourceApplyContract, /reverse CSS map receipt match/);
   assert.match(sourceApplyContract, /generated CSS declaration delta validation/);
+  assert.match(sourceApplyContract, /CSS declaration hint provenance match/);
   assert.match(sourceApplyContract, /CSS declaration dry-run receipt for CSS contexts/);
   assert.match(sourceApplyContract, /reverse CSS delta preview provenance match/);
   assert.match(sourceApplyContract, /reverse CSS delta replacement policy match/);
   assert.match(sourceApplyContract, /reverse_css_delta_replacement_payload_diagnostics/);
+  assert.match(sourceApplyContract, /css_declaration_hint/);
   assert.match(sourceApplyContract, /cursor-scoped dry-run structured edit preview/);
   assert.match(sourceApplyContract, /trusted grouped-class dry-run receipt/);
   assert.match(sourceApplyContract, /native writer dry-run replay/);
@@ -802,6 +808,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   );
   assert.ok(
     sourceApplyFixture.required_editor_guards.includes(
+      "CSS declaration hint provenance match",
+    ),
+  );
+  assert.ok(
+    sourceApplyFixture.required_editor_guards.includes(
       "reverse CSS delta preview provenance match",
     ),
   );
@@ -840,6 +851,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "reverse_css_delta_replacement_payload_diagnostics",
     ),
   );
+  assert.ok(sourceApplyFixture.review_receipt_fields.includes("css_declaration_hint"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_edit_review"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("native_writer_dry_run_replay"));
@@ -1641,6 +1653,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(cssDeclarationDryRunContract, /CSS_DECLARATION_DRY_RUN_CONTEXT_KIND/);
   assert.match(cssDeclarationDryRunContract, /source_mutation_enabled: false/);
   assert.match(cssDeclarationDryRunContract, /trusted CSS declaration dry-run receipt/);
+  assert.match(cssDeclarationDryRunContract, /CSS declaration hint provenance match/);
+  assert.match(cssDeclarationDryRunContract, /css_hint_ordinal/);
   assert.match(cssDeclarationDryRunContract, /css_declaration_dry_run_preview/);
   assert.match(cssDeclarationDryRunContract, /css_declaration_dry_run_diagnostics/);
   assert.match(cssDeclarationDryRunContract, /css_declaration_dry_run_preview_diagnostics/);
@@ -1656,6 +1670,12 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "css_source_edit_safety",
     ),
   );
+  assert.ok(cssDeclarationDryRunFixture.required_context_fields.includes("css_hint_ordinal"));
+  assert.ok(
+    cssDeclarationDryRunFixture.required_review_guards.includes(
+      "CSS declaration hint provenance match",
+    ),
+  );
   assert.ok(
     cssDeclarationDryRunFixture.accepted_source_edit_safety.includes(
       "safe-static-utility-source-edit",
@@ -1666,6 +1686,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "css_declaration_dry_run_preview",
     ),
   );
+  assert.ok(cssDeclarationDryRunFixture.review_receipt_fields.includes("css_declaration_hint"));
   assert.ok(
     cssDeclarationDryRunFixture.review_receipt_fields.includes(
       "css_declaration_dry_run_diagnostics",
@@ -2063,6 +2084,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /"context_kind": receipt\.pointer\("\/context\/context_kind"\)\.and_then\(Value::as_str\)/);
   assert.match(webPreviewView, /"css_source_edit_safety": receipt\.pointer\("\/context\/css_source_edit_safety"\)\.and_then\(Value::as_str\)/);
   assert.match(webPreviewView, /"preview_output": receipt\.get\("preview_output"\)\.cloned\(\)/);
+  assert.match(webPreviewView, /"css_declaration_hint": receipt\.get\("css_declaration_hint"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"css_declaration_dry_run_contract": receipt\.get\("css_declaration_dry_run_contract"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"css_declaration_dry_run_diagnostics": receipt\.get\("css_declaration_dry_run_diagnostics"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"css_declaration_dry_run_preview": receipt\.get\("css_declaration_dry_run_preview"\)\.cloned\(\)/);
@@ -2269,6 +2291,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /MAX_SOURCE_DIGEST_BYTES: usize = 128/);
   assert.match(sourceApply, /MAX_CONTEXT_KIND_BYTES: usize = 64/);
   assert.match(sourceApply, /MAX_CSS_SOURCE_EDIT_SAFETY_BYTES: usize = 128/);
+  assert.match(sourceApply, /MAX_CSS_DECLARATION_HINT_STRING_BYTES: usize = 256/);
+  assert.match(sourceApply, /MAX_CSS_DECLARATION_HINT_VALUE_FILTERS: usize = 8/);
   assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_UTILITIES: usize = 256/);
   assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_UTILITY_BYTES: usize = 1024/);
   assert.match(sourceApply, /MAX_REVERSE_DELTA_REPLACEMENT_SOURCE_DECLARATION_BYTES: usize = 4096/);
@@ -2291,9 +2315,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source-apply contract is missing reverse CSS map guard/);
   assert.match(sourceApply, /source-apply contract is missing declaration-delta guard/);
   assert.match(sourceApply, /source-apply contract is missing CSS declaration dry-run guard/);
+  assert.match(sourceApply, /source-apply contract is missing CSS declaration hint provenance guard/);
   assert.match(sourceApply, /source-apply contract is missing reverse-delta provenance guard/);
   assert.match(sourceApply, /source-apply contract is missing reverse-delta replacement policy guard/);
   assert.match(sourceApply, /source-apply contract is missing reverse-delta replacement payload diagnostics receipt field/);
+  assert.match(sourceApply, /source-apply contract is missing CSS declaration hint receipt field/);
   assert.match(sourceApply, /reverse CSS delta replacement payload diagnostics are not empty/);
   assert.match(sourceApply, /missing DX Style reverse CSS delta contract schema/);
   assert.match(sourceApply, /reverse CSS delta contract is not review-only/);
@@ -2345,7 +2371,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /\{contract_name\} \{field\} does not match native limit/);
   assert.match(sourceApply, /"contract":/);
   assert.match(sourceApply, /"context_kind": context_kind/);
+  assert.match(sourceApply, /"css_generator": context\.get\("css_generator"\)\.and_then\(Value::as_str\)/);
   assert.match(sourceApply, /"css_source_edit_safety": css_source_edit_safety/);
+  assert.match(sourceApply, /"css_hint_ordinal": context\.get\("css_hint_ordinal"\)\.and_then\(Value::as_u64\)/);
+  assert.match(sourceApply, /"css_hint_value_contains": string_array_at\(context, "\/css_hint_value_contains"\)/);
+  assert.match(sourceApply, /"css_declaration_hint": css_declaration_hint/);
   assert.match(sourceApply, /"reverse_delta_replacement_policy_guard_present"/);
   assert.match(sourceApply, /"review_context_kinds": string_array_at\(contract, "\/review_context_kinds"\)/);
   assert.match(sourceApply, /"mutation_context_kinds_when_enabled": string_array_at\(contract, "\/mutation_context_kinds_when_enabled"\)/);
@@ -2554,6 +2584,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /write_bridge_missing_native_mutation_writer_preflight_field/);
   assert.match(sourceApply, /write_bridge_missing_user_apply_action_receipt_field/);
   assert.match(sourceApply, /write_bridge_missing_native_writer_dispatch_receipt_field/);
+  assert.match(sourceApply, /write_bridge_missing_css_declaration_hint_receipt_field/);
   assert.match(sourceApply, /write_bridge_required_review_receipt_fields_missing/);
   assert.match(sourceApply, /"missing_required_review_receipt_fields": missing_required_review_receipt_fields/);
   assert.match(sourceApply, /"missing_required_runtime_proofs": missing_required_runtime_proofs/);
@@ -2595,9 +2626,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /source_len_bytes: zedStyleContext\?\.source_len_bytes \|\| null/);
   assert.match(sourceApply, /context kind is not listed in the source-apply review contract/);
   assert.match(sourceApply, /CSS declaration context is missing source edit safety/);
+  assert.match(sourceApply, /CSS declaration context is missing source-owned hint provenance/);
   assert.match(sourceApply, /missing DX Style CSS declaration dry-run contract schema/);
   assert.match(sourceApply, /CSS declaration dry-run contract is not review-only/);
   assert.match(sourceApply, /CSS declaration dry-run contract is missing \{field\} receipt field/);
+  assert.match(sourceApply, /CSS declaration dry-run contract is missing \{field\} context/);
   assert.match(sourceApply, /CSS declaration source edit safety is not accepted for dry-run/);
   assert.match(sourceApply, /CSS declaration dry-run preview is missing proposed declaration/);
   assert.match(sourceApply, /CSS_DECLARATION_DRY_RUN_MAX_DECLARATION_BYTES/);
@@ -2637,9 +2670,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /"max_source_digest_bytes": css_declaration_dry_run_contract\.get\("max_source_digest_bytes"\)\.and_then\(Value::as_u64\)/);
   assert.match(sourceApply, /"review_receipt_fields": string_array_at\(css_declaration_dry_run_contract, "\/review_receipt_fields"\)/);
   assert.match(sourceApply, /"css_declaration_dry_run_diagnostics": css_declaration_dry_run_diagnostics/);
+  assert.match(sourceApply, /"css_declaration_hint": css_declaration_hint/);
   assert.match(sourceApply, /"css_declaration_dry_run_preview":/);
   assert.match(sourceApply, /"proposed_declaration": css_dry_run_proposed_declaration/);
+  assert.match(sourceApply, /"css_declaration_hint": css_declaration_dry_run_preview\.get\("css_declaration_hint"\)\.cloned\(\)/);
   assert.match(sourceApply, /"css_declaration_dry_run_preview_diagnostics": css_declaration_dry_run_preview_diagnostics/);
+  assert.match(sourceApply, /fn css_declaration_hint_evidence/);
   assert.match(sourceApply, /fn optional_bounded_string_array/);
   assert.match(sourceApply, /CSS declaration dry-run diagnostics are not empty/);
   assert.match(sourceApply, /CSS declaration dry-run preview diagnostics are not empty/);
@@ -2720,6 +2756,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
     ),
   );
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("preview_output"));
+  assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("css_declaration_hint"));
   assert.ok(
     styleSourceApplyFixture.review_receipt_fields.includes(
       "css_declaration_dry_run_diagnostics",
@@ -2769,6 +2806,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     styleSourceApplyFixture.review_receipt_fields.includes(
       "native_active_editor_source_revalidation",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.required_editor_guards.includes(
+      "CSS declaration hint provenance match",
     ),
   );
   assert.ok(
@@ -3349,6 +3391,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceCssDeclarationDryRunScript, /function cssDeclarationDryRunPreview\(output, context = zedStyleContext\)/);
   assert.match(surfaceCssDeclarationDryRunScript, /ready_for_review/);
   assert.match(surfaceCssDeclarationDryRunScript, /fallback_generated_declaration/);
+  assert.match(surfaceCssDeclarationDryRunScript, /css_declaration_hint: cssDeclarationHintPacket\(context\)/);
   assert.match(surfaceScript, /escapeHtml\(applyGate\?\.reason/);
   assert.match(surfaceScript, /escapeHtml\(label\)/);
   assert.match(surfaceCssDeclarationDryRunScript, /function generatedCssDeclarations\(css\)/);
@@ -3387,6 +3430,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /source_len_bytes: zedStyleContext\?\.source_len_bytes \|\| null/);
   assert.match(surfaceScript, /user_apply_action: userApplyAction/);
   assert.match(surfaceScript, /css_declaration_dry_run_contract: cssDeclarationDryRunContract/);
+  assert.match(surfaceScript, /css_declaration_hint: cssDeclarationHintPacket\(zedStyleContext\)/);
   assert.match(surfaceScript, /css_declaration_dry_run_diagnostics: cssDeclarationDryRunContextDiagnostics\(zedStyleContext\)/);
   assert.match(surfaceScript, /css_declaration_dry_run_preview: cssDeclarationPreview/);
   assert.match(surfaceScript, /css_declaration_dry_run_preview_diagnostics: cssDeclarationDryRunContextPreviewDiagnostics\(cssDeclarationPreview\)/);
@@ -3394,10 +3438,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /userApplyActionPacket\("review_source", "reviewApplyButton"\)/);
   assert.match(surfaceScript, /function handleApplyClick\(\)/);
   assert.match(surfaceScript, /userApplyActionPacket\("mutate_source", "applyButton"\)/);
+  assert.match(surfaceScript, /function cssDeclarationHintPacket\(context = zedStyleContext\)/);
+  assert.match(surfaceScript, /schema: "zed\.dx_style\.css_declaration_hint\.v1"/);
+  assert.match(surfaceScript, /hint_ordinal: Number\.isInteger\(context\.css_hint_ordinal\)/);
   assert.match(surfaceScript, /function reviewPacket\(output\)/);
   assert.match(surfaceScript, /const cssDeclarationPreview = cssDeclarationDryRunPreview\(output, zedStyleContext\)/);
   assert.match(surfaceScript, /function dryRunReviewPacket\(applyGate\)/);
   assert.match(surfaceScript, /dry_run_review: dryRunReviewPacket\(applyGate\)/);
+  assert.match(surfaceScript, /css_declaration_hint: cssDeclarationHintPacket\(zedStyleContext\)/);
   assert.match(surfaceScript, /source_apply_session: sourceApplySessionReviewPacket\(\)/);
   assert.match(surfaceScript, /editor_write_bridge: editorWriteBridgeReviewPacket\(applyGate\)/);
   assert.match(surfaceScript, /source_write_readiness: sourceWriteReadinessPacket\(applyGate, output\)/);
@@ -3482,6 +3530,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /write_bridge_mutation_write_receipt_schema_missing/);
   assert.match(surfaceScript, /write_bridge_required_mutation_write_receipt_fields_missing/);
   assert.match(surfaceScript, /write_bridge_missing_replacement_payload_diagnostics_receipt_field/);
+  assert.match(surfaceScript, /write_bridge_missing_css_declaration_hint_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_native_writer_replay_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_native_writer_commit_plan_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_post_write_digest_verification_plan_receipt_field/);
@@ -3828,6 +3877,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /css_declaration_dry_run_preview_diagnostics/);
   assert.match(surfaceScript, /css_declaration_dry_run_preview_status/);
   assert.match(surfaceScript, /css_declaration_dry_run_preview_declaration/);
+  assert.match(surfaceScript, /css_declaration_hint_present/);
+  assert.match(surfaceScript, /css_hint_ordinal/);
   assert.match(surfaceScript, /CSS declaration source review is gated by the DX Style dry-run contract/);
   assert.match(surfaceScript, /const sourceApplyReviewReceiptFields = Array\.isArray\(sourceApplyContract\.review_receipt_fields\)/);
   assert.match(surfaceScript, /Review context kinds/);
@@ -3964,6 +4015,10 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(activeContext, /css_property: Option<String>/);
   assert.match(activeContext, /css_generator: Option<String>/);
   assert.match(activeContext, /css_source_edit_safety: Option<String>/);
+  assert.match(activeContext, /css_hint_ordinal: Option<u64>/);
+  assert.match(activeContext, /css_hint_property_pattern: Option<String>/);
+  assert.match(activeContext, /css_hint_property_match: Option<String>/);
+  assert.match(activeContext, /css_hint_value_contains: Vec<String>/);
   assert.match(activeContext, /attribute_tokens: Vec<String>/);
   assert.match(activeContext, /group_context: ActiveGroupContext/);
   assert.match(activeContext, /span_start: Option<usize>/);
@@ -3974,6 +4029,10 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(activeContext, /"css_property": self\.css_property/);
   assert.match(activeContext, /"css_generator": self\.css_generator/);
   assert.match(activeContext, /"css_source_edit_safety": self\.css_source_edit_safety/);
+  assert.match(activeContext, /"css_hint_ordinal": self\.css_hint_ordinal/);
+  assert.match(activeContext, /"css_hint_property_pattern": self\.css_hint_property_pattern/);
+  assert.match(activeContext, /"css_hint_property_match": self\.css_hint_property_match/);
+  assert.match(activeContext, /"css_hint_value_contains": self\.css_hint_value_contains/);
   assert.match(activeContext, /"attribute_tokens": self\.attribute_tokens/);
   assert.match(activeContext, /"group_context": self\.group_context\.to_json\(\)/);
   assert.match(activeContext, /source_span_json/);
@@ -4004,12 +4063,16 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(cssHintCatalog, /css-declaration-hint-catalog\.generated\.json/);
   assert.match(cssHintCatalog, /OnceLock<Vec<CssHintEntry>>/);
   assert.match(cssHintCatalog, /entry_count/);
+  assert.match(cssHintCatalog, /ordinal: u64/);
   assert.match(cssHintCatalog, /source_edit_safety/);
   assert.match(cssHintCatalog, /css_declaration_generator_hint/);
   assert.match(cssHintCatalog, /property_matches/);
   assert.match(cssHintCatalog, /value_matches/);
   assert.deepEqual(cssHintGenerated, cssHintStyleFixture);
   assert.match(activeContext, /css_style_hint/);
+  assert.match(activeContext, /hint\.ordinal/);
+  assert.match(activeContext, /hint\.property_pattern/);
+  assert.match(activeContext, /hint\.value_contains/);
   assert.match(activeContext, /CSS declaration generator hint is read-only/);
   assert.match(activeContext, /"css_declaration"/);
   assert.match(cursorContext, /attribute_tokens: Vec<String>/);
@@ -4264,6 +4327,9 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(panelView, /Generator/);
   assert.match(panelView, /css_generator/);
   assert.match(panelView, /CSS safety/);
+  assert.match(panelView, /CSS hint/);
+  assert.match(panelView, /Hint pattern/);
+  assert.match(panelView, /Hint value/);
   assert.match(panelView, /Class list/);
   assert.match(panelView, /Kind/);
   assert.match(panelView, /Group/);
@@ -4292,7 +4358,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/panel.rs") < 230);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/apply_gate.rs") < 260);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/css_cursor_context.rs") < 90);
-  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/css_hint_catalog.rs") < 120);
+  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/css_hint_catalog.rs") < 140);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/cursor_context.rs") < 260);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/cursor_context_tokens.rs") < 100);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/group_context.rs") < 210);
@@ -4302,9 +4368,9 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/source_digest.rs") < 50);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/receipt_match.rs") < 180);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/receipt_review.rs") < 260);
-  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/active_context.rs") < 360);
+  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/active_context.rs") < 400);
   assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/panel_metric.rs") < 60);
-  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/panel_view.rs") < 200);
+  assert.ok(lineCount("crates/agent_ui/src/dx_style_panel/panel_view.rs") < 240);
 });
 
 test("Zed Style rail surfaces source-only DX Style readiness", () => {

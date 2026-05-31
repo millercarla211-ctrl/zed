@@ -105,6 +105,23 @@ fn style_summary(
             active_context.css_source_edit_safety.clone(),
             |this, safety| this.child(metric("CSS safety", safety)),
         )
+        .when_some(active_context.css_hint_ordinal, |this, ordinal| {
+            let match_mode = active_context
+                .css_hint_property_match
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string());
+            this.child(metric("CSS hint", format!("#{ordinal} / {match_mode}")))
+        })
+        .when_some(
+            active_context.css_hint_property_pattern.clone(),
+            |this, pattern| this.child(metric("Hint pattern", pattern)),
+        )
+        .when(!active_context.css_hint_value_contains.is_empty(), |this| {
+            this.child(metric(
+                "Hint value",
+                active_context.css_hint_value_contains.join(", "),
+            ))
+        })
         .when(active_context.attribute_tokens.len() > 1, |this| {
             this.child(metric(
                 "Class list",

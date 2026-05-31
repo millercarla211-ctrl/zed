@@ -14,7 +14,10 @@
     "source_span",
     "source_digest",
     "css_property",
-    "css_source_edit_safety"
+    "css_source_edit_safety",
+    "css_hint_ordinal",
+    "css_hint_property_pattern",
+    "css_hint_property_match"
   ],
   "required_review_guards": [
     "active context schema match",
@@ -23,6 +26,7 @@
     "active source digest match",
     "request source span matches active source span",
     "generated declaration delta validation",
+    "CSS declaration hint provenance match",
     "trusted CSS declaration dry-run receipt",
     "editor write bridge can_apply",
     "explicit user apply action"
@@ -33,6 +37,7 @@
     "context_kind",
     "css_property",
     "css_source_edit_safety",
+    "css_declaration_hint",
     "source_path",
     "source_span",
     "source_digest",

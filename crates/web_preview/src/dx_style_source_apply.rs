@@ -44,6 +44,8 @@ const MAX_SOURCE_SPAN_BYTES: u64 = 16 * 1024;
 const MAX_SOURCE_DIGEST_BYTES: usize = 128;
 const MAX_CONTEXT_KIND_BYTES: usize = 64;
 const MAX_CSS_SOURCE_EDIT_SAFETY_BYTES: usize = 128;
+const MAX_CSS_DECLARATION_HINT_STRING_BYTES: usize = 256;
+const MAX_CSS_DECLARATION_HINT_VALUE_FILTERS: usize = 8;
 const MAX_PREVIEW_KIND_BYTES: usize = 64;
 const MAX_PREVIEW_ANATOMY_PART_BYTES: usize = 64;
 const MAX_PREVIEW_ANATOMY_PARTS: usize = 8;
@@ -66,6 +68,7 @@ const SOURCE_APPLY_REVIEW_RECEIPT_FIELDS: &[&str] = &[
     "css_source_edit_safety",
     "source_apply_session",
     "preview_output",
+    "css_declaration_hint",
     "css_declaration_dry_run_contract",
     "css_declaration_dry_run_diagnostics",
     "css_declaration_dry_run_preview",
@@ -156,6 +159,10 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let css_declaration_dry_run_contract = request
         .get("css_declaration_dry_run_contract")
         .unwrap_or(&Value::Null);
+    let css_declaration_hint = css_declaration_hint_evidence(
+        request.get("css_declaration_hint").unwrap_or(&Value::Null),
+        &mut reasons,
+    );
     let css_declaration_dry_run_preview = request
         .get("css_declaration_dry_run_preview")
         .unwrap_or(&Value::Null);
@@ -445,6 +452,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if !string_array_contains(
         contract,
         "/required_editor_guards",
+        "CSS declaration hint provenance match",
+    ) {
+        reasons.push(
+            "source-apply contract is missing CSS declaration hint provenance guard".to_string(),
+        );
+    }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
         "reverse CSS delta preview provenance match",
     ) {
         reasons.push("source-apply contract is missing reverse-delta provenance guard".to_string());
@@ -457,6 +473,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push(
             "source-apply contract is missing reverse-delta replacement payload diagnostics receipt field"
                 .to_string(),
+        );
+    }
+    if !string_array_contains(contract, "/review_receipt_fields", "css_declaration_hint") {
+        reasons.push(
+            "source-apply contract is missing CSS declaration hint receipt field".to_string(),
         );
     }
     let reverse_css_delta_replacement_policy_guard_present = string_array_contains(
@@ -1100,6 +1121,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         .get("proposed_declaration")
         .and_then(Value::as_str);
     if context_kind == Some("css_declaration") {
+        if css_declaration_hint.is_null() {
+            reasons.push(
+                "CSS declaration context is missing source-owned hint provenance".to_string(),
+            );
+        }
         if !css_declaration_dry_run_diagnostics.is_empty() {
             reasons.push("CSS declaration dry-run diagnostics are not empty".to_string());
         }
@@ -1140,6 +1166,22 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             );
         }
         for field in [
+            "css_hint_ordinal",
+            "css_hint_property_pattern",
+            "css_hint_property_match",
+        ] {
+            if !string_array_contains(
+                css_declaration_dry_run_contract,
+                "/required_context_fields",
+                field,
+            ) {
+                reasons.push(format!(
+                    "CSS declaration dry-run contract is missing {field} context"
+                ));
+            }
+        }
+        for field in [
+            "css_declaration_hint",
             "css_declaration_dry_run_diagnostics",
             "css_declaration_dry_run_preview",
             "css_declaration_dry_run_preview_diagnostics",
@@ -1385,7 +1427,12 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "source_digest": context_source_digest,
             "source_len_bytes": context_source_len,
             "css_property": context.get("css_property").and_then(Value::as_str),
+            "css_generator": context.get("css_generator").and_then(Value::as_str),
             "css_source_edit_safety": css_source_edit_safety,
+            "css_hint_ordinal": context.get("css_hint_ordinal").and_then(Value::as_u64),
+            "css_hint_property_pattern": context.get("css_hint_property_pattern").and_then(Value::as_str),
+            "css_hint_property_match": context.get("css_hint_property_match").and_then(Value::as_str),
+            "css_hint_value_contains": string_array_at(context, "/css_hint_value_contains"),
         },
         "output": {
             "className": class_name,
@@ -1447,11 +1494,13 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "review_receipt_field_count": css_declaration_dry_run_contract.get("review_receipt_fields").and_then(Value::as_array).map(|fields| fields.len()),
         },
         "css_declaration_dry_run_diagnostics": css_declaration_dry_run_diagnostics,
+        "css_declaration_hint": css_declaration_hint,
         "css_declaration_dry_run_preview": {
             "status": css_declaration_dry_run_preview.get("status").and_then(Value::as_str),
             "property": css_declaration_dry_run_preview.get("property").and_then(Value::as_str),
             "value": css_declaration_dry_run_preview.get("value").and_then(Value::as_str),
             "proposed_declaration": css_dry_run_proposed_declaration,
+            "css_declaration_hint": css_declaration_dry_run_preview.get("css_declaration_hint").cloned(),
             "source_edit_safety": css_declaration_dry_run_preview.get("source_edit_safety").and_then(Value::as_str),
         },
         "css_declaration_dry_run_preview_diagnostics": css_declaration_dry_run_preview_diagnostics,
@@ -1748,6 +1797,13 @@ fn source_write_readiness(
     ) {
         missing_requirements
             .push("write_bridge_missing_replacement_payload_diagnostics_receipt_field");
+    }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "css_declaration_hint",
+    ) {
+        missing_requirements.push("write_bridge_missing_css_declaration_hint_receipt_field");
     }
     if !string_array_contains(
         editor_write_bridge,
@@ -2732,6 +2788,77 @@ fn string_array_at<'a>(root: &'a Value, pointer: &str) -> Vec<&'a str> {
         .and_then(Value::as_array)
         .map(|values| values.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default()
+}
+
+fn css_declaration_hint_evidence(value: &Value, reasons: &mut Vec<String>) -> Value {
+    if value.is_null() {
+        return Value::Null;
+    }
+    if !value.is_object() {
+        reasons.push("CSS declaration hint provenance is not an object".to_string());
+        return Value::Null;
+    }
+
+    json!({
+        "schema": bounded_optional_string(
+            value,
+            "/schema",
+            "CSS declaration hint schema",
+            MAX_CSS_DECLARATION_HINT_STRING_BYTES,
+            reasons,
+        ),
+        "hint_ordinal": value.get("hint_ordinal").and_then(Value::as_u64),
+        "property": bounded_optional_string(
+            value,
+            "/property",
+            "CSS declaration hint property",
+            MAX_CSS_DECLARATION_HINT_STRING_BYTES,
+            reasons,
+        ),
+        "property_pattern": bounded_optional_string(
+            value,
+            "/property_pattern",
+            "CSS declaration hint property pattern",
+            MAX_CSS_DECLARATION_HINT_STRING_BYTES,
+            reasons,
+        ),
+        "property_match": bounded_optional_string(
+            value,
+            "/property_match",
+            "CSS declaration hint property match",
+            MAX_CSS_DECLARATION_HINT_STRING_BYTES,
+            reasons,
+        ),
+        "value_contains": optional_bounded_string_array(
+            value,
+            "/value_contains",
+            "CSS declaration hint value filters",
+            MAX_CSS_DECLARATION_HINT_VALUE_FILTERS,
+            MAX_CSS_DECLARATION_HINT_STRING_BYTES,
+            reasons,
+        ),
+        "token_hint": bounded_optional_string(
+            value,
+            "/token_hint",
+            "CSS declaration hint token",
+            MAX_CSS_DECLARATION_HINT_STRING_BYTES,
+            reasons,
+        ),
+        "generator_id": bounded_optional_string(
+            value,
+            "/generator_id",
+            "CSS declaration hint generator",
+            MAX_GENERATOR_ID_BYTES,
+            reasons,
+        ),
+        "source_edit_safety": bounded_optional_string(
+            value,
+            "/source_edit_safety",
+            "CSS declaration hint source edit safety",
+            MAX_CSS_SOURCE_EDIT_SAFETY_BYTES,
+            reasons,
+        ),
+    })
 }
 
 fn string_slice_contains_case_insensitive(values: &[&str], expected: &str) -> bool {

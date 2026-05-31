@@ -28,6 +28,7 @@
     "runtime validation receipt verification",
     "reverse CSS delta preview provenance match",
     "reverse CSS delta replacement policy match",
+    "CSS declaration hint provenance match",
     "CSS declaration dry-run receipt for CSS contexts",
     "editor write bridge can_apply",
     "explicit user apply action",
@@ -45,6 +46,7 @@
   "required_source_apply_review_receipt_fields": [
     "source_apply_session",
     "preview_output",
+    "css_declaration_hint",
     "css_declaration_dry_run_diagnostics",
     "css_declaration_dry_run_preview_diagnostics",
     "reverse_css_delta_contract",

@@ -2170,6 +2170,7 @@ impl WebPreviewView {
             "context_kind": receipt.pointer("/context/context_kind").and_then(Value::as_str),
             "css_source_edit_safety": receipt.pointer("/context/css_source_edit_safety").and_then(Value::as_str),
             "preview_output": receipt.get("preview_output").cloned(),
+            "css_declaration_hint": receipt.get("css_declaration_hint").cloned(),
             "css_declaration_dry_run_contract": receipt.get("css_declaration_dry_run_contract").cloned(),
             "css_declaration_dry_run_diagnostics": receipt.get("css_declaration_dry_run_diagnostics").cloned(),
             "css_declaration_dry_run_preview": receipt.get("css_declaration_dry_run_preview").cloned(),

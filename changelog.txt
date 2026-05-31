@@ -1,3 +1,20 @@
+[2026-05-31] - DX Style CSS Declaration Hint Provenance
+
+CHANGED:
+- `G:\Dx\style` source contracts now require CSS declaration hint provenance in source-apply review, CSS declaration dry-run review, and editor write-bridge preflight evidence.
+- `crates\agent_ui\src\dx_style_panel` now preserves matched CSS hint ordinal, property pattern, match mode, and value filters in active context JSON and the native Style panel summary.
+- `crates\web_preview\src\dx_style_generator_surface` now includes a structured `css_declaration_hint` packet in source review requests, copied review packets, and CSS dry-run previews.
+- `crates\web_preview\src\dx_style_source_apply.rs` now preserves bounded CSS declaration hint evidence in native review receipts and reports missing hint receipt-field coverage.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the provenance path.
+
+PASSED:
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs G:\Dx\style\src\core\engine\css_declaration_dry_run.rs crates\agent_ui\src\dx_style_panel\css_hint_catalog.rs crates\agent_ui\src\dx_style_panel\css_cursor_context.rs crates\agent_ui\src\dx_style_panel\active_context.rs crates\agent_ui\src\dx_style_panel\panel_view.rs crates\web_preview\src\dx_style_generator_surface.rs crates\web_preview\src\dx_style_generator_surface\css_declaration_dry_run_script.rs crates\web_preview\src\dx_style_source_apply.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Visual Generator Control Dependencies
 
 ADDED:

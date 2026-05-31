@@ -159,6 +159,7 @@ const DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW_SCRIPT: &str = r##"    function cs
         property: declaration.property,
         value: declaration.value,
         proposed_declaration: proposedDeclaration,
+        css_declaration_hint: cssDeclarationHintPacket(context),
         source_edit_safety: context?.css_source_edit_safety || null,
         reason: declaration.property.toLowerCase() === property
           ? "Generated CSS declaration matches the active CSS property."
