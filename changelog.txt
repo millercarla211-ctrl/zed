@@ -1,3 +1,23 @@
+[2026-05-31] - DX Style Native Writer Implementation Gate
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-native-writer-implementation-plan.md` records the source-only plan for installing the native editor transaction writer behind existing gates.
+
+CHANGED:
+- `crates\web_preview\src\web_preview_view.rs` now installs a native DX Style writer dispatcher that refuses unless source-write readiness, native mutation preflight, native mutation capability, same-session editor identity, trusted replacement preview, pre-write length/digest, expected after-write length/digest, and post-write readback digest all agree.
+- The dispatcher locates the original singleton editor by editor id, workspace item id, active buffer entity and remote id, multi-buffer id, worktree id, project path, buffer kind, and absolute source path, then applies only one `Editor::transact` byte-range edit when future contracts authorize mutation.
+- `crates\web_preview\src\dx_style_source_apply.rs` now marks the pure source-apply review path as `pending_native_dispatch` with `requires_web_preview_view_dispatch` instead of pretending the native writer is not installed.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document that the native writer implementation path exists but remains blocked by current source-owned gates.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\web_preview_view.rs crates\web_preview\src\dx_style_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed native writer implementation files returned no matches.
+
+NOTES:
+- Source mutation remains disabled under current contracts. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Native Writer Dispatch Gate
 
 ADDED:

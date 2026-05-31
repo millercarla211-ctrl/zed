@@ -1897,6 +1897,32 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /fn dx_style_active_editor_source_revalidation/);
   assert.match(webPreviewView, /dx_style_native_writer_replay::native_writer_dry_run_replay/);
   assert.match(webPreviewView, /native_writer_dry_run_replay/);
+  assert.match(webPreviewView, /use editor::\{Editor, MultiBufferOffset\}/);
+  assert.match(webPreviewView, /fn dx_style_native_writer_dispatch_receipt/);
+  assert.match(webPreviewView, /fn dx_style_native_writer_editor_for_receipt/);
+  assert.match(webPreviewView, /fn dx_style_native_writer_replacement_text/);
+  assert.match(webPreviewView, /fn dx_style_native_writer_dispatch_blocked/);
+  assert.match(webPreviewView, /source_write_readiness\/safe_to_mutate/);
+  assert.match(webPreviewView, /native_mutation_writer_preflight\/ready_to_write/);
+  assert.match(webPreviewView, /native_handler\/can_mutate_source/);
+  assert.match(webPreviewView, /expected_workspace_item_id != expected_editor_id/);
+  assert.match(webPreviewView, /expected_buffer_kind != "singleton"/);
+  assert.match(webPreviewView, /expected_active_buffer_remote_id/);
+  assert.match(webPreviewView, /expected_multi_buffer_id/);
+  assert.match(webPreviewView, /expected_worktree_id/);
+  assert.match(webPreviewView, /expected_project_path/);
+  assert.match(webPreviewView, /expected_source_len_bytes_before/);
+  assert.match(webPreviewView, /expected_source_len_bytes_after/);
+  assert.match(webPreviewView, /pre_write_source_len_mismatch/);
+  assert.match(webPreviewView, /pre_write_digest_mismatch/);
+  assert.match(webPreviewView, /expected_len_after_mismatch/);
+  assert.match(webPreviewView, /expected_digest_after_mismatch/);
+  assert.match(webPreviewView, /editor\.transact\(window, cx/);
+  assert.match(webPreviewView, /MultiBufferOffset\(edit_start\)\.\.MultiBufferOffset\(edit_end\)/);
+  assert.match(webPreviewView, /single_editor_transaction/);
+  assert.match(webPreviewView, /post_write_readback_digest_match/);
+  assert.match(webPreviewView, /"native_writer_implementation": "editor_transaction"/);
+  assert.match(webPreviewView, /"native_writer_dispatch"\.to_string\(\),\s*native_writer_dispatch/s);
   assert.match(nativeWriterReplay, /DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA/);
   assert.match(nativeWriterReplay, /MAX_DX_STYLE_DRY_RUN_EDIT_REPLAY_PREVIEWS: usize = 3/);
   assert.match(nativeWriterReplay, /MAX_DX_STYLE_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096/);
@@ -1943,6 +1969,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   );
   assert.match(sourceApplyArm, /source_apply_review_receipt[\s\S]*true/);
   assert.match(sourceApplyArm, /if consume_session_token/);
+  assert.match(
+    sourceApplyArm,
+    /if consume_session_token \{[\s\S]*dx_style_native_writer_dispatch_receipt[\s\S]*"native_writer_dispatch"\.to_string\(\)/,
+  );
   assert.match(sourceApplyArm, /self\.dx_style_source_apply_session_token = None/);
   assert.match(sourceApplyArm, /self\.dx_style_source_apply_session_source_identity = None/);
   assert.ok(
@@ -2299,7 +2329,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /authorized_runtime_validation_missing/);
   assert.match(sourceApply, /explicit_mutation_authorization_missing/);
   assert.match(sourceApply, /blocked_readiness_not_safe/);
-  assert.match(sourceApply, /blocked_writer_not_installed/);
+  assert.match(sourceApply, /pending_native_dispatch/);
+  assert.match(sourceApply, /requires_web_preview_view_dispatch/);
   assert.match(sourceApply, /writer_invoked/);
   assert.match(sourceApply, /required_before_dispatch/);
   assert.match(sourceApply, /runtime_webview_build_proof_missing/);

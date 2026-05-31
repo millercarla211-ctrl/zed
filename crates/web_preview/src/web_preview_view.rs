@@ -2,7 +2,7 @@ use agent_client_protocol::schema as acp;
 use agent_ui::AgentPanel;
 use anyhow::{Context as _, Result, anyhow};
 use base64::Engine as _;
-use editor::Editor;
+use editor::{Editor, MultiBufferOffset};
 use gpui::{
     Action, Anchor, App, AppContext as _, Bounds, ClipboardEntry, ClipboardItem, Context, Entity,
     EventEmitter, FocusHandle, Focusable, Image as GpuiImage, Pixels, Render, SharedString,
@@ -30540,6 +30540,315 @@ impl WebPreviewView {
         payload
     }
 
+    fn dx_style_native_writer_dispatch_receipt(
+        &self,
+        receipt: &Value,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Value {
+        if receipt
+            .pointer("/source_write_readiness/safe_to_mutate")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return dx_style_native_writer_dispatch_blocked(
+                "blocked_readiness_not_safe",
+                "DX Style native writer dispatch refused because source-write readiness is not safe to mutate.",
+                receipt,
+            );
+        }
+        if receipt
+            .pointer("/native_mutation_writer_preflight/ready_to_write")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return dx_style_native_writer_dispatch_blocked(
+                "blocked_preflight_not_ready",
+                "DX Style native writer dispatch refused because mutation writer preflight is not ready.",
+                receipt,
+            );
+        }
+        if receipt
+            .pointer("/native_handler/can_mutate_source")
+            .and_then(Value::as_bool)
+            != Some(true)
+        {
+            return dx_style_native_writer_dispatch_blocked(
+                "blocked_writer_unavailable",
+                "DX Style native writer dispatch refused because the native handler is review-only.",
+                receipt,
+            );
+        }
+
+        let Some(source_path) = receipt.get("source_path").and_then(Value::as_str) else {
+            return dx_style_native_writer_dispatch_blocked(
+                "source_path_missing",
+                "DX Style native writer dispatch requires a source_path.",
+                receipt,
+            );
+        };
+        let Some((edit_start_byte, edit_end_byte)) = receipt
+            .pointer("/native_writer_dry_run_replay/edit_span")
+            .and_then(source_span_from_json)
+        else {
+            return dx_style_native_writer_dispatch_blocked(
+                "edit_span_missing",
+                "DX Style native writer dispatch requires a dry-run replay edit_span.",
+                receipt,
+            );
+        };
+        let Some(replacement_text) = dx_style_native_writer_replacement_text(
+            receipt,
+            source_path,
+            (edit_start_byte, edit_end_byte),
+        ) else {
+            return dx_style_native_writer_dispatch_blocked(
+                "replacement_text_missing",
+                "DX Style native writer dispatch requires the trusted structured edit preview replacement text.",
+                receipt,
+            );
+        };
+        let replacement_text = replacement_text.to_string();
+        let Some(expected_source_digest_before) = receipt
+            .pointer("/native_writer_dry_run_replay/source_digest_before")
+            .and_then(Value::as_str)
+        else {
+            return dx_style_native_writer_dispatch_blocked(
+                "source_digest_before_missing",
+                "DX Style native writer dispatch requires a before-write source digest.",
+                receipt,
+            );
+        };
+        let Some(expected_source_digest_after) = receipt
+            .pointer("/native_writer_dry_run_replay/source_digest_after")
+            .and_then(Value::as_str)
+        else {
+            return dx_style_native_writer_dispatch_blocked(
+                "source_digest_after_missing",
+                "DX Style native writer dispatch requires an expected after-write source digest.",
+                receipt,
+            );
+        };
+        let Some(expected_source_len_bytes_before) = receipt
+            .pointer("/native_writer_dry_run_replay/source_len_bytes_before")
+            .and_then(Value::as_u64)
+        else {
+            return dx_style_native_writer_dispatch_blocked(
+                "source_len_before_missing",
+                "DX Style native writer dispatch requires a before-write source length.",
+                receipt,
+            );
+        };
+        let Some(expected_source_len_bytes_after) = receipt
+            .pointer("/native_writer_dry_run_replay/source_len_bytes_after")
+            .and_then(Value::as_u64)
+        else {
+            return dx_style_native_writer_dispatch_blocked(
+                "source_len_after_missing",
+                "DX Style native writer dispatch requires an expected after-write source length.",
+                receipt,
+            );
+        };
+        let Some(editor) = self.dx_style_native_writer_editor_for_receipt(receipt, source_path, cx)
+        else {
+            return dx_style_native_writer_dispatch_blocked(
+                "native_editor_identity_missing",
+                "DX Style native writer dispatch could not find the same-session singleton editor.",
+                receipt,
+            );
+        };
+
+        let Some(edit_start) = usize::try_from(edit_start_byte).ok() else {
+            return dx_style_native_writer_dispatch_blocked(
+                "edit_span_out_of_range",
+                "DX Style native writer dispatch edit start is too large for this platform.",
+                receipt,
+            );
+        };
+        let Some(edit_end) = usize::try_from(edit_end_byte).ok() else {
+            return dx_style_native_writer_dispatch_blocked(
+                "edit_span_out_of_range",
+                "DX Style native writer dispatch edit end is too large for this platform.",
+                receipt,
+            );
+        };
+
+        editor.update(cx, |editor, cx| {
+            let source_before = editor.text(cx);
+            if edit_start > edit_end
+                || edit_end > source_before.len()
+                || !source_before.is_char_boundary(edit_start)
+                || !source_before.is_char_boundary(edit_end)
+            {
+                return dx_style_native_writer_dispatch_blocked(
+                    "edit_span_not_writable",
+                    "DX Style native writer dispatch edit span does not align with the live editor source.",
+                    receipt,
+                );
+            }
+            let source_digest_before =
+                crate::dx_style_source_apply::active_source_digest(&source_before);
+            if source_before.len() as u64 != expected_source_len_bytes_before {
+                return dx_style_native_writer_dispatch_blocked(
+                    "pre_write_source_len_mismatch",
+                    "DX Style native writer dispatch refused because the live editor length changed before write.",
+                    receipt,
+                );
+            }
+            if source_digest_before != expected_source_digest_before {
+                return dx_style_native_writer_dispatch_blocked(
+                    "pre_write_digest_mismatch",
+                    "DX Style native writer dispatch refused because the live editor digest changed before write.",
+                    receipt,
+                );
+            }
+
+            let expected_after_len =
+                source_before.len() - (edit_end - edit_start) + replacement_text.len();
+            let mut expected_after = String::with_capacity(expected_after_len);
+            expected_after.push_str(&source_before[..edit_start]);
+            expected_after.push_str(&replacement_text);
+            expected_after.push_str(&source_before[edit_end..]);
+            let computed_source_digest_after =
+                crate::dx_style_source_apply::active_source_digest(&expected_after);
+            if expected_after.len() as u64 != expected_source_len_bytes_after {
+                return dx_style_native_writer_dispatch_blocked(
+                    "expected_len_after_mismatch",
+                    "DX Style native writer dispatch refused because the trusted replacement does not match the expected after-write length.",
+                    receipt,
+                );
+            }
+            if computed_source_digest_after != expected_source_digest_after {
+                return dx_style_native_writer_dispatch_blocked(
+                    "expected_digest_after_mismatch",
+                    "DX Style native writer dispatch refused because the trusted replacement does not match the expected after-write digest.",
+                    receipt,
+                );
+            }
+
+            let transaction_id = editor.transact(window, cx, |editor, _window, cx| {
+                editor.edit(
+                    [(
+                        MultiBufferOffset(edit_start)..MultiBufferOffset(edit_end),
+                        replacement_text.clone(),
+                    )],
+                    cx,
+                );
+            });
+            let source_after = editor.text(cx);
+            let source_digest_after = crate::dx_style_source_apply::active_source_digest(&source_after);
+            let post_write_readback_digest_match = source_digest_after == expected_source_digest_after;
+            serde_json::json!({
+                "schema": "zed.web_preview.dx_style.native_writer_dispatch.v1",
+                "mutation_write_receipt_schema": "zed.web_preview.dx_style.mutation_write_receipt.v1",
+                "status": if post_write_readback_digest_match { "dispatched" } else { "failed_post_write_digest_mismatch" },
+                "writer_invoked": true,
+                "mutation_performed": transaction_id.is_some(),
+                "source_path": source_path,
+                "edit_span": {
+                    "start_byte": edit_start_byte,
+                    "end_byte": edit_end_byte,
+                },
+                "replacement_text_bytes": replacement_text.len(),
+                "replacement_text_redacted": true,
+                "source_digest_before": source_digest_before,
+                "source_len_bytes_before": source_before.len(),
+                "expected_source_digest_after": expected_source_digest_after,
+                "expected_source_len_bytes_after": expected_source_len_bytes_after,
+                "source_digest_after": source_digest_after.clone(),
+                "source_len_bytes_after": source_after.len(),
+                "pre_write_digest_match": true,
+                "pre_write_source_len_match": true,
+                "single_editor_transaction": transaction_id.is_some(),
+                "undo_group_id": transaction_id.map(|transaction_id| format!("{transaction_id:?}")),
+                "post_write_readback_digest": source_digest_after,
+                "post_write_readback_digest_match": post_write_readback_digest_match,
+                "verification_performed": true,
+                "native_writer_implementation": "editor_transaction",
+            })
+        })
+    }
+
+    fn dx_style_native_writer_editor_for_receipt(
+        &self,
+        receipt: &Value,
+        source_path: &str,
+        cx: &App,
+    ) -> Option<Entity<Editor>> {
+        let expected_editor_id = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/editor_entity_id")
+            .and_then(Value::as_u64)?;
+        let expected_workspace_item_id = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/workspace_item_id")
+            .and_then(Value::as_u64)?;
+        let expected_active_buffer_id = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/active_buffer_entity_id")
+            .and_then(Value::as_u64)?;
+        let expected_active_buffer_remote_id = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/active_buffer_remote_id")
+            .and_then(Value::as_u64)?;
+        let expected_multi_buffer_id = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/multi_buffer_entity_id")
+            .and_then(Value::as_u64)?;
+        let expected_worktree_id = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/worktree_id")
+            .and_then(Value::as_u64)?;
+        let expected_project_path = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/project_path")
+            .and_then(Value::as_str)?;
+        let expected_buffer_kind = receipt
+            .pointer("/native_active_editor_source_revalidation/session_source/native_editor/buffer_kind")
+            .and_then(Value::as_str)?;
+        if expected_workspace_item_id != expected_editor_id || expected_buffer_kind != "singleton" {
+            return None;
+        }
+        let workspace = self.workspace.upgrade()?;
+        let (project, editors) = {
+            let workspace = workspace.read(cx);
+            (
+                workspace.project().clone(),
+                workspace.items_of_type::<Editor>(cx).collect::<Vec<_>>(),
+            )
+        };
+        editors.into_iter().find(|editor| {
+            let editor_entity_id = editor.entity_id().as_u64();
+            if editor_entity_id != expected_editor_id
+                || editor_entity_id != expected_workspace_item_id
+            {
+                return false;
+            }
+            let editor = editor.read(cx);
+            if editor.buffer_kind(cx) != ItemBufferKind::Singleton {
+                return false;
+            }
+            let Some(active_buffer) = editor.active_buffer(cx) else {
+                return false;
+            };
+            if active_buffer.entity_id().as_u64() != expected_active_buffer_id {
+                return false;
+            }
+            if active_buffer.read(cx).remote_id().to_proto() != expected_active_buffer_remote_id {
+                return false;
+            }
+            if editor.buffer().entity_id().as_u64() != expected_multi_buffer_id {
+                return false;
+            }
+            let Some(project_path) = editor.active_project_path(cx) else {
+                return false;
+            };
+            if project_path.worktree_id.to_proto() != expected_worktree_id
+                || project_path.path.as_unix_str() != expected_project_path
+            {
+                return false;
+            }
+            project
+                .read(cx)
+                .absolute_path(&project_path, cx)
+                .map(|path| dx_style_source_paths_match(&path.display().to_string(), source_path))
+                .unwrap_or(false)
+        })
+    }
+
     fn dx_style_active_editor_source_revalidation(&self, payload: &Value, cx: &App) -> Value {
         let request = payload.get("request").unwrap_or(&Value::Null);
         let request_source_path =
@@ -31161,7 +31470,7 @@ impl WebPreviewView {
                 }
             }
             "dx-style-source-apply" => {
-                let (receipt, consume_session_token) = if let Some(refusal_reason) =
+                let (mut receipt, consume_session_token) = if let Some(refusal_reason) =
                     self.dx_style_source_apply_session_refusal(&payload)
                 {
                     (
@@ -31179,6 +31488,14 @@ impl WebPreviewView {
                         true,
                     )
                 };
+                if consume_session_token {
+                    let native_writer_dispatch =
+                        self.dx_style_native_writer_dispatch_receipt(&receipt, window, cx);
+                    if let Some(receipt) = receipt.as_object_mut() {
+                        receipt
+                            .insert("native_writer_dispatch".to_string(), native_writer_dispatch);
+                    }
+                }
                 if consume_session_token {
                     self.dx_style_source_apply_session_token = None;
                     self.dx_style_source_apply_session_source_identity = None;
@@ -37834,6 +38151,63 @@ fn source_span_from_json(value: &Value) -> Option<(u64, u64)> {
     let start = value.get("start_byte").and_then(Value::as_u64)?;
     let end = value.get("end_byte").and_then(Value::as_u64)?;
     Some((start, end))
+}
+
+fn dx_style_native_writer_replacement_text<'a>(
+    receipt: &'a Value,
+    source_path: &str,
+    edit_span: (u64, u64),
+) -> Option<&'a str> {
+    receipt
+        .pointer("/dry_run_edit_review/structured_edit_previews")
+        .and_then(Value::as_array)?
+        .iter()
+        .find_map(|preview| {
+            let preview_path = preview.get("source_path").and_then(Value::as_str)?;
+            if !dx_style_source_paths_match(preview_path, source_path) {
+                return None;
+            }
+            let preview_span = source_span_from_json(preview)?;
+            if preview_span != edit_span {
+                return None;
+            }
+            preview.get("replacement_text").and_then(Value::as_str)
+        })
+}
+
+fn dx_style_native_writer_dispatch_blocked(
+    status: &'static str,
+    reason: &'static str,
+    receipt: &Value,
+) -> Value {
+    serde_json::json!({
+        "schema": "zed.web_preview.dx_style.native_writer_dispatch.v1",
+        "status": status,
+        "reason": reason,
+        "writer_invoked": false,
+        "mutation_performed": false,
+        "source_path": receipt.get("source_path").and_then(Value::as_str),
+        "source_write_readiness_status": receipt
+            .pointer("/source_write_readiness/status")
+            .and_then(Value::as_str),
+        "source_write_safe_to_mutate": receipt
+            .pointer("/source_write_readiness/safe_to_mutate")
+            .and_then(Value::as_bool),
+        "native_mutation_writer_preflight_status": receipt
+            .pointer("/native_mutation_writer_preflight/status")
+            .and_then(Value::as_str),
+        "native_mutation_writer_preflight_ready": receipt
+            .pointer("/native_mutation_writer_preflight/ready_to_write")
+            .and_then(Value::as_bool),
+        "native_writer_implementation": "editor_transaction",
+        "required_before_dispatch": [
+            "source_write_readiness_ready",
+            "native_mutation_writer_preflight_ready",
+            "native_writer_can_mutate_source",
+            "authorized_runtime_validation",
+            "mutation_write_receipt_runtime_implementation",
+        ],
+    })
 }
 
 fn dx_style_source_apply_session_source_identity_from_context_json(

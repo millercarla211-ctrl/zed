@@ -1912,13 +1912,13 @@ fn native_writer_dispatch(
     } else if !native_can_mutate_source {
         "blocked_writer_unavailable"
     } else {
-        "blocked_writer_not_installed"
+        "pending_native_dispatch"
     };
 
     json!({
         "schema": DX_STYLE_NATIVE_WRITER_DISPATCH_SCHEMA,
         "status": status,
-        "reason": "DX Style native writer dispatch is review-only until mutation capability, runtime proof, and the editor writer implementation are explicitly enabled.",
+        "reason": "DX Style source-apply review is complete, but native writer dispatch must run inside WebPreviewView before source mutation can occur.",
         "writer_invoked": false,
         "mutation_performed": false,
         "source_write_readiness_status": source_write_readiness.get("status").and_then(Value::as_str),
@@ -1926,7 +1926,7 @@ fn native_writer_dispatch(
         "native_mutation_writer_preflight_status": native_mutation_writer_preflight.get("status").and_then(Value::as_str),
         "native_mutation_writer_preflight_ready": preflight_ready,
         "native_can_mutate_source": native_can_mutate_source,
-        "native_writer_implementation": "not_installed",
+        "native_writer_implementation": "requires_web_preview_view_dispatch",
         "required_before_dispatch": [
             "source_write_readiness_ready",
             "native_mutation_writer_preflight_ready",
