@@ -49,6 +49,8 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
     const sourceApplyContractScope = sourceApplyContract.scope || "unknown";
     const sourceApplyIpcKind = sourceApplyContract.ipc_kind || "dx-style-source-apply";
     const sourceApplyReceiptSchema = sourceApplyContract.receipt_schema || "unknown";
+    const sourceApplyCssDeclarationHintSchema =
+      sourceApplyContract.css_declaration_hint_schema || null;
 __DX_STYLE_SOURCE_APPLY_SESSION_CONSTANTS__
     const sourceApplyMutationEnabled = sourceApplyContract.source_mutation_enabled === true;
     const sourceApplyRequiredHandlerCapabilities = Array.isArray(sourceApplyContract.required_native_handler_capabilities)
@@ -1644,7 +1646,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
     function cssDeclarationHintPacket(context = zedStyleContext) {
       if (context?.context_kind !== "css_declaration") return null;
       return {
-        schema: "zed.dx_style.css_declaration_hint.v1",
+        schema: cssDeclarationHintSchema(),
         hint_ordinal: Number.isInteger(context.css_hint_ordinal)
           ? context.css_hint_ordinal
           : null,
@@ -1660,6 +1662,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       };
     }
 
+    function cssDeclarationHintSchema() {
+      return sourceApplyCssDeclarationHintSchema
+        || cssDeclarationDryRunHintSchema
+        || "zed.dx_style.css_declaration_hint.v1";
+    }
+
     function cssDeclarationHintDiagnostics(context = zedStyleContext) {
       if (context?.context_kind !== "css_declaration") return [];
       const diagnostics = [];
@@ -1667,6 +1675,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const sourceApplyFields = normalizedStringValues(sourceApplyRequiredCssDeclarationHintFields);
       const dryRunFields = normalizedStringValues(cssDeclarationDryRunRequiredHintFields);
       const requiredFields = sourceApplyFields.length ? sourceApplyFields : dryRunFields;
+      const expectedHintSchema = cssDeclarationHintSchema();
       const supportedFields = new Set([
         "schema",
         "hint_ordinal",
@@ -1685,10 +1694,19 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (!dryRunFields.length) {
         diagnostics.push("css_declaration_dry_run_contract_missing_hint_fields");
       }
+      if (!sourceApplyCssDeclarationHintSchema) {
+        diagnostics.push("source_apply_contract_missing_css_declaration_hint_schema");
+      }
+      if (!cssDeclarationDryRunHintSchema) {
+        diagnostics.push("css_declaration_dry_run_contract_missing_hint_schema");
+      }
       if (sourceApplyFields.length
         && dryRunFields.length
         && sourceApplyFields.join("\u0000") !== dryRunFields.join("\u0000")) {
         diagnostics.push("css_declaration_hint_field_contract_mismatch");
+      }
+      if (sourceApplyCssDeclarationHintSchema !== cssDeclarationDryRunHintSchema) {
+        diagnostics.push("css_declaration_hint_schema_contract_mismatch");
       }
       if (!packet) {
         diagnostics.push("css_declaration_hint_missing");
@@ -1696,7 +1714,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
 
       const expected = {
-        schema: "zed.dx_style.css_declaration_hint.v1",
+        schema: expectedHintSchema,
         hint_ordinal: Number.isInteger(context.css_hint_ordinal) ? context.css_hint_ordinal : null,
         property: context.css_property || null,
         property_pattern: context.css_hint_property_pattern || null,
@@ -3018,6 +3036,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `source_apply_ipc_kind: ${sourceApplyIpcKind}`,
         `source_apply_receipt_schema: ${sourceApplyReceiptSchema}`,
         `source_apply_context_schema: ${expectedContextSchema}`,
+        `source_apply_css_declaration_hint_schema: ${sourceApplyCssDeclarationHintSchema || "missing"}`,
         `source_apply_mutation_enabled: ${sourceApplyMutationEnabled}`,
         `source_apply_required_editor_guards: ${sourceApplyRequiredEditorGuards.length}`,
         `source_apply_required_handler_capabilities: ${sourceApplyRequiredHandlerCapabilities.length}`,
@@ -3028,6 +3047,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `css_declaration_dry_run_contract_schema: ${cssDeclarationDryRunSchema}`,
         `css_declaration_dry_run_contract_source: ${cssDeclarationDryRunSource}`,
         `css_declaration_dry_run_context_kind: ${cssDeclarationDryRunContextKind}`,
+        `css_declaration_dry_run_hint_schema: ${cssDeclarationDryRunHintSchema || "missing"}`,
         `css_declaration_dry_run_mutation_enabled: ${cssDeclarationDryRunMutationEnabled}`,
         `css_declaration_dry_run_required_context_fields: ${cssDeclarationDryRunRequiredFields.length}`,
         `css_declaration_dry_run_required_hint_fields: ${cssDeclarationDryRunRequiredHintFields.length}`,

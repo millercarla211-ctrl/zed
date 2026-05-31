@@ -5,6 +5,7 @@
   "ipc_kind": "dx-style-source-apply",
   "receipt_schema": "zed.web_preview.dx_style_source_apply_receipt.v1",
   "active_context_schema": "zed.dx_style.active_context.v1",
+  "css_declaration_hint_schema": "zed.dx_style.css_declaration_hint.v1",
   "source_apply_session_kind": "zed.web_preview.dx_style.source_apply_session",
   "fixture_path": "fixtures/grouped-class-source-apply-contract.json",
   "source_mutation_enabled": false,

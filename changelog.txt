@@ -1,3 +1,19 @@
+[2026-05-31] - DX Style CSS Declaration Hint Schema Source Ownership
+
+CHANGED:
+- `G:\Dx\style` source-apply and CSS declaration dry-run contracts now source-own the expected `zed.dx_style.css_declaration_hint.v1` hint packet schema.
+- `crates\web_preview\src\dx_style_generator_surface` now compares source-apply and CSS dry-run hint schema values and reports missing or mismatched schema ownership before IPC.
+- `crates\web_preview\src\dx_style_source_apply.rs` now validates CSS declaration hint packet schema against the source-owned contract value and preserves that schema evidence in review receipts.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document schema source ownership.
+
+PASSED:
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\css_declaration_dry_run.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\web_preview\src\dx_style_generator_surface\css_declaration_dry_run_script.rs crates\web_preview\src\dx_style_source_apply.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts`
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style CSS Declaration Hint Match Guard
 
 CHANGED:

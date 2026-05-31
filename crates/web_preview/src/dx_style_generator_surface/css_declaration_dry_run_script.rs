@@ -2,6 +2,8 @@ const DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS_SCRIPT: &str = r##"    const cs
     const cssDeclarationDryRunSource = cssDeclarationDryRunContract.__source || "embedded:dx-style-css-declaration-dry-run-contract-fixture";
     const cssDeclarationDryRunMutationEnabled = cssDeclarationDryRunContract.source_mutation_enabled === true;
     const cssDeclarationDryRunContextKind = cssDeclarationDryRunContract.review_context_kind || "css_declaration";
+    const cssDeclarationDryRunHintSchema =
+      cssDeclarationDryRunContract.css_declaration_hint_schema || null;
     const cssDeclarationDryRunRequiredFields = Array.isArray(cssDeclarationDryRunContract.required_context_fields)
       ? cssDeclarationDryRunContract.required_context_fields
       : [];

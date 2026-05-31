@@ -222,6 +222,14 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if contract_session_kind != Some(DX_STYLE_SOURCE_APPLY_SESSION_KIND) {
         reasons.push("source-apply contract is missing trusted session kind".to_string());
     }
+    let contract_css_declaration_hint_schema = contract
+        .get("css_declaration_hint_schema")
+        .and_then(Value::as_str);
+    if contract_css_declaration_hint_schema != Some(DX_STYLE_CSS_DECLARATION_HINT_SCHEMA) {
+        reasons.push(
+            "source-apply contract is missing supported CSS declaration hint schema".to_string(),
+        );
+    }
     let contract_source_mutation_enabled = contract
         .get("source_mutation_enabled")
         .and_then(Value::as_bool);
@@ -1163,6 +1171,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
                     .to_string(),
             );
         }
+        if css_declaration_dry_run_contract
+            .get("css_declaration_hint_schema")
+            .and_then(Value::as_str)
+            != contract_css_declaration_hint_schema
+        {
+            reasons.push(
+                "CSS declaration dry-run contract hint schema does not match source-apply contract"
+                    .to_string(),
+            );
+        }
         if !string_array_contains(
             css_declaration_dry_run_contract,
             "/required_context_fields",
@@ -1211,6 +1229,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             &css_declaration_hint,
             context,
             &source_apply_required_css_declaration_hint_fields,
+            contract_css_declaration_hint_schema.unwrap_or(DX_STYLE_CSS_DECLARATION_HINT_SCHEMA),
             &mut reasons,
         );
         for field in [
@@ -1485,6 +1504,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "schema": contract_schema,
             "ipc_kind": contract_ipc_kind,
             "source_apply_session_kind": contract_session_kind,
+            "css_declaration_hint_schema": contract_css_declaration_hint_schema,
             "source_mutation_enabled": contract_source_mutation_enabled,
             "source": contract.get("__source").and_then(Value::as_str),
             "reverse_delta_replacement_policy_guard_present": reverse_css_delta_replacement_policy_guard_present,
@@ -1514,6 +1534,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "schema": css_declaration_dry_run_contract.get("__schema").and_then(Value::as_str),
             "source": css_declaration_dry_run_contract.get("__source").and_then(Value::as_str),
             "dry_run_receipt_schema": css_declaration_dry_run_contract.get("dry_run_receipt_schema").and_then(Value::as_str),
+            "css_declaration_hint_schema": css_declaration_dry_run_contract.get("css_declaration_hint_schema").and_then(Value::as_str),
             "source_mutation_enabled": css_declaration_dry_run_contract.get("source_mutation_enabled").and_then(Value::as_bool),
             "review_context_kind": css_declaration_dry_run_contract.get("review_context_kind").and_then(Value::as_str),
             "max_declaration_bytes": css_declaration_dry_run_contract.get("max_declaration_bytes").and_then(Value::as_u64),
@@ -2901,6 +2922,7 @@ fn validate_css_declaration_hint_provenance(
     hint: &Value,
     context: &Value,
     required_fields: &[&str],
+    expected_schema: &str,
     reasons: &mut Vec<String>,
 ) {
     if hint.is_null() || required_fields.is_empty() {
@@ -2915,13 +2937,9 @@ fn validate_css_declaration_hint_provenance(
             continue;
         }
         match *field {
-            "schema" => compare_css_hint_fixed_str(
-                hint,
-                "schema",
-                DX_STYLE_CSS_DECLARATION_HINT_SCHEMA,
-                "schema",
-                reasons,
-            ),
+            "schema" => {
+                compare_css_hint_fixed_str(hint, "schema", expected_schema, "schema", reasons)
+            }
             "hint_ordinal" => compare_css_hint_u64(
                 hint,
                 "hint_ordinal",
