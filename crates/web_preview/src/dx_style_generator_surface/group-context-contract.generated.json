@@ -61,6 +61,9 @@
     "group_context.expansion_status",
     "group_context.candidate_token_count",
     "group_context.source_state",
+    "group_context.requires_registry_receipt",
+    "group_context.source_owned",
+    "group_context.can_expand_inline",
     "group_context.registry_receipt"
   ],
   "max_alias_bytes": 128,

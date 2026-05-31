@@ -81,6 +81,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextStatusSet = new Set(groupContextStatusValues);
     const groupContextStatusBySyntax =
       groupContextStatusRulesBySyntax(groupContextContract.group_call_status_by_syntax);
+    const groupContextContractFields = Array.isArray(groupContextContract.context_fields)
+      ? normalizedStringValues(groupContextContract.context_fields)
+      : [];
+    const groupContextContractFieldSet = new Set(groupContextContractFields);
+    const groupContextRequiredFlagFields = [
+      "group_context.requires_registry_receipt",
+      "group_context.source_owned",
+      "group_context.can_expand_inline"
+    ];
     const reverseCssDeltaContractSchema = reverseCssDeltaContract.__schema || "unknown";
     const reverseCssDeltaContractSource = reverseCssDeltaContract.__source || "embedded:dx-style-reverse-css-delta-contract-fixture";
     const reverseCssDeltaMutationEnabled = reverseCssDeltaContract.source_mutation_enabled === true;
@@ -503,6 +512,11 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       const group = context?.group_context;
       if (!group || group.status === "none" || group.syntax === "not_grouped") return [];
       const diagnostics = [];
+      for (const field of groupContextRequiredFlagFields) {
+        if (!groupContextContractFieldSet.has(field)) {
+          diagnostics.push(`group_context_contract_missing_field:${field}`);
+        }
+      }
       const syntax = String(group.syntax || "");
       const status = String(group.status || "");
       if (!syntax) {
@@ -2544,6 +2558,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_max_utility_count: ${groupContextMaxUtilityCount || "unknown"}`,
         `group_context_max_utility_bytes: ${groupContextMaxUtilityBytes || "unknown"}`,
         `group_context_candidate_min_utility_count: ${groupContextCandidateMin || "unknown"}`,
+        `group_context_contract_fields: ${groupContextContractFields.length}`,
+        `group_context_required_flag_fields: ${groupContextRequiredFlagFields.length}`,
         `group_context_syntax_values: ${groupContextSyntaxValues.length}`,
         `group_context_status_values: ${groupContextStatusValues.length}`,
         `group_context_status_rules: ${Object.keys(groupContextStatusBySyntax).length}`,

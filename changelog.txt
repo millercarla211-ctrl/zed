@@ -1,3 +1,23 @@
+[2026-05-31] - DX Style Group Context Field Contract
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-group-context-field-contract-plan.md` records the source-only plan for keeping active grouped-class readiness flags source-owned by contract metadata.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` and `G:\Dx\style\fixtures\grouped-class-web-preview-context.json` now include `group_context.requires_registry_receipt`, `group_context.source_owned`, and `group_context.can_expand_inline` in the source-owned context field list.
+- `crates\web_preview\src\dx_style_generator_surface\group-context-contract.generated.json` mirrors the updated source-owned fixture.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now verifies the mirrored contract field list before trusting grouped readiness flags in source review/apply readiness.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the grouped context field contract.
+
+PASSED:
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its source/fixture changes are changed on disk and mirrored/guarded through the Zed commit.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Active Group Readiness Flags
 
 ADDED:

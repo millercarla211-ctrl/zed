@@ -908,6 +908,15 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupWebPreviewContextFixture.context_fields.includes("group_context.registry_receipt"),
   );
+  assert.ok(
+    groupWebPreviewContextFixture.context_fields.includes(
+      "group_context.requires_registry_receipt",
+    ),
+  );
+  assert.ok(groupWebPreviewContextFixture.context_fields.includes("group_context.source_owned"));
+  assert.ok(
+    groupWebPreviewContextFixture.context_fields.includes("group_context.can_expand_inline"),
+  );
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_SCHEMA/);
   assert.match(groupRegistryReceipt, /dx\.style\.grouped-class-registry-receipt/);
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_FIXTURE_PATH/);
@@ -3515,6 +3524,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_max_alias_bytes/);
   assert.match(surfaceScript, /group_context_max_utility_count/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
+  assert.match(surfaceScript, /groupContextRequiredFlagFields/);
+  assert.match(surfaceScript, /group_context_contract_fields/);
+  assert.match(surfaceScript, /group_context_required_flag_fields/);
   assert.match(surfaceScript, /group_context_syntax_values/);
   assert.match(surfaceScript, /group_context_status_values/);
   assert.match(surfaceScript, /groupContextStatusRulesBySyntax/);
@@ -3524,6 +3536,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_vocabulary_diagnostics/);
   assert.match(surfaceScript, /group_context_status_mismatch/);
   assert.match(surfaceScript, /group_context_registry_requirement_missing/);
+  assert.match(surfaceScript, /group_context_contract_missing_field/);
   assert.match(surfaceScript, /group_context_source_owned_missing/);
   assert.match(surfaceScript, /group_context_inline_expansion_missing/);
   assert.match(surfaceScript, /group_requires_registry_receipt/);
