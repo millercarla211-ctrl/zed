@@ -29,6 +29,8 @@ const DX_STYLE_MUTATION_WRITE_RECEIPT_SCHEMA: &str =
     "zed.web_preview.dx_style.mutation_write_receipt.v1";
 const DX_STYLE_MUTATION_WRITE_RECEIPT_TEMPLATE_SCHEMA: &str =
     "zed.web_preview.dx_style.mutation_write_receipt_template.v1";
+const DX_STYLE_NATIVE_MUTATION_WRITER_PREFLIGHT_SCHEMA: &str =
+    "zed.web_preview.dx_style.native_mutation_writer_preflight.v1";
 const DX_STYLE_USER_APPLY_ACTION_SCHEMA: &str = "zed.web_preview.dx_style.user_apply_action.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
@@ -76,6 +78,7 @@ const SOURCE_APPLY_REVIEW_RECEIPT_FIELDS: &[&str] = &[
     "post_write_digest_verification_plan",
     "runtime_validation_receipt_template",
     "mutation_write_receipt_template",
+    "native_mutation_writer_preflight",
     "user_apply_action",
     "source_write_readiness",
     "native_active_editor_source_revalidation",
@@ -391,6 +394,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     ) {
         reasons.push(
             "source-apply contract is missing mutation write receipt template field".to_string(),
+        );
+    }
+    if !string_array_contains(
+        contract,
+        "/review_receipt_fields",
+        "native_mutation_writer_preflight",
+    ) {
+        reasons.push(
+            "source-apply contract is missing native mutation writer preflight field".to_string(),
         );
     }
     if !string_array_contains(contract, "/review_receipt_fields", "user_apply_action") {
@@ -910,6 +922,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let mutation_write_receipt_template_status = mutation_write_receipt_template
         .get("status")
         .and_then(Value::as_str);
+    let native_mutation_writer_preflight = native_mutation_writer_preflight(
+        contract_source_mutation_enabled,
+        false,
+        editor_write_bridge,
+        &runtime_validation_receipt_template,
+        &mutation_write_receipt_template,
+    );
+    let native_mutation_writer_preflight_status = native_mutation_writer_preflight
+        .get("status")
+        .and_then(Value::as_str);
     let user_apply_action_evidence = user_apply_action_review(
         user_apply_action,
         contract_source_mutation_enabled,
@@ -1302,6 +1324,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         post_write_digest_verification_plan_status,
         runtime_validation_receipt_template_status,
         mutation_write_receipt_template_status,
+        native_mutation_writer_preflight_status,
         user_apply_action_status,
         reasons.len(),
         web_preview_declared_mutation_capability,
@@ -1474,6 +1497,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "post_write_digest_verification_plan": post_write_digest_verification_plan,
         "runtime_validation_receipt_template": runtime_validation_receipt_template,
         "mutation_write_receipt_template": mutation_write_receipt_template,
+        "native_mutation_writer_preflight": native_mutation_writer_preflight,
         "user_apply_action": user_apply_action_evidence,
         "source_write_readiness": source_write_readiness_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
@@ -1522,6 +1546,7 @@ fn source_write_readiness(
     post_write_digest_verification_plan_status: Option<&str>,
     runtime_validation_receipt_template_status: Option<&str>,
     mutation_write_receipt_template_status: Option<&str>,
+    native_mutation_writer_preflight_status: Option<&str>,
     user_apply_action_status: Option<&str>,
     native_review_reason_count: usize,
     web_preview_declared_mutation_capability: bool,
@@ -1634,6 +1659,17 @@ fn source_write_readiness(
     if !mutation_write_receipt_template_ready {
         missing_requirements.push("mutation_write_receipt_template_missing");
     }
+    let native_mutation_writer_preflight_ready = if contract_source_mutation_enabled == Some(true) {
+        native_mutation_writer_preflight_status == Some("ready")
+    } else {
+        matches!(
+            native_mutation_writer_preflight_status,
+            Some("blocked_mutation_disabled" | "ready")
+        )
+    };
+    if !native_mutation_writer_preflight_ready {
+        missing_requirements.push("native_mutation_writer_preflight_missing");
+    }
     let user_apply_action_ready = if contract_source_mutation_enabled == Some(true) {
         user_apply_action_status == Some("mutate_source_confirmed")
     } else {
@@ -1703,6 +1739,13 @@ fn source_write_readiness(
         "mutation_write_receipt_template",
     ) {
         missing_requirements.push("write_bridge_missing_mutation_write_receipt_template_field");
+    }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "native_mutation_writer_preflight",
+    ) {
+        missing_requirements.push("write_bridge_missing_native_mutation_writer_preflight_field");
     }
     if !string_array_contains(
         editor_write_bridge,
@@ -1791,6 +1834,7 @@ fn source_write_readiness(
         "post_write_digest_verification_plan_status": post_write_digest_verification_plan_status,
         "runtime_validation_receipt_template_status": runtime_validation_receipt_template_status,
         "mutation_write_receipt_template_status": mutation_write_receipt_template_status,
+        "native_mutation_writer_preflight_status": native_mutation_writer_preflight_status,
         "user_apply_action_status": user_apply_action_status,
         "native_review_reason_count": native_review_reason_count,
         "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
@@ -2220,6 +2264,88 @@ fn mutation_write_receipt_template(
         "post_write_readback_digest_match": false,
         "verification_performed": false,
         "written_at": Value::Null,
+    })
+}
+
+fn native_mutation_writer_preflight(
+    contract_source_mutation_enabled: Option<bool>,
+    native_can_mutate_source: bool,
+    editor_write_bridge: &Value,
+    runtime_validation_receipt_template: &Value,
+    mutation_write_receipt_template: &Value,
+) -> Value {
+    let editor_write_bridge_can_apply = editor_write_bridge
+        .get("can_apply")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let editor_write_bridge_can_mutate_source = editor_write_bridge
+        .get("can_mutate_source")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let runtime_template_status = runtime_validation_receipt_template
+        .get("status")
+        .and_then(Value::as_str);
+    let mutation_template_status = mutation_write_receipt_template
+        .get("status")
+        .and_then(Value::as_str);
+    let mut blockers = Vec::new();
+    if contract_source_mutation_enabled != Some(true) {
+        blockers.push("source_mutation_contract_disabled");
+    }
+    if !editor_write_bridge_can_apply {
+        blockers.push("editor_write_bridge_not_ready");
+    }
+    if !editor_write_bridge_can_mutate_source {
+        blockers.push("mutation_capable_editor_write_bridge_missing");
+    }
+    if !native_can_mutate_source {
+        blockers.push("native_writer_can_mutate_false");
+    }
+    if runtime_template_status != Some("ready") {
+        blockers.push("runtime_validation_receipt_template_unverified");
+    }
+    if mutation_template_status != Some("ready") {
+        blockers.push("mutation_write_receipt_template_unverified");
+    }
+    blockers.push("authorized_runtime_validation_missing");
+    blockers.push("explicit_mutation_authorization_missing");
+
+    let ready = blockers.is_empty();
+    let status = if ready {
+        "ready"
+    } else if contract_source_mutation_enabled == Some(true) {
+        "blocked_runtime_unverified"
+    } else {
+        "blocked_mutation_disabled"
+    };
+    let missing_authorization = blockers.clone();
+    json!({
+        "schema": DX_STYLE_NATIVE_MUTATION_WRITER_PREFLIGHT_SCHEMA,
+        "status": status,
+        "reason": if ready {
+            "Native mutation writer preflight is ready for an authorized source mutation."
+        } else {
+            "Native mutation writer preflight is blocked until source mutation, runtime validation, and mutation-capable writer authorization are proven."
+        },
+        "ready_to_write": ready,
+        "mutation_performed": false,
+        "source_mutation_enabled": contract_source_mutation_enabled,
+        "native_can_mutate_source": native_can_mutate_source,
+        "native_writer_available": native_can_mutate_source,
+        "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
+        "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,
+        "runtime_validation_receipt_template_status": runtime_template_status,
+        "mutation_write_receipt_template_status": mutation_template_status,
+        "required_authorization": [
+            "source_mutation_contract_enabled",
+            "mutation_capable_editor_write_bridge",
+            "authorized_runtime_validation",
+            "runtime_validation_receipt_ready",
+            "mutation_write_receipt_template_ready",
+            "explicit_mutation_authorization",
+        ],
+        "missing_authorization": missing_authorization,
+        "blockers": blockers,
     })
 }
 

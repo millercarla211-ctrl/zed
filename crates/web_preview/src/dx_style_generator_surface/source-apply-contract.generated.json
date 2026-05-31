@@ -67,6 +67,7 @@
     "post_write_digest_verification_plan",
     "runtime_validation_receipt_template",
     "mutation_write_receipt_template",
+    "native_mutation_writer_preflight",
     "user_apply_action",
     "source_write_readiness",
     "native_active_editor_source_revalidation",

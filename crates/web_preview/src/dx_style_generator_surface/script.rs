@@ -1373,6 +1373,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
             runtimeValidationReceiptTemplatePacket(applyGate),
           mutation_write_receipt_template:
             mutationWriteReceiptTemplatePacket(applyGate),
+          native_mutation_writer_preflight:
+            nativeMutationWriterPreflightPacket(applyGate),
           source_write_readiness: sourceWriteReadinessPacket(applyGate, output),
           review_receipt_fields: sourceApplyReviewReceiptFields,
           css_declaration_dry_run_contract: {
@@ -1595,6 +1597,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         "post_write_digest_verification_plan",
         "runtime_validation_receipt_template",
         "mutation_write_receipt_template",
+        "native_mutation_writer_preflight",
         "user_apply_action",
         "source_write_readiness",
         "native_active_editor_source_revalidation",
@@ -1680,6 +1683,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       missingRequirements.push("post_write_digest_verification_plan_missing");
       missingRequirements.push("runtime_validation_receipt_template_missing");
       missingRequirements.push("mutation_write_receipt_template_missing");
+      missingRequirements.push("native_mutation_writer_preflight_missing");
       if (bridge.can_apply !== true) missingRequirements.push("editor_write_bridge_not_ready");
       if (bridge.can_mutate_source !== true) {
         missingRequirements.push("mutation_capable_editor_write_bridge_missing");
@@ -1708,6 +1712,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
       if (!bridge.required_source_apply_review_receipt_fields.includes("mutation_write_receipt_template")) {
         missingRequirements.push("write_bridge_missing_mutation_write_receipt_template_field");
+      }
+      if (!bridge.required_source_apply_review_receipt_fields.includes("native_mutation_writer_preflight")) {
+        missingRequirements.push("write_bridge_missing_native_mutation_writer_preflight_field");
       }
       if (!bridge.required_source_apply_review_receipt_fields.includes("user_apply_action")) {
         missingRequirements.push("write_bridge_missing_user_apply_action_receipt_field");
@@ -1787,6 +1794,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         post_write_digest_verification_plan_status: "not_performed_in_web_preview",
         runtime_validation_receipt_template_status: "not_performed_in_web_preview",
         mutation_write_receipt_template_status: "not_performed_in_web_preview",
+        native_mutation_writer_preflight_status: "not_performed_in_web_preview",
         user_apply_action_status: "not_performed_in_preview",
         editor_write_bridge_state: bridge.state,
         editor_write_bridge_summary: bridge.summary,
@@ -1828,6 +1836,39 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         mutation_performed: false,
         post_write_readback_digest_match: false,
         verification_performed: false
+      };
+    }
+
+    function nativeMutationWriterPreflightPacket(applyGate) {
+      const bridge = editorWriteBridgeReviewPacket(applyGate);
+      return {
+        schema: "zed.web_preview.dx_style.native_mutation_writer_preflight.v1",
+        status: "not_performed_in_web_preview",
+        reason: "Native mutation writer preflight requires the trusted Zed-side source writer and authorized runtime validation.",
+        source_mutation_enabled: sourceApplyMutationEnabled,
+        editor_write_bridge_can_apply: bridge.can_apply,
+        editor_write_bridge_can_mutate_source: bridge.can_mutate_source,
+        mutation_write_receipt_schema: bridge.mutation_write_receipt_schema,
+        required_mutation_write_receipt_fields:
+          bridge.required_mutation_write_receipt_fields,
+        runtime_validation_receipt_schema: bridge.runtime_validation_receipt_schema,
+        required_runtime_validation_receipt_fields:
+          bridge.required_runtime_validation_receipt_fields,
+        mutation_performed: false,
+        native_writer_available: false,
+        required_authorization: [
+          "source_mutation_contract_enabled",
+          "mutation_capable_editor_write_bridge",
+          "authorized_runtime_validation",
+          "runtime_validation_receipt_ready",
+          "mutation_write_receipt_template_ready",
+          "explicit_mutation_authorization"
+        ],
+        missing_authorization: [
+          "native_writer_unavailable_in_web_preview",
+          "authorized_runtime_validation_missing",
+          "explicit_mutation_authorization_missing"
+        ]
       };
     }
 
