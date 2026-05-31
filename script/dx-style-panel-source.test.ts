@@ -1541,6 +1541,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   const actions = read("crates/zed_actions/src/lib.rs");
   const webPreview = read("crates/web_preview/src/web_preview.rs");
   const webPreviewView = read("crates/web_preview/src/web_preview_view.rs");
+  const nativeWriterReplay = read("crates/web_preview/src/dx_style_native_writer_replay.rs");
   const surface = read("crates/web_preview/src/dx_style_generator_surface.rs");
   const surfaceCatalog = read(
     "crates/web_preview/src/dx_style_generator_surface/catalog.rs",
@@ -1673,6 +1674,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(actions, /OpenGeneratorPreviewForContext/);
   assert.match(actions, /source_context_json/);
   assert.match(webPreview, /mod dx_style_generator_surface/);
+  assert.match(webPreview, /mod dx_style_native_writer_replay/);
   assert.match(webPreview, /mod dx_style_source_apply/);
   assert.match(webPreviewView, /zed_actions::dx_style::OpenGeneratorPreview/);
   assert.match(webPreviewView, /OpenGeneratorPreviewForContext/);
@@ -1777,15 +1779,19 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /self\.dx_style_source_apply_session_source_identity = None/);
   assert.match(webPreviewView, /fn dx_style_payload_with_active_editor_source_revalidation/);
   assert.match(webPreviewView, /fn dx_style_active_editor_source_revalidation/);
-  assert.match(webPreviewView, /DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA/);
-  assert.match(webPreviewView, /MAX_DX_STYLE_DRY_RUN_EDIT_REPLAY_PREVIEWS: usize = 3/);
-  assert.match(webPreviewView, /MAX_DX_STYLE_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096/);
+  assert.match(webPreviewView, /dx_style_native_writer_replay::native_writer_dry_run_replay/);
   assert.match(webPreviewView, /native_writer_dry_run_replay/);
-  assert.match(webPreviewView, /fn dx_style_native_writer_dry_run_replay/);
-  assert.match(webPreviewView, /mutation_performed": false/);
-  assert.match(webPreviewView, /source_digest_after/);
-  assert.match(webPreviewView, /replayed_edit_count/);
-  assert.match(webPreviewView, /edited_source\.push_str/);
+  assert.match(nativeWriterReplay, /DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA/);
+  assert.match(nativeWriterReplay, /MAX_DX_STYLE_DRY_RUN_EDIT_REPLAY_PREVIEWS: usize = 3/);
+  assert.match(nativeWriterReplay, /MAX_DX_STYLE_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096/);
+  assert.match(nativeWriterReplay, /pub\(crate\) fn native_writer_dry_run_replay/);
+  assert.match(nativeWriterReplay, /mutation_performed": false/);
+  assert.match(nativeWriterReplay, /source_digest_after/);
+  assert.match(nativeWriterReplay, /replayed_edit_count/);
+  assert.match(nativeWriterReplay, /edited_source\.push_str/);
+  assert.match(nativeWriterReplay, /source\.is_char_boundary/);
+  assert.match(nativeWriterReplay, /source_paths_match/);
+  assert.doesNotMatch(nativeWriterReplay, /fs::write|File::create|Command::new|spawn/);
   assert.match(webPreviewView, /session_source_identity_missing/);
   assert.match(webPreviewView, /request_source_length_missing/);
   assert.match(webPreviewView, /session_source_path_mismatch/);

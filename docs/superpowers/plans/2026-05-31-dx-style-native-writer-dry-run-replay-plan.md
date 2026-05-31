@@ -32,12 +32,14 @@
 
 **Files:**
 - Modify: `crates/web_preview/src/web_preview_view.rs`
+- Add: `crates/web_preview/src/dx_style_native_writer_replay.rs`
 - Modify: `crates/web_preview/src/dx_style_source_apply.rs`
 
 - [x] During active editor source revalidation, replay the trusted structured edit preview against the live source text in memory only.
 - [x] Record status, source path, source span, edit span, before digest, after digest, before length, after length, replacement byte count, and `mutation_performed=false`.
 - [x] Validate and preserve that receipt in native source-apply review.
 - [x] Add a fail-closed source-write readiness blocker when replay evidence is absent or not matched.
+- [x] Keep the replay algorithm in a focused module instead of growing the main Web Preview view file.
 
 ## Task 3: Source Guards And Handoff Docs
 

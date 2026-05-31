@@ -18,6 +18,8 @@ pub(crate) mod dx_studio_source_edit;
 #[cfg(target_os = "windows")]
 pub(crate) mod dx_style_generator_surface;
 #[cfg(target_os = "windows")]
+pub(crate) mod dx_style_native_writer_replay;
+#[cfg(target_os = "windows")]
 pub(crate) mod dx_style_source_apply;
 #[cfg(target_os = "windows")]
 pub mod web_preview_view;

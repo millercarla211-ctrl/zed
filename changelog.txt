@@ -11680,7 +11680,8 @@ NOTES:
 CHANGED:
 - `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now name `native writer dry-run replay` and the `native_writer_dry_run_replay` receipt field in the source-owned source-apply contract.
 - `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now require that native replay receipt before future editor writes can be trusted.
-- `crates\web_preview\src\web_preview_view.rs` now replays the trusted structured dry-run edit preview against the already revalidated live editor source in memory only, recording before/after digests, edit span, replacement byte count, and `mutation_performed=false`.
+- `crates\web_preview\src\dx_style_native_writer_replay.rs` now owns the in-memory native writer dry-run replay algorithm for trusted structured edit previews, recording before/after digests, edit span, replacement byte count, and `mutation_performed=false`.
+- `crates\web_preview\src\web_preview.rs` registers the native replay module, and `crates\web_preview\src\web_preview_view.rs` injects its replay receipt after active editor source revalidation.
 - `crates\web_preview\src\dx_style_source_apply.rs` now validates and preserves `native_writer_dry_run_replay` evidence and keeps source-write readiness blocked when replay evidence is absent or not matched.
 - `crates\web_preview\src\dx_style_generator_surface\source-apply-contract.generated.json` now mirrors the updated DX Style source-apply contract, and the Web Preview readiness packet reports missing bridge replay receipt requirements.
 - `script\dx-style-panel-source.test.ts` now guards the source-owned contract, editor bridge requirement, native replay receipt validation, Web Preview revalidation injection, and no-mutation replay evidence.
