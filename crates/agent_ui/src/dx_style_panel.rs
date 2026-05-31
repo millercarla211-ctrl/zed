@@ -322,6 +322,9 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
             .map(|text| {
                 text.contains("renderCssDeclarationDryRunContractReview")
                     && text.contains("dx_style_css_declaration_dry_run_review_script")
+                    && text.contains("generatorForContext")
+                    && text.contains("orderedCatalog")
+                    && text.contains("suggested_generator")
                     && text.contains("Review source")
                     && text.contains("Apply gated")
             })
@@ -399,7 +402,7 @@ fn scan_dx_style_panel() -> DxStylePanelSnapshot {
     } else {
         (
             "Style Web Preview source-ready".to_string(),
-            "Wire cursor-scoped editor selection into the Web Preview Style generator surface"
+            "Open context-aware Web Preview generators; source writes stay receipt-gated"
                 .to_string(),
         )
     };

@@ -1,3 +1,23 @@
+[2026-05-31] - DX Style Context Generator Readiness
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-context-generator-readiness-plan.md` records the source-only plan for the native/Web Preview context-aware generator handoff checkpoint.
+
+CHANGED:
+- DX Style native bridge readiness now requires Web Preview's context generator selector, catalog reordering, and copied suggested-generator diagnostics before reporting the generator host ready.
+- The native Style panel summary now shows the active CSS declaration generator hint before opening the Web Preview generator surface.
+- The ready next action now names the context-aware Web Preview generator handoff instead of stale cursor wiring work.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the context generator readiness boundary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel.rs crates\agent_ui\src\dx_style_panel\panel_view.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed context generator readiness files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Dispatch Proof Revalidation
 
 ADDED:

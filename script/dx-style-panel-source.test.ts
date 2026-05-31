@@ -1641,6 +1641,10 @@ test("Zed Style rail keeps GPUI as the shell and Web Preview as the generator ho
   assert.match(snapshot, /GROUPED_CLASS_SOURCE_APPLY_SCOPE/);
   assert.match(snapshot, /cssDeclarationDryRunPreview/);
   assert.match(snapshot, /css_declaration_dry_run_contract_missing/);
+  assert.match(snapshot, /generatorForContext/);
+  assert.match(snapshot, /orderedCatalog/);
+  assert.match(snapshot, /suggested_generator/);
+  assert.match(snapshot, /Open context-aware Web Preview generators/);
   assert.match(snapshot, /source_apply_review_receipt/);
   assert.match(snapshot, /source_apply_contract_ready/);
   assert.match(snapshot, /Source Apply/);
@@ -3945,6 +3949,8 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(panelView, /Match/);
   assert.match(panelView, /Bridge/);
   assert.match(panelView, /CSS/);
+  assert.match(panelView, /Generator/);
+  assert.match(panelView, /css_generator/);
   assert.match(panelView, /CSS safety/);
   assert.match(panelView, /Class list/);
   assert.match(panelView, /Kind/);

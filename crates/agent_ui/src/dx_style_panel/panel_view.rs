@@ -7,7 +7,6 @@ use super::{
     panel_metric::metric,
 };
 const STYLE_PANEL_ROW_LIMIT: usize = 13;
-
 pub(super) fn render_panel(
     snapshot: &DxStylePanelSnapshot,
     active_context: &ActiveStyleContextSnapshot,
@@ -16,7 +15,6 @@ pub(super) fn render_panel(
     let source_context_json = active_context.web_preview_context_json();
     let can_open_generator =
         snapshot.web_preview_bridge_ready && active_context.can_open_generator();
-
     v_flex()
         .id("dx-style-panel")
         .size_full()
@@ -101,6 +99,9 @@ fn style_summary(
         .when_some(active_context.css_property.clone(), |this, property| {
             this.child(metric("CSS", property))
         })
+        .when_some(active_context.css_generator.clone(), |this, generator| {
+            this.child(metric("Generator", generator))
+        })
         .when_some(
             active_context.css_source_edit_safety.clone(),
             |this, safety| this.child(metric("CSS safety", safety)),
@@ -156,7 +157,6 @@ fn style_rows(snapshot: &DxStylePanelSnapshot, cx: &App) -> impl IntoElement {
             cx,
         ));
     }
-
     for (ix, warning) in snapshot.warnings.iter().take(3).enumerate() {
         stack = stack.child(
             h_flex()
