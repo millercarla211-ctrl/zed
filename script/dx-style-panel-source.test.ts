@@ -3770,11 +3770,15 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(groupContext, /reverse_css_map_summary/);
   assert.match(groupContext, /group_call_context/);
   assert.match(groupContext, /parse_group_call/);
+  assert.match(groupContext, /source_group_declaration/);
+  assert.match(groupContext, /source_declaration/);
+  assert.match(groupContext, /inline_utilities/);
+  assert.doesNotMatch(groupContext, /alias_with_atomic_utilities/);
   assert.match(groupContext, /looks_like_atomic_utility/);
   assert.match(groupContext, /utility\.contains\('-'\)/);
   assert.match(groupContext, /needs_project_group_contract/);
   assert.match(groupContext, /candidate_requires_project_repetition_scan/);
-  assert.match(groupContext, /source-owned grouping analysis/);
+  assert.match(groupContext, /grouping analysis/);
   assert.match(groupRegistry, /DX_STYLE_GROUP_REGISTRY_RECEIPT_SCHEMA/);
   assert.match(groupRegistry, /dx\.style\.grouped-class-registry-receipt/);
   assert.match(groupRegistry, /DX_STYLE_REVERSE_CSS_MAP_RECEIPT_FILE/);

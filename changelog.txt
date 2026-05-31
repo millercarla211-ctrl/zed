@@ -1,3 +1,22 @@
+[2026-05-31] - DX Style Group Context Syntax Alignment
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-group-context-syntax-alignment-plan.md` records the source-only plan for aligning Zed's group context vocabulary with the DX Style read model.
+
+CHANGED:
+- `crates\agent_ui\src\dx_style_panel\group_context.rs` now emits `alias_reference`, `inline_utilities`, and `source_declaration` syntax states, with `@alias(...)` reported as `source_group_declaration`.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the aligned source-only group context vocabulary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel\group_context.rs G:\Dx\style\src\core\engine\grouped_class_read_model.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the group-context syntax files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Group Call Read Model
 
 ADDED:

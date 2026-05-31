@@ -65,8 +65,7 @@ impl ActiveGroupContext {
                 utilities: bounded_utilities(attribute_tokens.iter().map(String::as_str)),
                 expansion_status: "candidate_requires_project_repetition_scan".to_string(),
                 candidate_token_count: Some(attribute_tokens.len()),
-                source_state: "static class list is eligible for source-owned grouping analysis"
-                    .to_string(),
+                source_state: "static class list is eligible for grouping analysis".to_string(),
                 registry_receipt: None,
                 reverse_css_map_receipt: None,
                 reverse_css_map_status: None,
@@ -106,7 +105,7 @@ fn group_call_context(
     source_path: Option<&str>,
     workspace_root: Option<&str>,
 ) -> Option<ActiveGroupContext> {
-    let (alias, body) = parse_group_call(token)?;
+    let (alias, body, source_declaration) = parse_group_call(token)?;
     if body.trim().is_empty() {
         if let Some(entry) = registry_group_entry(alias, source_path, workspace_root) {
             let reverse_css_map =
@@ -114,13 +113,11 @@ fn group_call_context(
             return Some(ActiveGroupContext {
                 status: "alias_reference_expanded".to_string(),
                 alias: Some(alias.to_string()),
-                syntax: "alias_call".to_string(),
+                syntax: "alias_reference".to_string(),
                 utilities: entry.utilities,
                 expansion_status: "registry_receipt_expansion_available".to_string(),
                 candidate_token_count: None,
-                source_state:
-                    "alias reference expanded from trusted DX Style group registry receipt"
-                        .to_string(),
+                source_state: "expanded from trusted DX Style registry receipt".to_string(),
                 registry_receipt: Some(entry.receipt_path.display().to_string()),
                 reverse_css_map_receipt: reverse_css_map
                     .as_ref()
@@ -131,19 +128,16 @@ fn group_call_context(
         return Some(ActiveGroupContext {
             status: "alias_reference".to_string(),
             alias: Some(alias.to_string()),
-            syntax: "alias_call".to_string(),
+            syntax: "alias_reference".to_string(),
             utilities: Vec::new(),
             expansion_status: "needs_project_group_contract".to_string(),
             candidate_token_count: None,
-            source_state:
-                "alias reference needs a DX Style group registry receipt before expansion"
-                    .to_string(),
+            source_state: "alias needs a DX Style registry receipt before expansion".to_string(),
             registry_receipt: None,
             reverse_css_map_receipt: None,
             reverse_css_map_status: None,
         });
     }
-
     let utilities = bounded_utilities(tokens_in_value(body).iter().map(String::as_str));
     if !utilities
         .iter()
@@ -152,23 +146,29 @@ fn group_call_context(
         return None;
     }
 
+    let (status, syntax) = if source_declaration {
+        ("source_group_declaration", "source_declaration")
+    } else {
+        ("inline_group_declaration", "inline_utilities")
+    };
+
     Some(ActiveGroupContext {
-        status: "inline_group_declaration".to_string(),
+        status: status.to_string(),
         alias: Some(alias.to_string()),
-        syntax: "alias_with_atomic_utilities".to_string(),
+        syntax: syntax.to_string(),
         utilities,
         expansion_status: "inline_utilities_available".to_string(),
         candidate_token_count: None,
-        source_state: "group call carries an inline atomic expansion for Web Preview review"
-            .to_string(),
+        source_state: "group call carries inline atomics for Web Preview review".to_string(),
         registry_receipt: None,
         reverse_css_map_receipt: None,
         reverse_css_map_status: None,
     })
 }
 
-fn parse_group_call(token: &str) -> Option<(&str, &str)> {
+fn parse_group_call(token: &str) -> Option<(&str, &str, bool)> {
     let trimmed = token.trim();
+    let source_declaration = trimmed.starts_with('@');
     let body_end = trimmed.strip_suffix(')')?;
     let open = body_end.find('(')?;
     let alias = body_end[..open]
@@ -182,7 +182,7 @@ fn parse_group_call(token: &str) -> Option<(&str, &str)> {
     {
         return None;
     }
-    Some((alias, &body_end[open + 1..]))
+    Some((alias, &body_end[open + 1..], source_declaration))
 }
 
 fn bounded_utilities<'a>(utilities: impl Iterator<Item = &'a str>) -> Vec<String> {
