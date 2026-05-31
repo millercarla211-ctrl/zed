@@ -228,6 +228,8 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "editor write bridge can_apply".to_string(),
             "explicit user apply action".to_string(),
             "authorized runtime validation".to_string(),
+            "dispatch-time runtime validation receipt revalidation".to_string(),
+            "dispatch-time explicit mutation action revalidation".to_string(),
         ],
         required_native_handlers: vec!["window.__DX_STYLE_SOURCE_APPLY__".to_string()],
         required_native_handler_capabilities: vec![

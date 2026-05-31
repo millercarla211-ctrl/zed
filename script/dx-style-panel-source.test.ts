@@ -132,6 +132,8 @@ const expectedEditorWriteBridgeGuards = [
   "editor write bridge can_apply",
   "explicit user apply action",
   "authorized runtime validation",
+  "dispatch-time runtime validation receipt revalidation",
+  "dispatch-time explicit mutation action revalidation",
 ];
 
 const expectedEditorWriteBridgeHandlers = ["window.__DX_STYLE_SOURCE_APPLY__"];
@@ -537,6 +539,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /native writer commit plan/);
   assert.match(editorWriteBridgePreflight, /post-write source digest verification plan/);
   assert.match(editorWriteBridgePreflight, /runtime validation receipt verification/);
+  assert.match(
+    editorWriteBridgePreflight,
+    /dispatch-time runtime validation receipt revalidation/,
+  );
+  assert.match(
+    editorWriteBridgePreflight,
+    /dispatch-time explicit mutation action revalidation/,
+  );
   assert.match(editorWriteBridgePreflight, /reverse CSS delta replacement policy match/);
   assert.match(editorWriteBridgePreflight, /authorized runtime validation/);
   assert.match(editorWriteBridgePreflight, /required_native_handlers/);
@@ -1936,6 +1946,19 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /post_write_readback_digest_match/);
   assert.match(webPreviewView, /let single_editor_transaction = transaction_id\.is_some\(\)/);
   assert.match(webPreviewView, /single_editor_transaction && post_write_readback_digest_match/);
+  assert.match(webPreviewView, /dx_style_native_writer_dispatch_authorization_blocker/);
+  assert.match(webPreviewView, /blocked_runtime_validation_receipt_missing/);
+  assert.match(webPreviewView, /blocked_runtime_validation_receipt_not_validated/);
+  assert.match(webPreviewView, /blocked_runtime_validation_not_authorized/);
+  assert.match(webPreviewView, /blocked_runtime_validation_round_trip_missing/);
+  assert.match(webPreviewView, /blocked_runtime_validation_native_replay_missing/);
+  assert.match(webPreviewView, /blocked_runtime_validation_digest_proof_missing/);
+  assert.match(webPreviewView, /blocked_runtime_validation_readback_mismatch/);
+  assert.match(webPreviewView, /blocked_runtime_validation_source_path_mismatch/);
+  assert.match(webPreviewView, /blocked_runtime_validation_source_digest_mismatch/);
+  assert.match(webPreviewView, /blocked_runtime_validation_readback_digest_mismatch/);
+  assert.match(webPreviewView, /blocked_runtime_validation_verified_at_missing/);
+  assert.match(webPreviewView, /blocked_user_apply_action_not_mutation_confirmed/);
   assert.match(webPreviewView, /failed_no_editor_transaction/);
   assert.match(webPreviewView, /failed_post_write_digest_mismatch/);
   assert.match(webPreviewView, /source_apply_receipt_schema/);
@@ -3843,6 +3866,14 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /native writer commit plan/);
   assert.match(editorWriteBridge, /post-write source digest verification plan/);
   assert.match(editorWriteBridge, /runtime validation receipt verification/);
+  assert.match(
+    editorWriteBridge,
+    /dispatch-time runtime validation receipt revalidation/,
+  );
+  assert.match(
+    editorWriteBridge,
+    /dispatch-time explicit mutation action revalidation/,
+  );
   assert.match(editorWriteBridge, /reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(editorWriteBridge, /native_writer_commit_plan/);
   assert.match(editorWriteBridge, /post_write_digest_verification_plan/);

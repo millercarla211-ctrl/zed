@@ -1,3 +1,24 @@
+[2026-05-31] - DX Style Dispatch Proof Revalidation
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-dispatch-proof-revalidation-plan.md` records the source-only plan for last-mile native dispatch proof revalidation.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now name dispatch-time runtime validation receipt and explicit mutation action revalidation as source-owned editor guards.
+- Zed's Style editor write-bridge fallback mirrors those dispatch-time guard requirements.
+- WebPreviewView native writer dispatch now revalidates runtime validation receipt schema/status, authorized runtime validation, WebView source-review round trip, native dry-run replay, post-write digest/readback proof, matching source path/digest, validation timestamp, and `mutate_source_confirmed` user action before any future edit transaction can run.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the stricter dispatch proof boundary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\web_preview_view.rs crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed dispatch proof revalidation files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Dispatch Success Invariant
 
 ADDED:

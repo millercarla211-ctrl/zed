@@ -30630,6 +30630,13 @@ impl WebPreviewView {
                 receipt,
             );
         };
+        if let Some((status, reason)) = dx_style_native_writer_dispatch_authorization_blocker(
+            receipt,
+            source_path,
+            expected_source_digest_after,
+        ) {
+            return dx_style_native_writer_dispatch_blocked(status, reason, receipt);
+        }
         let Some(expected_source_len_bytes_before) = receipt
             .pointer("/native_writer_dry_run_replay/source_len_bytes_before")
             .and_then(Value::as_u64)
@@ -38217,6 +38224,139 @@ fn dx_style_native_writer_replacement_text<'a>(
         })
 }
 
+fn dx_style_native_writer_dispatch_authorization_blocker(
+    receipt: &Value,
+    source_path: &str,
+    expected_source_digest_after: &str,
+) -> Option<(&'static str, &'static str)> {
+    if receipt
+        .pointer("/user_apply_action/status")
+        .and_then(Value::as_str)
+        != Some("mutate_source_confirmed")
+    {
+        return Some((
+            "blocked_user_apply_action_not_mutation_confirmed",
+            "DX Style native writer dispatch requires an explicit mutation-confirmed user action.",
+        ));
+    }
+
+    let Some(runtime_receipt) = receipt.get("runtime_validation_receipt") else {
+        return Some((
+            "blocked_runtime_validation_receipt_missing",
+            "DX Style native writer dispatch requires runtime validation receipt evidence.",
+        ));
+    };
+    if runtime_receipt.get("schema").and_then(Value::as_str)
+        != Some("zed.web_preview.dx_style.runtime_validation_receipt.v1")
+    {
+        return Some((
+            "blocked_runtime_validation_receipt_schema_mismatch",
+            "DX Style native writer dispatch requires the runtime validation receipt schema.",
+        ));
+    }
+    if runtime_receipt.get("status").and_then(Value::as_str) != Some("validated") {
+        return Some((
+            "blocked_runtime_validation_receipt_not_validated",
+            "DX Style native writer dispatch requires a validated runtime validation receipt.",
+        ));
+    }
+    if runtime_receipt
+        .get("authorized_runtime_validation")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Some((
+            "blocked_runtime_validation_not_authorized",
+            "DX Style native writer dispatch requires authorized runtime validation.",
+        ));
+    }
+    if runtime_receipt
+        .get("webview_source_review_round_trip")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Some((
+            "blocked_runtime_validation_round_trip_missing",
+            "DX Style native writer dispatch requires a successful WebView source-review round trip.",
+        ));
+    }
+    if runtime_receipt
+        .get("native_writer_dry_run_replay")
+        .and_then(Value::as_str)
+        .map_or(true, str::is_empty)
+        || receipt
+            .pointer("/native_writer_dry_run_replay/status")
+            .and_then(Value::as_str)
+            != Some("matched")
+    {
+        return Some((
+            "blocked_runtime_validation_native_replay_missing",
+            "DX Style native writer dispatch requires a successful native writer dry-run replay.",
+        ));
+    }
+    if runtime_receipt
+        .get("post_write_source_digest_verification")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Some((
+            "blocked_runtime_validation_digest_proof_missing",
+            "DX Style native writer dispatch requires post-write source digest proof.",
+        ));
+    }
+    if runtime_receipt
+        .get("post_write_readback_digest_match")
+        .and_then(Value::as_bool)
+        != Some(true)
+    {
+        return Some((
+            "blocked_runtime_validation_readback_mismatch",
+            "DX Style native writer dispatch requires matching post-write readback digest proof.",
+        ));
+    }
+    if runtime_receipt
+        .get("source_path")
+        .and_then(Value::as_str)
+        .map_or(true, |path| !dx_style_source_paths_match(path, source_path))
+    {
+        return Some((
+            "blocked_runtime_validation_source_path_mismatch",
+            "DX Style native writer dispatch requires runtime proof for the same source path.",
+        ));
+    }
+    if runtime_receipt
+        .get("source_digest_after")
+        .and_then(Value::as_str)
+        != Some(expected_source_digest_after)
+    {
+        return Some((
+            "blocked_runtime_validation_source_digest_mismatch",
+            "DX Style native writer dispatch requires runtime proof for the expected after-write source digest.",
+        ));
+    }
+    if runtime_receipt
+        .get("post_write_readback_digest")
+        .and_then(Value::as_str)
+        != Some(expected_source_digest_after)
+    {
+        return Some((
+            "blocked_runtime_validation_readback_digest_mismatch",
+            "DX Style native writer dispatch requires runtime readback digest evidence for the expected after-write source digest.",
+        ));
+    }
+    if !runtime_receipt
+        .get("verified_at")
+        .is_some_and(|verified_at| !verified_at.is_null())
+    {
+        return Some((
+            "blocked_runtime_validation_verified_at_missing",
+            "DX Style native writer dispatch requires a timestamped runtime validation receipt.",
+        ));
+    }
+
+    None
+}
+
 fn dx_style_native_writer_dispatch_blocked(
     status: &'static str,
     reason: &'static str,
@@ -38241,6 +38381,27 @@ fn dx_style_native_writer_dispatch_blocked(
         "native_mutation_writer_preflight_ready": receipt
             .pointer("/native_mutation_writer_preflight/ready_to_write")
             .and_then(Value::as_bool),
+        "runtime_validation_receipt_status": receipt
+            .pointer("/runtime_validation_receipt/status")
+            .and_then(Value::as_str),
+        "authorized_runtime_validation": receipt
+            .pointer("/runtime_validation_receipt/authorized_runtime_validation")
+            .and_then(Value::as_bool),
+        "webview_source_review_round_trip": receipt
+            .pointer("/runtime_validation_receipt/webview_source_review_round_trip")
+            .and_then(Value::as_bool),
+        "native_writer_dry_run_replay": receipt
+            .pointer("/runtime_validation_receipt/native_writer_dry_run_replay")
+            .and_then(Value::as_str),
+        "post_write_source_digest_verification": receipt
+            .pointer("/runtime_validation_receipt/post_write_source_digest_verification")
+            .and_then(Value::as_bool),
+        "post_write_readback_digest_match": receipt
+            .pointer("/runtime_validation_receipt/post_write_readback_digest_match")
+            .and_then(Value::as_bool),
+        "user_apply_action_status": receipt
+            .pointer("/user_apply_action/status")
+            .and_then(Value::as_str),
         "native_writer_implementation": "editor_transaction",
         "required_before_dispatch": [
             "source_write_readiness_ready",
