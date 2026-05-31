@@ -71,7 +71,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     const groupContextMaxUtilityCount = Number(groupContextContract.max_utility_count || 0);
     const groupContextMaxUtilityBytes = Number(groupContextContract.max_utility_bytes || 0);
     const groupContextUtilityPreviewMaxChars =
-      Number(groupContextContract.utility_preview_max_chars || 512);
+      contractNumberLimit(groupContextContract, "utility_preview_max_chars");
     const groupContextCandidateMin = Number(groupContextContract.candidate_min_utility_count || 0);
     const groupContextSyntaxValues = Array.isArray(groupContextContract.group_call_syntax_values)
       ? normalizedStringValues(groupContextContract.group_call_syntax_values)
@@ -519,6 +519,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
           diagnostics.push(`group_context_contract_missing_field:${field}`);
         }
       }
+      if (!Number.isInteger(groupContextUtilityPreviewMaxChars)) {
+        diagnostics.push("group_context_utility_preview_cap_missing");
+      }
       const syntax = String(group.syntax || "");
       const status = String(group.status || "");
       if (!syntax) {
@@ -562,6 +565,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     function groupContextUtilityPreview(group) {
       const utilities = boundedGroupContextUtilities(group);
       if (!utilities.length) return null;
+      if (!Number.isInteger(groupContextUtilityPreviewMaxChars)) return null;
       const preview = utilities.join(" ");
       return preview.length > groupContextUtilityPreviewMaxChars
         ? `${preview.slice(0, groupContextUtilityPreviewMaxChars)}...`

@@ -1,3 +1,16 @@
+[2026-05-31] - DX Style Utility Preview Fail Closed
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-utility-preview-fail-closed-plan.md` records the source-only plan for removing the hidden grouped utility preview fallback.
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now reads `utility_preview_max_chars` through the contract-number parser and suppresses grouped utility preview text when the source-owned cap is absent.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, `todo.txt`, and `changelog.txt` now guard and document the fail-closed grouped utility preview cap behavior.
+
+NOTES:
+- No `G:\Dx\style` source change was needed in this checkpoint because the cap was already added to the source-owned DX Style contract in the previous slice.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Utility Preview Contract
 
 ADDED:
