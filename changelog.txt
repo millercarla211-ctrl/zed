@@ -1,3 +1,25 @@
+[2026-05-31] - DX Style Mutation Writer Contract
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-mutation-writer-contract-plan.md` records the source-only plan for mutation writer receipt requirements.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now publish `mutation_write_receipt_schema` plus required mutation write receipt fields.
+- `crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs` now exposes that mutation writer receipt schema/checklist in the Style editor write-bridge snapshot and fallback preflight.
+- Native source-write readiness now reports `write_bridge_mutation_write_receipt_schema_missing` and `write_bridge_required_mutation_write_receipt_fields_missing` before any future mutation path can graduate.
+- Web Preview source-write readiness now surfaces mutation writer receipt schema/checklist and reports matching drift blockers.
+- `script/dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the mutation writer contract checkpoint.
+
+PASSED:
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed Zed and DX Style mutation writer files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Runtime Validation Template
 
 ADDED:

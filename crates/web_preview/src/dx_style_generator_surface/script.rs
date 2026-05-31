@@ -1475,6 +1475,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           required_review_receipt_field_count: 0,
           required_runtime_proof_count: 0,
           required_runtime_validation_receipt_field_count: 0,
+          required_mutation_write_receipt_field_count: 0,
           required_receipts: [],
           required_editor_guards: [],
           required_native_handlers: [],
@@ -1482,7 +1483,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           required_source_apply_review_receipt_fields: [],
           required_runtime_proofs: [],
           runtime_validation_receipt_schema: null,
-          required_runtime_validation_receipt_fields: []
+          required_runtime_validation_receipt_fields: [],
+          mutation_write_receipt_schema: null,
+          required_mutation_write_receipt_fields: []
         };
       }
       const requiredReceipts = Array.isArray(bridge.required_receipts) ? bridge.required_receipts : [];
@@ -1500,6 +1503,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const requiredRuntimeValidationReceiptFields =
         Array.isArray(bridge.required_runtime_validation_receipt_fields)
           ? bridge.required_runtime_validation_receipt_fields
+          : [];
+      const requiredMutationWriteReceiptFields =
+        Array.isArray(bridge.required_mutation_write_receipt_fields)
+          ? bridge.required_mutation_write_receipt_fields
           : [];
       return {
         present: true,
@@ -1526,6 +1533,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         required_runtime_proof_count: requiredRuntimeProofs.length,
         required_runtime_validation_receipt_field_count:
           requiredRuntimeValidationReceiptFields.length,
+        required_mutation_write_receipt_field_count:
+          requiredMutationWriteReceiptFields.length,
         required_receipts: requiredReceipts,
         required_editor_guards: requiredGuards,
         required_native_handlers: requiredHandlers,
@@ -1533,7 +1542,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         required_source_apply_review_receipt_fields: requiredReviewReceiptFields,
         required_runtime_proofs: requiredRuntimeProofs,
         runtime_validation_receipt_schema: bridge.runtime_validation_receipt_schema || null,
-        required_runtime_validation_receipt_fields: requiredRuntimeValidationReceiptFields
+        required_runtime_validation_receipt_fields: requiredRuntimeValidationReceiptFields,
+        mutation_write_receipt_schema: bridge.mutation_write_receipt_schema || null,
+        required_mutation_write_receipt_fields: requiredMutationWriteReceiptFields
       };
     }
 
@@ -1611,12 +1622,33 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         "mutation_performed",
         "verified_at"
       ];
+      const knownMutationWriteReceiptFields = [
+        "schema",
+        "source_apply_receipt_schema",
+        "runtime_validation_receipt_schema",
+        "source_path",
+        "edit_span",
+        "replacement_text_bytes",
+        "source_digest_before",
+        "expected_source_digest_after",
+        "pre_write_digest_match",
+        "single_editor_transaction",
+        "undo_group_id",
+        "mutation_performed",
+        "post_write_readback_digest",
+        "post_write_readback_digest_match",
+        "written_at"
+      ];
       const missingRequiredRuntimeProofs = bridge.required_runtime_proofs.filter((proof) =>
         !knownRuntimeProofs.includes(proof)
       );
       const missingRequiredRuntimeValidationReceiptFields =
         bridge.required_runtime_validation_receipt_fields.filter((field) =>
           !knownRuntimeValidationReceiptFields.includes(field)
+        );
+      const missingRequiredMutationWriteReceiptFields =
+        bridge.required_mutation_write_receipt_fields.filter((field) =>
+          !knownMutationWriteReceiptFields.includes(field)
         );
       const missingRequirements = [];
       if (!sourceApplyMutationEnabled) missingRequirements.push("source_mutation_contract_disabled");
@@ -1647,6 +1679,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (bridge.can_apply !== true) missingRequirements.push("editor_write_bridge_not_ready");
       if (bridge.can_mutate_source !== true) {
         missingRequirements.push("mutation_capable_editor_write_bridge_missing");
+      }
+      if (bridge.mutation_write_receipt_schema !== "zed.web_preview.dx_style.mutation_write_receipt.v1") {
+        missingRequirements.push("write_bridge_mutation_write_receipt_schema_missing");
+      }
+      if (missingRequiredMutationWriteReceiptFields.length) {
+        missingRequirements.push("write_bridge_required_mutation_write_receipt_fields_missing");
       }
       missingRequirements.push("explicit_user_apply_action_missing");
       if (!bridge.required_source_apply_review_receipt_fields.includes("reverse_css_delta_replacement_payload_diagnostics")) {
@@ -1755,6 +1793,11 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           bridge.required_runtime_validation_receipt_field_count,
         missing_required_runtime_validation_receipt_fields:
           missingRequiredRuntimeValidationReceiptFields,
+        mutation_write_receipt_schema: bridge.mutation_write_receipt_schema,
+        required_mutation_write_receipt_field_count:
+          bridge.required_mutation_write_receipt_field_count,
+        missing_required_mutation_write_receipt_fields:
+          missingRequiredMutationWriteReceiptFields,
         runtime_validation_required: bridge.runtime_validation_required,
         web_preview_declared_mutation_capability: webPreviewDeclaredMutationCapability,
         native_handler_state: handlerState,
@@ -1896,6 +1939,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         Array.isArray(bridge.required_runtime_validation_receipt_fields)
           ? bridge.required_runtime_validation_receipt_fields.map((field) => `<li>${escapeHtml(field)}</li>`).join("")
           : "";
+      const mutationWriteFields = Array.isArray(bridge.required_mutation_write_receipt_fields)
+        ? bridge.required_mutation_write_receipt_fields.map((field) => `<li>${escapeHtml(field)}</li>`).join("")
+        : "";
       return `
         ${sourceApplyContractReview}
         <strong>Write bridge preflight</strong>
@@ -1905,6 +1951,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Schema</dt><dd>${escapeHtml(bridge.preflight_schema || "unknown")}</dd>
           <dt>Runtime</dt><dd>${bridge.runtime_validation_required ? "validation required" : "not required"}</dd>
           <dt>Runtime receipt</dt><dd>${escapeHtml(bridge.runtime_validation_receipt_schema || "missing")}</dd>
+          <dt>Mutation receipt</dt><dd>${escapeHtml(bridge.mutation_write_receipt_schema || "missing")}</dd>
         </dl>
         ${receipts ? `<span>Required receipts</span><ul>${receipts}</ul>` : ""}
         ${guards ? `<span>Required guards</span><ul>${guards}</ul>` : ""}
@@ -1913,6 +1960,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         ${reviewReceiptFields ? `<span>Required source-apply receipt fields</span><ul>${reviewReceiptFields}</ul>` : ""}
         ${runtimeProofs ? `<span>Required runtime proofs</span><ul>${runtimeProofs}</ul>` : ""}
         ${runtimeReceiptFields ? `<span>Required runtime receipt fields</span><ul>${runtimeReceiptFields}</ul>` : ""}
+        ${mutationWriteFields ? `<span>Required mutation write receipt fields</span><ul>${mutationWriteFields}</ul>` : ""}
       `;
     }
 

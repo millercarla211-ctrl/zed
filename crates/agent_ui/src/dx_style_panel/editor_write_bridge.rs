@@ -24,6 +24,8 @@ pub(super) struct StyleEditorWriteBridgeSnapshot {
     pub(super) required_runtime_proofs: Vec<String>,
     pub(super) runtime_validation_receipt_schema: String,
     pub(super) required_runtime_validation_receipt_fields: Vec<String>,
+    pub(super) mutation_write_receipt_schema: String,
+    pub(super) required_mutation_write_receipt_fields: Vec<String>,
     pub(super) runtime_validation_required: bool,
     pub(super) can_apply: bool,
 }
@@ -47,6 +49,8 @@ impl StyleEditorWriteBridgeSnapshot {
             "required_runtime_proofs": self.required_runtime_proofs,
             "runtime_validation_receipt_schema": self.runtime_validation_receipt_schema,
             "required_runtime_validation_receipt_fields": self.required_runtime_validation_receipt_fields,
+            "mutation_write_receipt_schema": self.mutation_write_receipt_schema,
+            "required_mutation_write_receipt_fields": self.required_mutation_write_receipt_fields,
             "runtime_validation_required": self.runtime_validation_required,
             "can_apply": self.can_apply,
         })
@@ -67,7 +71,7 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
     StyleEditorWriteBridgeSnapshot {
         state: preflight.state,
         summary: format!(
-            "{} receipt(s), {} guard(s), {} native handler(s), {} handler capability(s), {} review field(s), {} runtime proof(s), {} runtime receipt field(s), runtime validation {}",
+            "{} receipt(s), {} guard(s), {} native handler(s), {} handler capability(s), {} review field(s), {} runtime proof(s), {} runtime receipt field(s), {} mutation write field(s), runtime validation {}",
             preflight.required_receipts.len(),
             preflight.required_editor_guards.len(),
             preflight.required_native_handlers.len(),
@@ -75,6 +79,7 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
             preflight.required_source_apply_review_receipt_fields.len(),
             preflight.required_runtime_proofs.len(),
             preflight.required_runtime_validation_receipt_fields.len(),
+            preflight.required_mutation_write_receipt_fields.len(),
             if preflight.runtime_validation_required {
                 "required"
             } else {
@@ -103,6 +108,8 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
         runtime_validation_receipt_schema: preflight.runtime_validation_receipt_schema,
         required_runtime_validation_receipt_fields: preflight
             .required_runtime_validation_receipt_fields,
+        mutation_write_receipt_schema: preflight.mutation_write_receipt_schema,
+        required_mutation_write_receipt_fields: preflight.required_mutation_write_receipt_fields,
         runtime_validation_required: preflight.runtime_validation_required,
         can_apply: false,
     }
@@ -121,6 +128,8 @@ struct EditorWriteBridgePreflight {
     required_runtime_proofs: Vec<String>,
     runtime_validation_receipt_schema: String,
     required_runtime_validation_receipt_fields: Vec<String>,
+    mutation_write_receipt_schema: String,
+    required_mutation_write_receipt_fields: Vec<String>,
     runtime_validation_required: bool,
 }
 
@@ -168,6 +177,15 @@ fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {
         required_runtime_validation_receipt_fields: string_list(
             &value,
             "required_runtime_validation_receipt_fields",
+        ),
+        mutation_write_receipt_schema: value
+            .get("mutation_write_receipt_schema")
+            .and_then(Value::as_str)
+            .unwrap_or("zed.web_preview.dx_style.mutation_write_receipt.v1")
+            .to_string(),
+        required_mutation_write_receipt_fields: string_list(
+            &value,
+            "required_mutation_write_receipt_fields",
         ),
         runtime_validation_required: value
             .get("runtime_validation_required")
@@ -256,6 +274,25 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "post_write_readback_digest_match".to_string(),
             "mutation_performed".to_string(),
             "verified_at".to_string(),
+        ],
+        mutation_write_receipt_schema: "zed.web_preview.dx_style.mutation_write_receipt.v1"
+            .to_string(),
+        required_mutation_write_receipt_fields: vec![
+            "schema".to_string(),
+            "source_apply_receipt_schema".to_string(),
+            "runtime_validation_receipt_schema".to_string(),
+            "source_path".to_string(),
+            "edit_span".to_string(),
+            "replacement_text_bytes".to_string(),
+            "source_digest_before".to_string(),
+            "expected_source_digest_after".to_string(),
+            "pre_write_digest_match".to_string(),
+            "single_editor_transaction".to_string(),
+            "undo_group_id".to_string(),
+            "mutation_performed".to_string(),
+            "post_write_readback_digest".to_string(),
+            "post_write_readback_digest_match".to_string(),
+            "written_at".to_string(),
         ],
         runtime_validation_required: true,
     }

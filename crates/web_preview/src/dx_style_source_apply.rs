@@ -25,6 +25,8 @@ const DX_STYLE_RUNTIME_VALIDATION_RECEIPT_SCHEMA: &str =
     "zed.web_preview.dx_style.runtime_validation_receipt.v1";
 const DX_STYLE_RUNTIME_VALIDATION_RECEIPT_TEMPLATE_SCHEMA: &str =
     "zed.web_preview.dx_style.runtime_validation_receipt_template.v1";
+const DX_STYLE_MUTATION_WRITE_RECEIPT_SCHEMA: &str =
+    "zed.web_preview.dx_style.mutation_write_receipt.v1";
 const DX_STYLE_USER_APPLY_ACTION_SCHEMA: &str = "zed.web_preview.dx_style.user_apply_action.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
@@ -96,6 +98,23 @@ const SOURCE_APPLY_RUNTIME_VALIDATION_RECEIPT_FIELDS: &[&str] = &[
     "post_write_readback_digest_match",
     "mutation_performed",
     "verified_at",
+];
+const SOURCE_APPLY_MUTATION_WRITE_RECEIPT_FIELDS: &[&str] = &[
+    "schema",
+    "source_apply_receipt_schema",
+    "runtime_validation_receipt_schema",
+    "source_path",
+    "edit_span",
+    "replacement_text_bytes",
+    "source_digest_before",
+    "expected_source_digest_after",
+    "pre_write_digest_match",
+    "single_editor_transaction",
+    "undo_group_id",
+    "mutation_performed",
+    "post_write_readback_digest",
+    "post_write_readback_digest_match",
+    "written_at",
 ];
 
 pub(crate) fn active_source_digest(source: &str) -> String {
@@ -1509,12 +1528,17 @@ fn source_write_readiness(
     let runtime_validation_receipt_schema = editor_write_bridge
         .get("runtime_validation_receipt_schema")
         .and_then(Value::as_str);
+    let mutation_write_receipt_schema = editor_write_bridge
+        .get("mutation_write_receipt_schema")
+        .and_then(Value::as_str);
     let dry_run_edit_review_status = dry_run_edit_review.get("status").and_then(Value::as_str);
     let missing_required_review_receipt_fields =
         missing_required_review_receipt_fields(editor_write_bridge);
     let missing_required_runtime_proofs = missing_required_runtime_proofs(editor_write_bridge);
     let missing_required_runtime_validation_receipt_fields =
         missing_required_runtime_validation_receipt_fields(editor_write_bridge);
+    let missing_required_mutation_write_receipt_fields =
+        missing_required_mutation_write_receipt_fields(editor_write_bridge);
 
     let mut missing_requirements = Vec::new();
     if contract_source_mutation_enabled != Some(true) {
@@ -1595,6 +1619,12 @@ fn source_write_readiness(
     }
     if editor_write_bridge_can_mutate_source != Some(true) {
         missing_requirements.push("mutation_capable_editor_write_bridge_missing");
+    }
+    if mutation_write_receipt_schema != Some(DX_STYLE_MUTATION_WRITE_RECEIPT_SCHEMA) {
+        missing_requirements.push("write_bridge_mutation_write_receipt_schema_missing");
+    }
+    if !missing_required_mutation_write_receipt_fields.is_empty() {
+        missing_requirements.push("write_bridge_required_mutation_write_receipt_fields_missing");
     }
     if !string_array_contains(
         editor_write_bridge,
@@ -1731,6 +1761,9 @@ fn source_write_readiness(
         "runtime_validation_receipt_schema": runtime_validation_receipt_schema,
         "required_runtime_validation_receipt_fields": string_array_at(editor_write_bridge, "/required_runtime_validation_receipt_fields"),
         "missing_required_runtime_validation_receipt_fields": missing_required_runtime_validation_receipt_fields,
+        "mutation_write_receipt_schema": mutation_write_receipt_schema,
+        "required_mutation_write_receipt_fields": string_array_at(editor_write_bridge, "/required_mutation_write_receipt_fields"),
+        "missing_required_mutation_write_receipt_fields": missing_required_mutation_write_receipt_fields,
         "runtime_validation_required": runtime_validation_required,
         "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
         "native_can_mutate_source": native_can_mutate_source,
@@ -1775,6 +1808,16 @@ fn missing_required_runtime_validation_receipt_fields(editor_write_bridge: &Valu
     )
     .into_iter()
     .filter(|field| !SOURCE_APPLY_RUNTIME_VALIDATION_RECEIPT_FIELDS.contains(field))
+    .collect()
+}
+
+fn missing_required_mutation_write_receipt_fields(editor_write_bridge: &Value) -> Vec<&str> {
+    string_array_at(
+        editor_write_bridge,
+        "/required_mutation_write_receipt_fields",
+    )
+    .into_iter()
+    .filter(|field| !SOURCE_APPLY_MUTATION_WRITE_RECEIPT_FIELDS.contains(field))
     .collect()
 }
 
