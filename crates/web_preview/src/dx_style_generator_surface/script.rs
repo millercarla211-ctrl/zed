@@ -1562,6 +1562,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (!bridge.required_source_apply_review_receipt_fields.includes("reverse_css_delta_replacement_payload_diagnostics")) {
         missingRequirements.push("write_bridge_missing_replacement_payload_diagnostics_receipt_field");
       }
+      if (!bridge.required_source_apply_review_receipt_fields.includes("native_writer_dry_run_replay")) {
+        missingRequirements.push("write_bridge_missing_native_writer_replay_receipt_field");
+      }
       if (!webPreviewDeclaredMutationCapability) {
         missingRequirements.push("web_preview_mutation_capability_missing");
       }

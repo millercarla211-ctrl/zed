@@ -142,6 +142,7 @@ const expectedEditorWriteBridgeReviewReceiptFields = [
   "reverse_css_delta_preview",
   "reverse_css_delta_replacement_payload_diagnostics",
   "dry_run_edit_review",
+  "native_writer_dry_run_replay",
   "source_write_readiness",
   "native_active_editor_source_revalidation",
   "native_handler",
@@ -600,6 +601,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(sourceApplyContract, /reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(sourceApplyContract, /cursor-scoped dry-run structured edit preview/);
   assert.match(sourceApplyContract, /trusted grouped-class dry-run receipt/);
+  assert.match(sourceApplyContract, /native writer dry-run replay/);
+  assert.match(sourceApplyContract, /native_writer_dry_run_replay/);
   assert.match(
     sourceApplyContract,
     /GROUPED_CLASS_SOURCE_APPLY_MAX_DRY_RUN_EDIT_PREVIEWS: usize = 3/,
@@ -677,12 +680,18 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     ),
   );
   assert.ok(
+    sourceApplyFixture.required_editor_guards.includes(
+      "native writer dry-run replay",
+    ),
+  );
+  assert.ok(
     sourceApplyFixture.review_receipt_fields.includes(
       "reverse_css_delta_replacement_payload_diagnostics",
     ),
   );
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("dry_run_edit_review"));
+  assert.ok(sourceApplyFixture.review_receipt_fields.includes("native_writer_dry_run_replay"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("source_write_readiness"));
   assert.ok(sourceApplyFixture.review_receipt_fields.includes("context_kind"));
   assert.ok(
@@ -1724,6 +1733,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /"reverse_css_delta_preview": receipt\.get\("reverse_css_delta_preview"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"reverse_css_delta_replacement_payload_diagnostics": receipt\.get\("reverse_css_delta_replacement_payload_diagnostics"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"dry_run_review": receipt\.get\("dry_run_review"\)\.cloned\(\)/);
+  assert.match(webPreviewView, /"native_writer_dry_run_replay": receipt\.get\("native_writer_dry_run_replay"\)\.cloned\(\)/);
   assert.match(webPreviewView, /"review_status": receipt\.get\("review_status"\)\.and_then\(Value::as_str\)/);
   assert.match(webPreviewView, /"mutation_ready": receipt\.get\("mutation_ready"\)\.and_then\(Value::as_bool\)/);
   assert.match(webPreviewView, /"context_kind": receipt\.pointer\("\/context\/context_kind"\)\.and_then\(Value::as_str\)/);
@@ -1767,6 +1777,15 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /self\.dx_style_source_apply_session_source_identity = None/);
   assert.match(webPreviewView, /fn dx_style_payload_with_active_editor_source_revalidation/);
   assert.match(webPreviewView, /fn dx_style_active_editor_source_revalidation/);
+  assert.match(webPreviewView, /DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA/);
+  assert.match(webPreviewView, /MAX_DX_STYLE_DRY_RUN_EDIT_REPLAY_PREVIEWS: usize = 3/);
+  assert.match(webPreviewView, /MAX_DX_STYLE_DRY_RUN_REPLACEMENT_TEXT_BYTES: usize = 4096/);
+  assert.match(webPreviewView, /native_writer_dry_run_replay/);
+  assert.match(webPreviewView, /fn dx_style_native_writer_dry_run_replay/);
+  assert.match(webPreviewView, /mutation_performed": false/);
+  assert.match(webPreviewView, /source_digest_after/);
+  assert.match(webPreviewView, /replayed_edit_count/);
+  assert.match(webPreviewView, /edited_source\.push_str/);
   assert.match(webPreviewView, /session_source_identity_missing/);
   assert.match(webPreviewView, /request_source_length_missing/);
   assert.match(webPreviewView, /session_source_path_mismatch/);
@@ -2005,6 +2024,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source-apply contract is missing native active editor source revalidation receipt field/);
   assert.match(sourceApply, /source-apply contract is missing cursor-scoped dry-run edit preview guard/);
   assert.match(sourceApply, /source-apply contract is missing dry-run edit review receipt field/);
+  assert.match(sourceApply, /source-apply contract is missing native writer dry-run replay guard/);
+  assert.match(sourceApply, /source-apply contract is missing native writer dry-run replay receipt field/);
   assert.match(sourceApply, /source-apply contract is missing source-write readiness receipt field/);
   assert.match(sourceApply, /native active editor source revalidation schema is missing or invalid/);
   assert.match(sourceApply, /native active editor source revalidation did not match active source/);
@@ -2021,6 +2042,16 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /native editor identity workspace item does not match editor entity/);
   assert.match(sourceApply, /native editor identity buffer_kind is not singleton/);
   assert.match(sourceApply, /native editor identity is missing project_path/);
+  assert.match(sourceApply, /DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA/);
+  assert.match(sourceApply, /native writer dry-run replay schema is missing or invalid/);
+  assert.match(sourceApply, /native writer dry-run replay did not match active source/);
+  assert.match(sourceApply, /native writer dry-run replay must not mutate source/);
+  assert.match(sourceApply, /native writer dry-run replay before digest does not match request source_digest/);
+  assert.match(sourceApply, /native writer dry-run replay after digest is missing or invalid/);
+  assert.match(sourceApply, /native writer dry-run replay edit span does not cover request source_span/);
+  assert.match(sourceApply, /native writer dry-run replay replacement byte count is invalid/);
+  assert.match(sourceApply, /native writer dry-run replay must replay exactly one edit/);
+  assert.match(sourceApply, /"native_writer_dry_run_replay": native_writer_dry_run_replay/);
   assert.match(sourceApply, /"native_active_editor_source_revalidation": native_active_editor_source_revalidation/);
   assert.doesNotMatch(
     sourceApply,
@@ -2041,10 +2072,13 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /source_mutation_contract_disabled/);
   assert.match(sourceApply, /cursor_scoped_dry_run_edit_review_missing/);
   assert.match(sourceApply, /native_active_editor_source_revalidation_missing/);
+  assert.match(sourceApply, /native_writer_dry_run_replay_missing/);
+  assert.match(sourceApply, /native_writer_dry_run_replay_status/);
   assert.match(sourceApply, /native_review_reasons_present/);
   assert.match(sourceApply, /editor_write_bridge_not_ready/);
   assert.match(sourceApply, /mutation_capable_editor_write_bridge_missing/);
   assert.match(sourceApply, /write_bridge_missing_replacement_payload_diagnostics_receipt_field/);
+  assert.match(sourceApply, /write_bridge_missing_native_writer_replay_receipt_field/);
   assert.match(sourceApply, /native_writer_can_mutate_false/);
   assert.match(sourceApply, /runtime_webview_build_proof_missing/);
   assert.match(sourceApply, /write_bridge_runtime_proofs_missing/);
@@ -2131,6 +2165,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("dry_run_review"));
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("dry_run_edit_review"));
   assert.ok(
+    styleSourceApplyFixture.review_receipt_fields.includes(
+      "native_writer_dry_run_replay",
+    ),
+  );
+  assert.ok(
     styleSourceApplyFixture.review_receipt_fields.includes("source_write_readiness"),
   );
   assert.ok(styleSourceApplyFixture.review_receipt_fields.includes("source_apply_session"));
@@ -2203,6 +2242,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.ok(
     styleSourceApplyFixture.required_editor_guards.includes(
       "cursor-scoped dry-run structured edit preview",
+    ),
+  );
+  assert.ok(
+    styleSourceApplyFixture.required_editor_guards.includes(
+      "native writer dry-run replay",
     ),
   );
   assert.ok(styleSourceApplyFixture.review_context_kinds.includes("css_declaration"));
@@ -2826,6 +2870,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /editor_write_bridge_not_ready/);
   assert.match(surfaceScript, /mutation_capable_editor_write_bridge_missing/);
   assert.match(surfaceScript, /write_bridge_missing_replacement_payload_diagnostics_receipt_field/);
+  assert.match(surfaceScript, /write_bridge_missing_native_writer_replay_receipt_field/);
   assert.match(surfaceScript, /write_bridge_runtime_proofs_missing/);
   assert.match(surfaceScript, /required_review_receipt_field_count: bridge\.required_review_receipt_field_count/);
   assert.match(surfaceScript, /required_runtime_proof_count: bridge\.required_runtime_proof_count/);

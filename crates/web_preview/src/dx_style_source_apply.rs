@@ -15,6 +15,8 @@ pub(crate) const DX_STYLE_SOURCE_APPLY_SESSION_KIND: &str =
     "zed.web_preview.dx_style.source_apply_session";
 pub(crate) const DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA: &str =
     "zed.web_preview.dx_style.active_editor_source_revalidation";
+pub(crate) const DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA: &str =
+    "zed.web_preview.dx_style.native_writer_dry_run_replay.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_SOURCE_PATH_BYTES: usize = 4096;
@@ -103,6 +105,9 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let native_active_editor_source_revalidation = request
         .get("native_active_editor_source_revalidation")
         .unwrap_or(&Value::Null);
+    let native_writer_dry_run_replay = request
+        .get("native_writer_dry_run_replay")
+        .unwrap_or(&Value::Null);
     let group_context = context.get("group_context").unwrap_or(&Value::Null);
     let apply_gate = context.get("apply_gate").unwrap_or(&Value::Null);
     let editor_write_bridge = apply_gate
@@ -178,6 +183,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "source-apply contract is missing cursor-scoped dry-run edit preview guard".to_string(),
         );
     }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "native writer dry-run replay",
+    ) {
+        reasons.push(
+            "source-apply contract is missing native writer dry-run replay guard".to_string(),
+        );
+    }
     if !string_array_contains(contract, "/review_context_kinds", "class_token")
         || !string_array_contains(contract, "/review_context_kinds", "class_list")
         || !string_array_contains(contract, "/review_context_kinds", "css_declaration")
@@ -233,6 +247,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if !string_array_contains(contract, "/review_receipt_fields", "dry_run_edit_review") {
         reasons
             .push("source-apply contract is missing dry-run edit review receipt field".to_string());
+    }
+    if !string_array_contains(
+        contract,
+        "/review_receipt_fields",
+        "native_writer_dry_run_replay",
+    ) {
+        reasons.push(
+            "source-apply contract is missing native writer dry-run replay receipt field"
+                .to_string(),
+        );
     }
     if !string_array_contains(contract, "/review_receipt_fields", "source_write_readiness") {
         reasons.push(
@@ -713,6 +737,125 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     {
         reasons.push("native editor identity is missing project_path".to_string());
     }
+    let native_writer_dry_run_replay_schema = native_writer_dry_run_replay
+        .get("schema")
+        .and_then(Value::as_str);
+    if native_writer_dry_run_replay_schema != Some(DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA) {
+        reasons.push("native writer dry-run replay schema is missing or invalid".to_string());
+    }
+    let native_writer_dry_run_replay_status = native_writer_dry_run_replay
+        .get("status")
+        .and_then(Value::as_str);
+    if native_writer_dry_run_replay_status != Some("matched") {
+        reasons.push("native writer dry-run replay did not match active source".to_string());
+    }
+    if native_writer_dry_run_replay_status == Some("matched")
+        && native_writer_dry_run_replay
+            .get("mutation_performed")
+            .and_then(Value::as_bool)
+            != Some(false)
+    {
+        reasons.push("native writer dry-run replay must not mutate source".to_string());
+    }
+    let native_writer_replay_source_path = native_writer_dry_run_replay
+        .get("source_path")
+        .and_then(Value::as_str);
+    if native_writer_dry_run_replay_status == Some("matched")
+        && native_writer_replay_source_path != source_path
+    {
+        reasons.push(
+            "native writer dry-run replay path does not match request source_path".to_string(),
+        );
+    }
+    let native_writer_replay_source_digest_before = native_writer_dry_run_replay
+        .get("source_digest_before")
+        .and_then(Value::as_str);
+    if native_writer_dry_run_replay_status == Some("matched")
+        && request_source_digest.is_some()
+        && native_writer_replay_source_digest_before != request_source_digest
+    {
+        reasons.push(
+            "native writer dry-run replay before digest does not match request source_digest"
+                .to_string(),
+        );
+    }
+    let native_writer_replay_source_digest_after = native_writer_dry_run_replay
+        .get("source_digest_after")
+        .and_then(Value::as_str);
+    if native_writer_dry_run_replay_status == Some("matched")
+        && !native_writer_replay_source_digest_after.is_some_and(is_source_digest)
+    {
+        reasons.push("native writer dry-run replay after digest is missing or invalid".to_string());
+    }
+    let native_writer_replay_source_len_before = native_writer_dry_run_replay
+        .get("source_len_bytes_before")
+        .and_then(Value::as_u64);
+    if native_writer_dry_run_replay_status == Some("matched")
+        && context_source_len.is_some()
+        && native_writer_replay_source_len_before != context_source_len
+    {
+        reasons.push(
+            "native writer dry-run replay source length does not match context source_len_bytes"
+                .to_string(),
+        );
+    }
+    if native_writer_dry_run_replay_status == Some("matched")
+        && native_writer_dry_run_replay
+            .get("source_len_bytes_after")
+            .and_then(Value::as_u64)
+            .is_none()
+    {
+        reasons.push("native writer dry-run replay is missing after source length".to_string());
+    }
+    let native_writer_replay_request_span = source_span_at(
+        native_writer_dry_run_replay,
+        "/request_source_span",
+        "native writer dry-run replay request source_span",
+        &mut reasons,
+    );
+    if native_writer_dry_run_replay_status == Some("matched")
+        && request_span.is_some()
+        && native_writer_replay_request_span != request_span
+    {
+        reasons.push(
+            "native writer dry-run replay request span does not match request source_span"
+                .to_string(),
+        );
+    }
+    let native_writer_replay_edit_span = source_span_at(
+        native_writer_dry_run_replay,
+        "/edit_span",
+        "native writer dry-run replay edit span",
+        &mut reasons,
+    );
+    if native_writer_dry_run_replay_status == Some("matched")
+        && let (Some(edit_span), Some(request_span)) =
+            (native_writer_replay_edit_span, request_span)
+        && (edit_span.start > request_span.start || request_span.end > edit_span.end)
+    {
+        reasons.push(
+            "native writer dry-run replay edit span does not cover request source_span".to_string(),
+        );
+    }
+    let native_writer_replay_replacement_bytes = native_writer_dry_run_replay
+        .get("replacement_text_bytes")
+        .and_then(Value::as_u64);
+    if native_writer_dry_run_replay_status == Some("matched")
+        && !matches!(
+            native_writer_replay_replacement_bytes,
+            Some(bytes) if bytes > 0 && bytes <= MAX_DRY_RUN_REPLACEMENT_TEXT_BYTES as u64
+        )
+    {
+        reasons.push("native writer dry-run replay replacement byte count is invalid".to_string());
+    }
+    if native_writer_dry_run_replay_status == Some("matched")
+        && native_writer_dry_run_replay
+            .get("replayed_edit_count")
+            .and_then(Value::as_u64)
+            != Some(1)
+    {
+        reasons.push("native writer dry-run replay must replay exactly one edit".to_string());
+    }
 
     let context_schema = context.get("schema").and_then(Value::as_str);
     if context_schema != Some(ACTIVE_STYLE_CONTEXT_SCHEMA) {
@@ -982,6 +1125,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         editor_write_bridge,
         &dry_run_edit_review_evidence,
         native_revalidation_status,
+        native_writer_dry_run_replay_status,
         reasons.len(),
         web_preview_declared_mutation_capability,
         can_mutate_source,
@@ -1148,6 +1292,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "receipt_mismatch": apply_gate.get("receipt_mismatch").cloned(),
         },
         "dry_run_edit_review": dry_run_edit_review_evidence,
+        "native_writer_dry_run_replay": native_writer_dry_run_replay,
         "source_write_readiness": source_write_readiness_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
@@ -1190,6 +1335,7 @@ fn source_write_readiness(
     editor_write_bridge: &Value,
     dry_run_edit_review: &Value,
     native_revalidation_status: Option<&str>,
+    native_writer_dry_run_replay_status: Option<&str>,
     native_review_reason_count: usize,
     web_preview_declared_mutation_capability: bool,
     native_can_mutate_source: bool,
@@ -1239,6 +1385,9 @@ fn source_write_readiness(
     if native_revalidation_status != Some("matched") {
         missing_requirements.push("native_active_editor_source_revalidation_missing");
     }
+    if native_writer_dry_run_replay_status != Some("matched") {
+        missing_requirements.push("native_writer_dry_run_replay_missing");
+    }
     if native_review_reason_count > 0 {
         missing_requirements.push("native_review_reasons_present");
     }
@@ -1255,6 +1404,13 @@ fn source_write_readiness(
     ) {
         missing_requirements
             .push("write_bridge_missing_replacement_payload_diagnostics_receipt_field");
+    }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "native_writer_dry_run_replay",
+    ) {
+        missing_requirements.push("write_bridge_missing_native_writer_replay_receipt_field");
     }
     if !web_preview_declared_mutation_capability {
         missing_requirements.push("web_preview_mutation_capability_missing");
@@ -1287,6 +1443,7 @@ fn source_write_readiness(
         "receipt_path_present": receipt_path_present,
         "dry_run_edit_review_status": dry_run_edit_review_status,
         "native_revalidation_status": native_revalidation_status,
+        "native_writer_dry_run_replay_status": native_writer_dry_run_replay_status,
         "native_review_reason_count": native_review_reason_count,
         "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
         "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,

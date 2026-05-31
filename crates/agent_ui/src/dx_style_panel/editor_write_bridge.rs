@@ -203,6 +203,7 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "reverse_css_delta_preview".to_string(),
             "reverse_css_delta_replacement_payload_diagnostics".to_string(),
             "dry_run_edit_review".to_string(),
+            "native_writer_dry_run_replay".to_string(),
             "source_write_readiness".to_string(),
             "native_active_editor_source_revalidation".to_string(),
             "native_handler".to_string(),
