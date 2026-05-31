@@ -1,0 +1,118 @@
+{
+  "schema": "dx.style.grouped-class-editor-write-bridge-preflight",
+  "schema_version": 1,
+  "scope": "preflight requirements for trusted grouped-class editor source writes",
+  "status": "not_enabled",
+  "can_mutate_source": false,
+  "required_receipts": [
+    "dx.style.grouped-class-dry-run-receipt",
+    "dx.style.grouped-class-source-digest",
+    "dx.style.grouped-class-source-apply-contract",
+    "zed.web_preview.dx_style_source_apply_receipt.v1",
+    "zed.web_preview.dx_style.active_editor_source_revalidation"
+  ],
+  "required_editor_guards": [
+    "active context schema match",
+    "active source path match",
+    "request source span matches active source span",
+    "active source length match",
+    "active source digest match",
+    "trusted Web Preview source-apply session",
+    "session-bound source identity",
+    "native active editor source revalidation",
+    "same-session native editor identity",
+    "trusted grouped-class dry-run receipt",
+    "cursor-scoped dry-run structured edit preview",
+    "native writer commit plan",
+    "post-write source digest verification plan",
+    "runtime validation receipt verification",
+    "reverse CSS delta preview provenance match",
+    "reverse CSS delta replacement policy match",
+    "CSS declaration dry-run receipt for CSS contexts",
+    "editor write bridge can_apply",
+    "explicit user apply action",
+    "authorized runtime validation",
+    "dispatch-time runtime validation receipt revalidation",
+    "dispatch-time explicit mutation action revalidation"
+  ],
+  "required_native_handlers": [
+    "window.__DX_STYLE_SOURCE_APPLY__"
+  ],
+  "required_native_handler_capabilities": [
+    "can_review_request",
+    "can_mutate_source"
+  ],
+  "required_source_apply_review_receipt_fields": [
+    "source_apply_session",
+    "preview_output",
+    "css_declaration_dry_run_diagnostics",
+    "css_declaration_dry_run_preview_diagnostics",
+    "reverse_css_delta_contract",
+    "reverse_css_delta_preview",
+    "reverse_css_delta_replacement_payload_diagnostics",
+    "dry_run_edit_review",
+    "native_writer_dry_run_replay",
+    "native_writer_commit_plan",
+    "post_write_digest_verification_plan",
+    "runtime_validation_receipt_template",
+    "runtime_validation_receipt",
+    "mutation_write_receipt_template",
+    "native_mutation_writer_preflight",
+    "user_apply_action",
+    "source_write_readiness",
+    "native_writer_dispatch",
+    "native_active_editor_source_revalidation",
+    "native_handler",
+    "apply_gate"
+  ],
+  "required_runtime_proofs": [
+    "authorized runtime validation",
+    "successful WebView source-review round trip",
+    "successful native writer dry-run replay",
+    "post-write source digest verification"
+  ],
+  "runtime_validation_receipt_schema": "zed.web_preview.dx_style.runtime_validation_receipt.v1",
+  "required_runtime_validation_receipt_fields": [
+    "schema",
+    "source_apply_receipt_schema",
+    "source_path",
+    "source_digest_before",
+    "source_digest_after",
+    "authorized_runtime_validation",
+    "webview_source_review_round_trip",
+    "native_writer_dry_run_replay",
+    "post_write_source_digest_verification",
+    "post_write_readback_digest",
+    "post_write_readback_digest_match",
+    "mutation_performed",
+    "verified_at"
+  ],
+  "mutation_write_receipt_schema": "zed.web_preview.dx_style.mutation_write_receipt.v1",
+  "required_mutation_write_receipt_fields": [
+    "schema",
+    "source_apply_receipt_schema",
+    "runtime_validation_receipt_schema",
+    "source_path",
+    "edit_span",
+    "replacement_text_bytes",
+    "source_digest_before",
+    "expected_source_digest_after",
+    "pre_write_digest_match",
+    "single_editor_transaction",
+    "undo_group_id",
+    "mutation_performed",
+    "post_write_readback_digest",
+    "post_write_readback_digest_match",
+    "written_at"
+  ],
+  "runtime_validation_required": true,
+  "consumers": [
+    "Zed",
+    "Friday",
+    "dx-check"
+  ],
+  "notes": [
+    "This fixture is review evidence only.",
+    "It must not enable editor source mutation without a matching trusted dry-run receipt and a validated editor write bridge."
+  ]
+}

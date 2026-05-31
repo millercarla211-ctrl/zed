@@ -402,6 +402,9 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   const editorWriteBridgeFixture = JSON.parse(
     readStyle("fixtures/grouped-class-editor-write-bridge-preflight.json"),
   );
+  const editorWriteBridgeGenerated = JSON.parse(
+    read("crates/agent_ui/src/dx_style_panel/editor-write-bridge-preflight.generated.json"),
+  );
   const sourceDigest = readStyle("src/core/engine/grouped_class_source_digest.rs");
   const sourceApplyContract = readStyle(
     "src/core/engine/grouped_class_source_apply.rs",
@@ -615,6 +618,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     editorWriteBridgeFixture.required_mutation_write_receipt_fields,
     expectedEditorWriteBridgeMutationWriteReceiptFields,
   );
+  assert.deepEqual(editorWriteBridgeGenerated, editorWriteBridgeFixture);
   assert.deepEqual(
     rustStringVec(editorWriteBridgePreflight, "required_receipts"),
     expectedEditorWriteBridgeReceipts,
@@ -1516,6 +1520,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(fixtureMirrorScript, /css-declaration-hint-catalog\.generated\.json/);
   assert.match(fixtureMirrorScript, /css-declaration-dry-run-contract\.generated\.json/);
   assert.match(fixtureMirrorScript, /grouped-class-dry-run-receipt-fixtures\.generated\.json/);
+  assert.match(fixtureMirrorScript, /grouped-class-editor-write-bridge-preflight\.json/);
+  assert.match(fixtureMirrorScript, /editor-write-bridge-preflight\.generated\.json/);
   assert.deepEqual(receiptFixturesGenerated, receiptFixtures);
   assert.equal(
     receiptFixtures.schema,
@@ -1602,6 +1608,7 @@ test("DX Style visual generator mirror helper reports Zed fallback freshness", (
   assert.match(output, /ok fixtures\/visual-generator-css-declaration-hint-catalog\.json/);
   assert.match(output, /ok fixtures\/css-declaration-dry-run-contract\.json/);
   assert.match(output, /ok fixtures\/grouped-class-dry-run-receipt-fixtures\.json/);
+  assert.match(output, /ok fixtures\/grouped-class-editor-write-bridge-preflight\.json/);
 });
 
 test("Zed Style rail keeps GPUI as the shell and Web Preview as the generator host", () => {
@@ -3607,6 +3614,12 @@ test("DX Style has a real right-dock GPUI shell", () => {
   const editorWriteBridge = read(
     "crates/agent_ui/src/dx_style_panel/editor_write_bridge.rs",
   );
+  const editorWriteBridgeGenerated = JSON.parse(
+    read("crates/agent_ui/src/dx_style_panel/editor-write-bridge-preflight.generated.json"),
+  );
+  const editorWriteBridgeStyleFixture = JSON.parse(
+    readStyle("fixtures/grouped-class-editor-write-bridge-preflight.json"),
+  );
   const receiptMatch = read("crates/agent_ui/src/dx_style_panel/receipt_match.rs");
   const receiptReview = read("crates/agent_ui/src/dx_style_panel/receipt_review.rs");
   const sourceDigest = read("crates/agent_ui/src/dx_style_panel/source_digest.rs");
@@ -3852,10 +3865,14 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /summary: format!/);
   assert.match(editorWriteBridge, /preflight_fixture_path/);
   assert.match(editorWriteBridge, /read_preflight_fixture/);
+  assert.match(editorWriteBridge, /GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_JSON/);
+  assert.match(editorWriteBridge, /include_str!\("editor-write-bridge-preflight\.generated\.json"\)/);
+  assert.match(editorWriteBridge, /generated_preflight/);
+  assert.match(editorWriteBridge, /preflight_from_value/);
+  assert.match(editorWriteBridge, /emergency_preflight/);
   assert.match(editorWriteBridge, /MAX_EDITOR_WRITE_BRIDGE_PREFLIGHT_BYTES/);
   assert.match(editorWriteBridge, /PREFLIGHT_LIST_LIMIT: usize = 32/);
   assert.match(editorWriteBridge, /string_list/);
-  assert.match(editorWriteBridge, /fallback_preflight/);
   assert.match(editorWriteBridge, /required_editor_guards/);
   assert.match(editorWriteBridge, /required_native_handlers/);
   assert.match(editorWriteBridge, /required_native_handler_capabilities/);
@@ -3865,68 +3882,56 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /required_runtime_validation_receipt_fields/);
   assert.match(editorWriteBridge, /mutation_write_receipt_schema/);
   assert.match(editorWriteBridge, /required_mutation_write_receipt_fields/);
-  assert.match(editorWriteBridge, /same-session native editor identity/);
-  assert.match(editorWriteBridge, /cursor-scoped dry-run structured edit preview/);
-  assert.match(editorWriteBridge, /native writer commit plan/);
-  assert.match(editorWriteBridge, /post-write source digest verification plan/);
-  assert.match(editorWriteBridge, /runtime validation receipt verification/);
-  assert.match(
-    editorWriteBridge,
-    /dispatch-time runtime validation receipt revalidation/,
+  assert.match(editorWriteBridge, /generated editor write-bridge preflight mirror parse failed/);
+  assert.deepEqual(editorWriteBridgeGenerated, editorWriteBridgeStyleFixture);
+  assert.equal(
+    editorWriteBridgeGenerated.schema,
+    "dx.style.grouped-class-editor-write-bridge-preflight",
   );
-  assert.match(
-    editorWriteBridge,
-    /dispatch-time explicit mutation action revalidation/,
-  );
-  assert.match(editorWriteBridge, /reverse_css_delta_replacement_payload_diagnostics/);
-  assert.match(editorWriteBridge, /native_writer_commit_plan/);
-  assert.match(editorWriteBridge, /post_write_digest_verification_plan/);
-  assert.match(editorWriteBridge, /runtime_validation_receipt_template/);
-  assert.match(editorWriteBridge, /runtime_validation_receipt/);
-  assert.match(editorWriteBridge, /mutation_write_receipt_template/);
-  assert.match(editorWriteBridge, /native_mutation_writer_preflight/);
-  assert.match(editorWriteBridge, /native_writer_dispatch/);
-  assert.match(editorWriteBridge, /user_apply_action/);
-  assert.match(editorWriteBridge, /authorized runtime validation/);
-  assert.match(editorWriteBridge, /post-write source digest verification/);
-  assert.match(editorWriteBridge, /post_write_readback_digest_match/);
-  assert.match(editorWriteBridge, /single_editor_transaction/);
-  assert.match(editorWriteBridge, /zed\.web_preview\.dx_style_source_apply_receipt\.v1/);
-  assert.match(editorWriteBridge, /zed\.web_preview\.dx_style\.runtime_validation_receipt\.v1/);
-  assert.match(editorWriteBridge, /zed\.web_preview\.dx_style\.mutation_write_receipt\.v1/);
+  assert.equal(editorWriteBridgeGenerated.schema_version, 1);
+  assert.equal(editorWriteBridgeGenerated.status, "not_enabled");
+  assert.equal(editorWriteBridgeGenerated.can_mutate_source, false);
+  assert.equal(editorWriteBridgeGenerated.runtime_validation_required, true);
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_receipts"),
+    editorWriteBridgeGenerated.required_receipts,
     expectedEditorWriteBridgeReceipts,
   );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_editor_guards"),
+    editorWriteBridgeGenerated.required_editor_guards,
     expectedEditorWriteBridgeGuards,
   );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_native_handlers"),
+    editorWriteBridgeGenerated.required_native_handlers,
     expectedEditorWriteBridgeHandlers,
   );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_native_handler_capabilities"),
+    editorWriteBridgeGenerated.required_native_handler_capabilities,
     expectedEditorWriteBridgeCapabilities,
   );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_source_apply_review_receipt_fields"),
+    editorWriteBridgeGenerated.required_source_apply_review_receipt_fields,
     expectedEditorWriteBridgeReviewReceiptFields,
   );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_runtime_proofs"),
+    editorWriteBridgeGenerated.required_runtime_proofs,
     expectedEditorWriteBridgeRuntimeProofs,
   );
+  assert.equal(
+    editorWriteBridgeGenerated.runtime_validation_receipt_schema,
+    "zed.web_preview.dx_style.runtime_validation_receipt.v1",
+  );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_runtime_validation_receipt_fields"),
+    editorWriteBridgeGenerated.required_runtime_validation_receipt_fields,
     expectedEditorWriteBridgeRuntimeValidationReceiptFields,
   );
+  assert.equal(
+    editorWriteBridgeGenerated.mutation_write_receipt_schema,
+    "zed.web_preview.dx_style.mutation_write_receipt.v1",
+  );
   assert.deepEqual(
-    rustStringVec(editorWriteBridge, "required_mutation_write_receipt_fields"),
+    editorWriteBridgeGenerated.required_mutation_write_receipt_fields,
     expectedEditorWriteBridgeMutationWriteReceiptFields,
   );
-  assert.match(editorWriteBridge, /window\.__DX_STYLE_SOURCE_APPLY__/);
   assert.match(editorWriteBridge, /can_mutate_source/);
   assert.match(editorWriteBridge, /can_apply: false/);
   assert.match(editorWriteBridge, /grouped-class-editor-write-bridge-preflight/);

@@ -1,3 +1,25 @@
+[2026-05-31] - DX Style Generated Write-Bridge Preflight
+
+ADDED:
+- `crates\agent_ui\src\dx_style_panel\editor-write-bridge-preflight.generated.json` mirrors the source-owned DX Style editor write-bridge preflight fixture into Zed.
+- `docs/superpowers/plans/2026-05-31-dx-style-generated-write-bridge-preflight-plan.md` records the source-only plan for removing hand-maintained preflight fallback drift.
+
+CHANGED:
+- `crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs` now reads the live DX Style preflight fixture first, parses the generated Zed mirror second, and keeps only a tiny fail-closed emergency fallback for corrupted generated data.
+- `G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs` now mirrors `fixtures/grouped-class-editor-write-bridge-preflight.json` into Zed along with the other source-owned Style fixtures.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the generated preflight mirror path.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the generated write-bridge preflight files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+- `G:\Dx\style` is not a git repository in this workspace, so the fixture sync script change is changed on disk and verified through the Zed source guard rather than included in the Zed commit.
+
 [2026-05-31] - DX Style Context Generator Readiness
 
 ADDED:

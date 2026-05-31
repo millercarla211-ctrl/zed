@@ -61,12 +61,16 @@ const GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_SCHEMA: &str =
     "dx.style.grouped-class-editor-write-bridge-preflight";
 const GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_FIXTURE: &str =
     r"G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json";
+const GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_JSON: &str =
+    include_str!("editor-write-bridge-preflight.generated.json");
 const MAX_EDITOR_WRITE_BRIDGE_PREFLIGHT_BYTES: u64 = 64 * 1024;
 const PREFLIGHT_LIST_LIMIT: usize = 32;
 
 pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnapshot {
     let preflight_path = PathBuf::from(GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_FIXTURE);
-    let preflight = read_preflight_fixture(&preflight_path).unwrap_or_else(fallback_preflight);
+    let preflight = read_preflight_fixture(&preflight_path)
+        .or_else(generated_preflight)
+        .unwrap_or_else(emergency_preflight);
 
     StyleEditorWriteBridgeSnapshot {
         state: preflight.state,
@@ -135,6 +139,15 @@ struct EditorWriteBridgePreflight {
 
 fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {
     let value = serde_json::from_str::<Value>(&read_text_limited(path)?).ok()?;
+    preflight_from_value(&value)
+}
+
+fn generated_preflight() -> Option<EditorWriteBridgePreflight> {
+    let value = serde_json::from_str::<Value>(GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_JSON).ok()?;
+    preflight_from_value(&value)
+}
+
+fn preflight_from_value(value: &Value) -> Option<EditorWriteBridgePreflight> {
     if value.get("schema")?.as_str()? != GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_SCHEMA {
         return None;
     }
@@ -194,113 +207,26 @@ fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {
     })
 }
 
-fn fallback_preflight() -> EditorWriteBridgePreflight {
+fn emergency_preflight() -> EditorWriteBridgePreflight {
     EditorWriteBridgePreflight {
         schema_version: 1,
         scope: "preflight requirements for trusted grouped-class editor source writes".to_string(),
         state: "not_enabled".to_string(),
         can_mutate_source: false,
-        required_receipts: vec![
-            "dx.style.grouped-class-dry-run-receipt".to_string(),
-            "dx.style.grouped-class-source-digest".to_string(),
-            "dx.style.grouped-class-source-apply-contract".to_string(),
-            "zed.web_preview.dx_style_source_apply_receipt.v1".to_string(),
-            "zed.web_preview.dx_style.active_editor_source_revalidation".to_string(),
-        ],
+        required_receipts: Vec::new(),
         required_editor_guards: vec![
-            "active context schema match".to_string(),
-            "active source path match".to_string(),
-            "request source span matches active source span".to_string(),
-            "active source length match".to_string(),
-            "active source digest match".to_string(),
-            "trusted Web Preview source-apply session".to_string(),
-            "session-bound source identity".to_string(),
-            "native active editor source revalidation".to_string(),
-            "same-session native editor identity".to_string(),
-            "trusted grouped-class dry-run receipt".to_string(),
-            "cursor-scoped dry-run structured edit preview".to_string(),
-            "native writer commit plan".to_string(),
-            "post-write source digest verification plan".to_string(),
-            "runtime validation receipt verification".to_string(),
-            "reverse CSS delta preview provenance match".to_string(),
-            "reverse CSS delta replacement policy match".to_string(),
-            "CSS declaration dry-run receipt for CSS contexts".to_string(),
-            "editor write bridge can_apply".to_string(),
-            "explicit user apply action".to_string(),
-            "authorized runtime validation".to_string(),
-            "dispatch-time runtime validation receipt revalidation".to_string(),
-            "dispatch-time explicit mutation action revalidation".to_string(),
+            "generated editor write-bridge preflight mirror parse failed".to_string(),
         ],
-        required_native_handlers: vec!["window.__DX_STYLE_SOURCE_APPLY__".to_string()],
-        required_native_handler_capabilities: vec![
-            "can_review_request".to_string(),
-            "can_mutate_source".to_string(),
-        ],
-        required_source_apply_review_receipt_fields: vec![
-            "source_apply_session".to_string(),
-            "preview_output".to_string(),
-            "css_declaration_dry_run_diagnostics".to_string(),
-            "css_declaration_dry_run_preview_diagnostics".to_string(),
-            "reverse_css_delta_contract".to_string(),
-            "reverse_css_delta_preview".to_string(),
-            "reverse_css_delta_replacement_payload_diagnostics".to_string(),
-            "dry_run_edit_review".to_string(),
-            "native_writer_dry_run_replay".to_string(),
-            "native_writer_commit_plan".to_string(),
-            "post_write_digest_verification_plan".to_string(),
-            "runtime_validation_receipt_template".to_string(),
-            "runtime_validation_receipt".to_string(),
-            "mutation_write_receipt_template".to_string(),
-            "native_mutation_writer_preflight".to_string(),
-            "user_apply_action".to_string(),
-            "source_write_readiness".to_string(),
-            "native_writer_dispatch".to_string(),
-            "native_active_editor_source_revalidation".to_string(),
-            "native_handler".to_string(),
-            "apply_gate".to_string(),
-        ],
-        required_runtime_proofs: vec![
-            "authorized runtime validation".to_string(),
-            "successful WebView source-review round trip".to_string(),
-            "successful native writer dry-run replay".to_string(),
-            "post-write source digest verification".to_string(),
-        ],
+        required_native_handlers: Vec::new(),
+        required_native_handler_capabilities: Vec::new(),
+        required_source_apply_review_receipt_fields: Vec::new(),
+        required_runtime_proofs: Vec::new(),
         runtime_validation_receipt_schema: "zed.web_preview.dx_style.runtime_validation_receipt.v1"
             .to_string(),
-        required_runtime_validation_receipt_fields: vec![
-            "schema".to_string(),
-            "source_apply_receipt_schema".to_string(),
-            "source_path".to_string(),
-            "source_digest_before".to_string(),
-            "source_digest_after".to_string(),
-            "authorized_runtime_validation".to_string(),
-            "webview_source_review_round_trip".to_string(),
-            "native_writer_dry_run_replay".to_string(),
-            "post_write_source_digest_verification".to_string(),
-            "post_write_readback_digest".to_string(),
-            "post_write_readback_digest_match".to_string(),
-            "mutation_performed".to_string(),
-            "verified_at".to_string(),
-        ],
+        required_runtime_validation_receipt_fields: Vec::new(),
         mutation_write_receipt_schema: "zed.web_preview.dx_style.mutation_write_receipt.v1"
             .to_string(),
-        required_mutation_write_receipt_fields: vec![
-            "schema".to_string(),
-            "source_apply_receipt_schema".to_string(),
-            "runtime_validation_receipt_schema".to_string(),
-            "source_path".to_string(),
-            "edit_span".to_string(),
-            "replacement_text_bytes".to_string(),
-            "source_digest_before".to_string(),
-            "expected_source_digest_after".to_string(),
-            "pre_write_digest_match".to_string(),
-            "single_editor_transaction".to_string(),
-            "undo_group_id".to_string(),
-            "mutation_performed".to_string(),
-            "post_write_readback_digest".to_string(),
-            "post_write_readback_digest_match".to_string(),
-            "written_at".to_string(),
-        ],
+        required_mutation_write_receipt_fields: Vec::new(),
         runtime_validation_required: true,
     }
 }
