@@ -572,6 +572,14 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && Array.isArray(group.utilities) && !group.utilities.length) {
         diagnostics.push("group_context_utilities_empty");
       }
+      if (Array.isArray(group.utilities) && !Number.isInteger(group.utility_count)) {
+        diagnostics.push("group_context_utility_count_missing");
+      }
+      if (Array.isArray(group.utilities)
+        && Number.isInteger(group.utility_count)
+        && group.utility_count !== group.utilities.length) {
+        diagnostics.push("group_context_utility_count_mismatch");
+      }
       if (Array.isArray(group.utilities) && group.utilities.length
         && group.can_expand_inline !== true) {
         diagnostics.push("group_context_inline_expansion_missing");
@@ -2257,6 +2265,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
     function renderGroupContextReview() {
       const group = zedStyleContext?.group_context || null;
       const totalUtilityCount = Array.isArray(group?.utilities) ? group.utilities.length : 0;
+      const reportedUtilityCount = Number.isInteger(group?.utility_count)
+        ? group.utility_count
+        : totalUtilityCount;
       const boundedUtilities = boundedGroupContextUtilities(group);
       const utilities = boundedUtilities.length
         ? `<span>Showing ${boundedUtilities.length} of ${totalUtilityCount} bounded utilities</span><ul>${boundedUtilities.map((utility) => `<li>${escapeHtml(utility)}</li>`).join("")}</ul>`
@@ -2276,7 +2287,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Registry</dt><dd>${escapeHtml(group?.registry_receipt || "not available")}</dd>
           <dt>Reverse CSS map</dt><dd>${escapeHtml(group?.reverse_css_map_receipt || "not available")}</dd>
           <dt>Reverse CSS status</dt><dd>${escapeHtml(group?.reverse_css_map_status || "not available")}</dd>
-          <dt>Utilities</dt><dd>${Number(group?.utility_count || 0)} / ${groupContextMaxUtilityCount || "unknown"}</dd>
+          <dt>Utilities</dt><dd>${reportedUtilityCount} / ${groupContextMaxUtilityCount || "unknown"}</dd>
         </dl>
         ${group?.source_state ? `<span>${escapeHtml(group.source_state)}</span>` : ""}
         ${utilities}

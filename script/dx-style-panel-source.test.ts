@@ -3539,6 +3539,9 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_utility_byte_cap_missing/);
   assert.match(surfaceScript, /group_context_candidate_min_missing/);
   assert.match(surfaceScript, /group_context_alias_exceeds_contract_limit/);
+  assert.match(surfaceScript, /group_context_utility_count_missing/);
+  assert.match(surfaceScript, /group_context_utility_count_mismatch/);
+  assert.match(surfaceScript, /reportedUtilityCount/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);
   assert.match(surfaceScript, /groupContextUtilityPreview/);
