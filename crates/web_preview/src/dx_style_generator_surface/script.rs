@@ -1575,6 +1575,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         bridge.required_source_apply_review_receipt_fields.filter((field) =>
           !emittedReviewReceiptFields.includes(field)
         );
+      const knownRuntimeProofs = [
+        "authorized runtime validation",
+        "successful WebView source-review round trip",
+        "successful native writer dry-run replay",
+        "post-write source digest verification"
+      ];
+      const missingRequiredRuntimeProofs = bridge.required_runtime_proofs.filter((proof) =>
+        !knownRuntimeProofs.includes(proof)
+      );
       const missingRequirements = [];
       if (!sourceApplyMutationEnabled) missingRequirements.push("source_mutation_contract_disabled");
       if (!sourceApplyContractHasGuard(reverseCssDeltaReplacementPolicyGuard)) {
@@ -1625,6 +1634,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
       if (bridge.runtime_validation_required === true) {
         missingRequirements.push("runtime_webview_build_proof_missing");
+      }
+      if (bridge.runtime_validation_required === true && missingRequiredRuntimeProofs.length) {
+        missingRequirements.push("write_bridge_required_runtime_proofs_missing");
       }
       if (bridge.runtime_validation_required === true && !bridge.required_runtime_proofs.length) {
         missingRequirements.push("write_bridge_runtime_proofs_missing");
@@ -1681,6 +1693,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         required_review_receipt_field_count: bridge.required_review_receipt_field_count,
         missing_required_review_receipt_fields: missingRequiredReviewReceiptFields,
         required_runtime_proof_count: bridge.required_runtime_proof_count,
+        missing_required_runtime_proofs: missingRequiredRuntimeProofs,
         runtime_validation_required: bridge.runtime_validation_required,
         web_preview_declared_mutation_capability: webPreviewDeclaredMutationCapability,
         native_handler_state: handlerState,

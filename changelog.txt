@@ -11797,3 +11797,19 @@ PASSED:
 
 NOTES:
 - This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.
+
+[2026-05-31] - DX Style Runtime Proof Coverage
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now compares the source-owned editor write-bridge required runtime proof list against the runtime proof names Web Preview/Zed currently understand, exposing unsupported proof names in source-write readiness.
+- `crates\web_preview\src\dx_style_source_apply.rs` now performs the same coverage check in native source-write readiness with `write_bridge_required_runtime_proofs_missing` as the generic drift blocker.
+- `script\dx-style-panel-source.test.ts` guards both Web Preview and native runtime-proof coverage checks so new source-owned runtime proof names cannot silently bypass readiness.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Focused conflict-marker scan across changed source/docs files.
+
+NOTES:
+- This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.

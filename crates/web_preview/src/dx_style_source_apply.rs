@@ -68,6 +68,12 @@ const SOURCE_APPLY_REVIEW_RECEIPT_FIELDS: &[&str] = &[
     "native_active_editor_source_revalidation",
     "native_handler",
 ];
+const SOURCE_APPLY_RUNTIME_PROOFS: &[&str] = &[
+    "authorized runtime validation",
+    "successful WebView source-review round trip",
+    "successful native writer dry-run replay",
+    "post-write source digest verification",
+];
 
 pub(crate) fn active_source_digest(source: &str) -> String {
     let mut hash = 0xcbf29ce484222325u64;
@@ -1431,6 +1437,7 @@ fn source_write_readiness(
     let dry_run_edit_review_status = dry_run_edit_review.get("status").and_then(Value::as_str);
     let missing_required_review_receipt_fields =
         missing_required_review_receipt_fields(editor_write_bridge);
+    let missing_required_runtime_proofs = missing_required_runtime_proofs(editor_write_bridge);
 
     let mut missing_requirements = Vec::new();
     if contract_source_mutation_enabled != Some(true) {
@@ -1529,6 +1536,9 @@ fn source_write_readiness(
     if runtime_validation_required == Some(true) {
         missing_requirements.push("runtime_webview_build_proof_missing");
     }
+    if runtime_validation_required == Some(true) && !missing_required_runtime_proofs.is_empty() {
+        missing_requirements.push("write_bridge_required_runtime_proofs_missing");
+    }
     if runtime_validation_required == Some(true)
         && !string_array_contains(
             editor_write_bridge,
@@ -1588,6 +1598,7 @@ fn source_write_readiness(
         "required_source_apply_review_receipt_fields": string_array_at(editor_write_bridge, "/required_source_apply_review_receipt_fields"),
         "missing_required_review_receipt_fields": missing_required_review_receipt_fields,
         "required_runtime_proofs": string_array_at(editor_write_bridge, "/required_runtime_proofs"),
+        "missing_required_runtime_proofs": missing_required_runtime_proofs,
         "runtime_validation_required": runtime_validation_required,
         "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
         "native_can_mutate_source": native_can_mutate_source,
@@ -1616,6 +1627,13 @@ fn missing_required_review_receipt_fields(editor_write_bridge: &Value) -> Vec<&s
     .into_iter()
     .filter(|field| !SOURCE_APPLY_REVIEW_RECEIPT_FIELDS.contains(field))
     .collect()
+}
+
+fn missing_required_runtime_proofs(editor_write_bridge: &Value) -> Vec<&str> {
+    string_array_at(editor_write_bridge, "/required_runtime_proofs")
+        .into_iter()
+        .filter(|proof| !SOURCE_APPLY_RUNTIME_PROOFS.contains(proof))
+        .collect()
 }
 
 fn user_apply_action_review(
