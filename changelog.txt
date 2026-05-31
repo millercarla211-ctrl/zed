@@ -1,3 +1,15 @@
+[2026-05-31] - DX Style Expected Recommendation Surface
+
+ADDED:
+- `docs\superpowers\plans\2026-05-31-dx-style-expected-recommendation-surface-plan.md` records the bounded source-only checkpoint.
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now shows the recomputed expected grouped efficiency recommendation in the visible grouped-class review and emits it as `group_expected_recommended_representation` in copied context output.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the expected recommendation surface.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Grouping Recommendation Consistency
 
 ADDED:
