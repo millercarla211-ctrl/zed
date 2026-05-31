@@ -87,6 +87,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       ? normalizedStringValues(groupContextContract.context_fields)
       : [];
     const groupContextContractFieldSet = new Set(groupContextContractFields);
+    const groupContextReviewOutputFields =
+      Array.isArray(groupContextContract.review_output_fields)
+        ? normalizedStringValues(groupContextContract.review_output_fields)
+        : [];
+    const groupContextReviewOutputFieldSet =
+      new Set(groupContextReviewOutputFields);
     const groupContextDiagnosticCodes = Array.isArray(groupContextContract.diagnostic_codes)
       ? normalizedStringValues(groupContextContract.diagnostic_codes)
       : [];
@@ -107,6 +113,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       "group_context.requires_registry_receipt",
       "group_context.source_owned",
       "group_context.can_expand_inline"
+    ];
+    const groupContextRequiredReviewOutputFields = [
+      "group_expected_recommended_representation",
+      "group_recommendation_match"
     ];
     const reverseCssDeltaContractSchema = reverseCssDeltaContract.__schema || "unknown";
     const reverseCssDeltaContractSource = reverseCssDeltaContract.__source || "embedded:dx-style-reverse-css-delta-contract-fixture";
@@ -644,6 +654,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && expectedRecommendedRepresentation
         && group.recommended_representation !== expectedRecommendedRepresentation) {
         diagnostics.push("group_context_recommended_representation_mismatch");
+      }
+      if (!groupContextReviewOutputFieldSet.size) {
+        diagnostics.push("group_context_review_output_fields_missing");
+      } else {
+        for (const field of groupContextRequiredReviewOutputFields) {
+          if (!groupContextReviewOutputFieldSet.has(field)) {
+            diagnostics.push(`group_context_review_output_field_missing:${field}`);
+          }
+        }
       }
       const recommendationMatch = groupContextRecommendationMatchState(group);
       if (!groupContextRecommendationMatchSet.size) {
@@ -2789,6 +2808,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_utility_preview_max_chars: ${groupContextUtilityPreviewMaxChars}`,
         `group_context_candidate_min_utility_count: ${groupContextCandidateMin || "unknown"}`,
         `group_context_contract_fields: ${groupContextContractFields.length}`,
+        `group_context_review_output_fields: ${groupContextReviewOutputFields.length}`,
         `group_context_diagnostic_codes: ${groupContextDiagnosticCodes.length}`,
         `group_context_recommended_representation_values: ${groupContextRecommendedRepresentationValues.length}`,
         `group_context_recommendation_match_values: ${groupContextRecommendationMatchValues.length}`,

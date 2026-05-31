@@ -70,6 +70,10 @@
     "group_context.can_expand_inline",
     "group_context.registry_receipt"
   ],
+  "review_output_fields": [
+    "group_expected_recommended_representation",
+    "group_recommendation_match"
+  ],
   "diagnostic_codes": [
     "group_context_contract_missing_field",
     "group_context_diagnostic_codes_missing",
@@ -102,6 +106,8 @@
     "group_context_recommended_representation_mismatch",
     "group_context_recommendation_match_values_missing",
     "group_context_recommendation_match_unsupported",
+    "group_context_review_output_fields_missing",
+    "group_context_review_output_field_missing",
     "group_context_inline_expansion_missing"
   ],
   "recommended_representation_values": [

@@ -58,6 +58,7 @@ fn group_context_fixture_to_web_preview_json(fixture: Value, source_path: &str) 
         "group_call_status_values": fixture.get("group_call_status_values")?.as_array()?,
         "group_call_status_by_syntax": fixture.get("group_call_status_by_syntax")?.as_array()?,
         "context_fields": fixture.get("context_fields")?.as_array()?,
+        "review_output_fields": fixture.get("review_output_fields")?.as_array()?,
         "diagnostic_codes": fixture.get("diagnostic_codes")?.as_array()?,
         "recommended_representation_values": fixture
             .get("recommended_representation_values")?

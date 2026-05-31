@@ -1,3 +1,16 @@
+[2026-05-31] - DX Style Grouped Review Output Fields
+
+ADDED:
+- DX Style now source-owns grouped Web Preview review-output fields in `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` and `G:\Dx\style\fixtures\grouped-class-web-preview-context.json`.
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs` now mirrors `review_output_fields` from the DX Style grouped context fixture.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now reports missing grouped review-output field declarations and emits the source-owned review-output field count.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document source-owned grouped review-output fields.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Typed Recommendation Labels
 
 ADDED:

@@ -888,6 +888,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupWebPreviewContext, /GroupedClassGroupCallStatusRule/);
   assert.match(groupWebPreviewContext, /source_declaration/);
   assert.match(groupWebPreviewContext, /source_group_declaration/);
+  assert.match(groupWebPreviewContext, /review_output_fields/);
   assert.match(groupWebPreviewContext, /recommendation_match_values/);
   assert.match(groupWebPreviewContext, /GroupedClassRecommendedRepresentation::GroupedReference\.as_str\(\)/);
   assert.match(groupWebPreviewContext, /GroupedClassRecommendationMatch::MissingSourceRecommendation\.as_str\(\)/);
@@ -946,6 +947,10 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "group_context.recommended_representation",
     ),
   );
+  assert.deepEqual(groupWebPreviewContextFixture.review_output_fields, [
+    "group_expected_recommended_representation",
+    "group_recommendation_match",
+  ]);
   assert.ok(
     groupWebPreviewContextFixture.diagnostic_codes.includes(
       "group_context_utility_count_mismatch",
@@ -979,6 +984,16 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupWebPreviewContextFixture.diagnostic_codes.includes(
       "group_context_recommended_representation_mismatch",
+    ),
+  );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_review_output_fields_missing",
+    ),
+  );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_review_output_field_missing",
     ),
   );
   assert.deepEqual(groupWebPreviewContextFixture.recommended_representation_values, [
@@ -2927,6 +2942,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceGroupContextContract, /group_call_syntax_values/);
   assert.match(surfaceGroupContextContract, /group_call_status_values/);
   assert.match(surfaceGroupContextContract, /group_call_status_by_syntax/);
+  assert.match(surfaceGroupContextContract, /review_output_fields/);
   assert.match(surfaceGroupContextContract, /max_alias_bytes/);
   assert.match(surfaceGroupContextContract, /max_utility_count/);
   assert.match(surfaceGroupContextContract, /diagnostic_codes/);
@@ -3637,6 +3653,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /groupContextRecommendationMatchSet/);
   assert.match(surfaceScript, /group_context_recommendation_match_values_missing/);
   assert.match(surfaceScript, /group_context_recommendation_match_unsupported/);
+  assert.match(surfaceScript, /groupContextReviewOutputFields/);
+  assert.match(surfaceScript, /groupContextReviewOutputFieldSet/);
+  assert.match(surfaceScript, /groupContextRequiredReviewOutputFields/);
+  assert.match(surfaceScript, /group_context_review_output_fields_missing/);
+  assert.match(surfaceScript, /group_context_review_output_field_missing/);
   assert.match(surfaceScript, /groupContextExpectedRecommendation/);
   assert.match(surfaceScript, /groupContextRecommendationMatchState/);
   assert.match(surfaceScript, /group_context_recommended_representation_values/);
@@ -3659,6 +3680,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /boundedGroupContextUtilities/);
   assert.match(surfaceScript, /groupContextUtilityPreviewMaxChars/);
   assert.match(surfaceScript, /group_context_contract_fields/);
+  assert.match(surfaceScript, /group_context_review_output_fields/);
   assert.match(surfaceScript, /group_context_required_flag_fields/);
   assert.match(surfaceScript, /group_context_syntax_values/);
   assert.match(surfaceScript, /group_context_status_values/);
