@@ -28,6 +28,101 @@
     "css_mesh",
     "css_noise"
   ],
+  "runtime_value_dependencies": [
+    {
+      "value_key": "half_blur",
+      "control_keys": [
+        "blur"
+      ]
+    },
+    {
+      "value_key": "third_blur",
+      "control_keys": [
+        "blur"
+      ]
+    },
+    {
+      "value_key": "blur_eighth",
+      "control_keys": [
+        "blur"
+      ]
+    },
+    {
+      "value_key": "blur_quarter",
+      "control_keys": [
+        "blur"
+      ]
+    },
+    {
+      "value_key": "text_shadow_blur",
+      "control_keys": [
+        "blur"
+      ]
+    },
+    {
+      "value_key": "glass_blur",
+      "control_keys": [
+        "blur"
+      ]
+    },
+    {
+      "value_key": "angle_sixth",
+      "control_keys": [
+        "angle"
+      ]
+    },
+    {
+      "value_key": "angle_quarter",
+      "control_keys": [
+        "angle"
+      ]
+    },
+    {
+      "value_key": "gap_plus_20",
+      "control_keys": [
+        "gap"
+      ]
+    },
+    {
+      "value_key": "css_linear",
+      "control_keys": [
+        "from",
+        "to",
+        "angle"
+      ]
+    },
+    {
+      "value_key": "css_radial",
+      "control_keys": [
+        "from",
+        "to"
+      ]
+    },
+    {
+      "value_key": "css_conic",
+      "control_keys": [
+        "from",
+        "to",
+        "angle"
+      ]
+    },
+    {
+      "value_key": "css_mesh",
+      "control_keys": [
+        "from",
+        "to",
+        "angle"
+      ]
+    },
+    {
+      "value_key": "css_noise",
+      "control_keys": [
+        "from",
+        "to",
+        "blur"
+      ]
+    }
+  ],
   "entries": [
     {
       "generator_id": "linear-gradient",
@@ -159,8 +254,8 @@
     },
     {
       "generator_id": "clip-path-shapes",
-      "class_template": "clip-path-[polygon(12%_0,100%_0,88%_100%,0_100%)]",
-      "css_template": "clip-path: polygon(12% 0, 100% 0, 88% 100%, 0 100%);\nbackground: {from};",
+      "class_template": "rounded-[{radius}px] clip-path-[polygon(12%_0,100%_0,88%_100%,0_100%)]",
+      "css_template": "clip-path: polygon(12% 0, 100% 0, 88% 100%, 0 100%);\nborder-radius: {radius}px;\nbackground: {from};",
       "preview_kind": "hero-card",
       "preview_anatomy": [
         "preview-label"
@@ -177,8 +272,8 @@
     },
     {
       "generator_id": "transform-2d",
-      "class_template": "rotate-[{angle_sixth}deg] scale-105",
-      "css_template": "transform: rotate({angle_sixth}deg) scale(1.05);",
+      "class_template": "rotate-[{angle_sixth}deg] scale-105 transition-transform duration-[{duration}ms] ease-[{easing}]",
+      "css_template": "transform: rotate({angle_sixth}deg) scale(1.05);\ntransition-duration: {duration}ms;\ntransition-timing-function: {easing};",
       "preview_kind": "hero-card",
       "preview_anatomy": [
         "preview-label"
@@ -186,8 +281,8 @@
     },
     {
       "generator_id": "transform-3d",
-      "class_template": "transform-3d rotate-y-[{angle_quarter}deg]",
-      "css_template": "transform: perspective(720px) rotateY({angle_quarter}deg) rotateX(8deg);",
+      "class_template": "transform-3d rotate-y-[{angle_quarter}deg] transition-transform duration-[{duration}ms] ease-[{easing}]",
+      "css_template": "transform: perspective(720px) rotateY({angle_quarter}deg) rotateX(8deg);\ntransition-duration: {duration}ms;\ntransition-timing-function: {easing};",
       "preview_kind": "hero-card",
       "preview_anatomy": [
         "preview-label"

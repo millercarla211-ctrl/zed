@@ -1466,6 +1466,8 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(generatorRecipeCatalog, /VISUAL_GENERATOR_RECIPE_CATALOG_SCHEMA/);
   assert.match(generatorRecipeCatalog, /VISUAL_GENERATOR_RECIPE_CATALOG_FIXTURE_PATH/);
   assert.match(generatorRecipeCatalog, /VISUAL_GENERATOR_RECIPE_RUNTIME_VALUE_KEYS/);
+  assert.match(generatorRecipeCatalog, /VISUAL_GENERATOR_RECIPE_RUNTIME_VALUE_DEPENDENCIES/);
+  assert.match(generatorRecipeCatalog, /VisualGeneratorRuntimeValueDependency/);
   assert.match(generatorRecipeCatalog, /VISUAL_GENERATOR_PREVIEW_ANATOMY_PARTS/);
   assert.match(generatorRecipeCatalog, /VisualGeneratorPreviewKind/);
   assert.match(generatorRecipeCatalog, /VisualGeneratorPreviewPart/);
@@ -1480,12 +1482,27 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(generatorControlCatalog, /VisualGeneratorControlCatalogEntry/);
   assert.match(generatorControlCatalog, /visual_generator_control_catalog_json/);
   assert.match(generatorControlCatalog, /GRADIENT_CONTROLS/);
-  assert.match(generatorControlCatalog, /RESPONSIVE_CONTROLS/);
+  assert.match(generatorControlCatalog, /CONTAINER_CONTROLS/);
+  assert.match(generatorControlCatalog, /SPACING_CONTROLS/);
   assert.equal(generatorRecipeFixture.schema, "dx.style.visual-generator-recipe-catalog");
   assert.equal(generatorRecipeFixture.entry_count, 25);
   assert.equal(generatorRecipeFixture.entries.length, 25);
   assert.ok(generatorRecipeFixture.runtime_value_keys.includes("css_linear"));
   assert.ok(generatorRecipeFixture.runtime_value_keys.includes("glass_blur"));
+  assert.ok(
+    generatorRecipeFixture.runtime_value_dependencies.some(
+      (dependency) =>
+        dependency.value_key === "css_mesh" &&
+        dependency.control_keys.includes("angle"),
+    ),
+  );
+  assert.ok(
+    generatorRecipeFixture.runtime_value_dependencies.some(
+      (dependency) =>
+        dependency.value_key === "css_noise" &&
+        dependency.control_keys.includes("blur"),
+    ),
+  );
   assert.ok(generatorRecipeFixture.preview_anatomy_parts.includes("timeline-track"));
   assert.ok(generatorRecipeFixture.preview_anatomy_parts.includes("layout-items"));
   assert.ok(
@@ -1523,6 +1540,33 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       `${entry.generator_id} should only use source-owned recipe value keys`,
     );
   }
+  const runtimeDependencyMap = new Map(
+    generatorRecipeFixture.runtime_value_dependencies.map((dependency) => [
+      dependency.value_key,
+      dependency.control_keys,
+    ]),
+  );
+  const unusedControlBindings = generatorControlFixture.entries.flatMap((entry) => {
+    const recipe = generatorRecipeFixture.entries.find(
+      (candidate) => candidate.generator_id === entry.generator_id,
+    );
+    assert.ok(recipe, `${entry.generator_id} should have a recipe`);
+    const placeholders = new Set([
+      ...templatePlaceholders(recipe.class_template),
+      ...templatePlaceholders(recipe.css_template),
+    ]);
+    const activeControlKeys = new Set(placeholders);
+    for (const placeholder of placeholders) {
+      for (const key of runtimeDependencyMap.get(placeholder) || []) {
+        activeControlKeys.add(key);
+      }
+    }
+    return entry.controls
+      .map((control) => control.key)
+      .filter((key) => !activeControlKeys.has(key))
+      .map((key) => `${entry.generator_id}:${key}`);
+  });
+  assert.deepEqual(unusedControlBindings, []);
   const reverseDeltaProperties = new Set(
     groupReverseCssDeltaFixture.supported_properties.map((entry) => entry.property),
   );
@@ -2862,6 +2906,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceRecipes, /recipe_fixture_to_web_preview_json/);
   assert.match(surfaceRecipes, /__source/);
   assert.match(surfaceRecipes, /__value_keys/);
+  assert.match(surfaceRecipes, /runtime_value_dependencies/);
+  assert.match(surfaceRecipes, /__value_dependencies/);
   assert.match(surfaceRecipes, /__preview_anatomy_parts/);
   assert.match(surfaceRecipes, /dx_style_generator_recipes_json/);
   assert.match(surfaceRecipes, /classTemplate/);
@@ -2968,6 +3014,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.equal(surfaceGeneratedRecipes.schema, "dx.style.visual-generator-recipe-catalog");
   assert.equal(surfaceGeneratedRecipes.entry_count, 25);
   assert.deepEqual(surfaceGeneratedRecipes.runtime_value_keys, styleRecipeFixture.runtime_value_keys);
+  assert.deepEqual(
+    surfaceGeneratedRecipes.runtime_value_dependencies,
+    styleRecipeFixture.runtime_value_dependencies,
+  );
   assert.equal(surfaceGeneratedCatalog.schema, "dx.style.visual-generator-catalog");
   assert.equal(surfaceGeneratedCatalog.generator_count, 25);
   assert.equal(surfaceGeneratedControls.schema, "dx.style.visual-generator-control-catalog");
@@ -3028,6 +3078,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /const recipeSchema = recipes\.__schema/);
   assert.match(surfaceScript, /const recipeSource = recipes\.__source/);
   assert.match(surfaceScript, /const recipeValueKeys = Array\.isArray\(recipes\.__value_keys\)/);
+  assert.match(surfaceScript, /const recipeValueDependencies = Array\.isArray\(recipes\.__value_dependencies\)/);
   assert.match(surfaceScript, /const recipePreviewAnatomyParts = Array\.isArray\(recipes\.__preview_anatomy_parts\)/);
   assert.match(surfaceScript, /const recipePreviewAnatomyPartSet = new Set\(recipePreviewAnatomyParts\)/);
   assert.match(surfaceScript, /const sourceApplyContractSchema = sourceApplyContract\.__schema/);
@@ -3097,7 +3148,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/);
   assert.match(surfaceScript, /function metadataKeys\(source\)/);
   assert.match(surfaceScript, /function templatePlaceholderKeys\(template\)/);
+  assert.match(surfaceScript, /function recipeValueDependencyMap\(\)/);
+  assert.match(surfaceScript, /const recipeValueDependenciesByKey = recipeValueDependencyMap\(\)/);
+  assert.match(surfaceScript, /function controlKeysForRecipePlaceholders\(placeholders\)/);
   assert.match(surfaceScript, /unsupportedRecipePlaceholders/);
+  assert.match(surfaceScript, /unusedControls/);
   assert.match(surfaceScript, /metadataDiagnostics\.status === "aligned"/);
   assert.match(surfaceScript, /metadata_missing_controls/);
   assert.match(surfaceScript, /metadata_missing_recipes/);
@@ -3106,6 +3161,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /recipe_value_keys/);
   assert.match(surfaceScript, /recipe_preview_anatomy_parts/);
   assert.match(surfaceScript, /metadata_unsupported_placeholders/);
+  assert.match(surfaceScript, /metadata_unused_controls/);
   assert.match(surfaceScript, /metadata_missing_preview_anatomy/);
   assert.match(surfaceScript, /metadata_unsupported_preview_anatomy/);
   assert.match(surfaceScript, /Metadata aligned/);

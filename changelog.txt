@@ -1,3 +1,17 @@
+[2026-05-31] - DX Style Visual Generator Control Dependencies
+
+ADDED:
+- DX Style visual generator recipes now source-own runtime value dependencies in `G:\Dx\style\src\core\engine\visual_generator_recipe_catalog.rs` and `G:\Dx\style\fixtures\visual-generator-recipe-catalog.json`.
+
+CHANGED:
+- DX Style visual generator controls/templates now remove disconnected controls from effect/layout generators and make mesh, noise, clip-path, and transform controls affect output.
+- `crates\web_preview\src\dx_style_generator_surface\recipes.rs` now mirrors `runtime_value_dependencies` into Web Preview metadata.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now reports `metadata_unused_controls` when a source-owned control is not connected to a recipe placeholder or runtime dependency.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the control-dependency contract.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Grouped Review Output Fields
 
 ADDED:

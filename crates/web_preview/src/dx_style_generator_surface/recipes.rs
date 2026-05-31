@@ -69,6 +69,27 @@ fn recipe_fixture_to_web_preview_json(fixture: Value, source_path: &str) -> Opti
         "__value_keys".to_string(),
         Value::Array(runtime_value_keys.clone()),
     );
+    let runtime_value_dependencies = fixture.get("runtime_value_dependencies")?.as_array()?;
+    if runtime_value_dependencies.len() > 64 {
+        return None;
+    }
+    for dependency in runtime_value_dependencies {
+        let value_key = dependency.get("value_key")?.as_str()?;
+        let control_keys = dependency.get("control_keys")?.as_array()?;
+        if value_key.is_empty()
+            || control_keys.is_empty()
+            || control_keys.len() > 8
+            || control_keys
+                .iter()
+                .any(|key| key.as_str().map(str::is_empty).unwrap_or(true))
+        {
+            return None;
+        }
+    }
+    values.insert(
+        "__value_dependencies".to_string(),
+        Value::Array(runtime_value_dependencies.clone()),
+    );
     let preview_anatomy_parts = fixture.get("preview_anatomy_parts")?.as_array()?;
     if preview_anatomy_parts.is_empty()
         || preview_anatomy_parts.len() > 16

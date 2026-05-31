@@ -36,6 +36,9 @@ const DX_STYLE_GENERATOR_SCRIPT: &str = r##"    const catalogPayload = __DX_STYL
     const recipeSchema = recipes.__schema || "unknown";
     const recipeSource = recipes.__source || "embedded:dx-style-recipe-fixture";
     const recipeValueKeys = Array.isArray(recipes.__value_keys) ? recipes.__value_keys : [];
+    const recipeValueDependencies = Array.isArray(recipes.__value_dependencies)
+      ? recipes.__value_dependencies
+      : [];
     const recipePreviewAnatomyParts = Array.isArray(recipes.__preview_anatomy_parts)
       ? recipes.__preview_anatomy_parts
       : [];
@@ -333,6 +336,31 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       return [...keys];
     }
 
+    function recipeValueDependencyMap() {
+      const dependencies = Object.create(null);
+      for (const dependency of recipeValueDependencies) {
+        const valueKey = String(dependency?.value_key || "").trim();
+        const controlKeys = Array.isArray(dependency?.control_keys)
+          ? normalizedStringValues(dependency.control_keys)
+          : [];
+        if (valueKey && controlKeys.length) dependencies[valueKey] = controlKeys;
+      }
+      return dependencies;
+    }
+
+    const recipeValueDependenciesByKey = recipeValueDependencyMap();
+
+    function controlKeysForRecipePlaceholders(placeholders) {
+      const controlKeys = new Set();
+      for (const key of placeholders) {
+        controlKeys.add(key);
+        for (const dependencyKey of recipeValueDependenciesByKey[key] || []) {
+          controlKeys.add(dependencyKey);
+        }
+      }
+      return controlKeys;
+    }
+
     function generatorMetadataDiagnostics() {
       const ids = catalogGeneratorIds();
       const catalogIdSet = new Set(ids);
@@ -352,6 +380,20 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
           .filter((key) => !recipeValueKeySet.has(key))
           .map((key) => `${id}:${key}`);
       });
+      const unusedControls = ids.flatMap((id) => {
+        const controlDefinitions = Array.isArray(controls[id]?.controls)
+          ? controls[id].controls
+          : [];
+        const recipe = recipes[id] || {};
+        const placeholders = templatePlaceholderKeys(
+          `${recipe.classTemplate || ""}\n${recipe.cssTemplate || ""}`
+        );
+        const activeControlKeys = controlKeysForRecipePlaceholders(placeholders);
+        return controlDefinitions
+          .map((definition) => String(definition?.key || "").trim())
+          .filter((key) => key && !activeControlKeys.has(key))
+          .map((key) => `${id}:${key}`);
+      });
       const missingPreviewAnatomy = ids.filter((id) =>
         !Array.isArray(recipes[id]?.previewAnatomy) || !recipes[id].previewAnatomy.length
       );
@@ -369,6 +411,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         || extraControls.length
         || extraRecipes.length
         || unsupportedRecipePlaceholders.length
+        || unusedControls.length
         || missingPreviewAnatomy.length
         || unsupportedPreviewAnatomy.length;
       return {
@@ -379,6 +422,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         extraControls,
         extraRecipes,
         unsupportedRecipePlaceholders,
+        unusedControls,
         missingPreviewAnatomy,
         unsupportedPreviewAnatomy
       };
@@ -469,6 +513,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     function recipeValues() {
       const halfBlur = Math.round(state.blur / 2);
       const thirdBlur = Math.round(state.blur / 3);
+      const noiseDot = Math.max(1, Math.round(state.blur / 18));
       return {
         from: state.from,
         to: state.to,
@@ -491,8 +536,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         css_linear: `linear-gradient(${state.angle}deg, ${state.from}, ${state.to})`,
         css_radial: `radial-gradient(circle at center, ${state.from}, ${state.to})`,
         css_conic: `conic-gradient(from ${state.angle}deg, ${state.from}, ${state.to}, ${state.from})`,
-        css_mesh: `radial-gradient(at 18% 22%, ${state.from}, transparent 52%), radial-gradient(at 82% 18%, ${state.to}, transparent 48%), radial-gradient(at 54% 82%, #a78bfa, transparent 46%), #0f172a`,
-        css_noise: `radial-gradient(circle at 20% 20%, ${state.from}33 0 2px, transparent 3px), radial-gradient(circle at 80% 40%, ${state.to}33 0 2px, transparent 3px), #0f172a`
+        css_mesh: `linear-gradient(${state.angle}deg, ${state.from}18, transparent 58%), radial-gradient(at 18% 22%, ${state.from}, transparent 52%), radial-gradient(at 82% 18%, ${state.to}, transparent 48%), radial-gradient(at 54% 82%, #a78bfa, transparent 46%), #0f172a`,
+        css_noise: `radial-gradient(circle at 20% 20%, ${state.from}33 0 ${noiseDot}px, transparent ${noiseDot + 1}px), radial-gradient(circle at 80% 40%, ${state.to}33 0 ${noiseDot}px, transparent ${noiseDot + 1}px), #0f172a`
       };
     }
 
@@ -2901,6 +2946,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `metadata_extra_controls: ${metadataDiagnostics.extraControls.length}`,
         `metadata_extra_recipes: ${metadataDiagnostics.extraRecipes.length}`,
         `metadata_unsupported_placeholders: ${metadataDiagnostics.unsupportedRecipePlaceholders.length}`,
+        `metadata_unused_controls: ${metadataDiagnostics.unusedControls.length}`,
         `metadata_missing_preview_anatomy: ${metadataDiagnostics.missingPreviewAnatomy.length}`,
         `metadata_unsupported_preview_anatomy: ${metadataDiagnostics.unsupportedPreviewAnatomy.length}`,
         `web_preview_apply_handler: ${sourceApplyHandlerState()}`,

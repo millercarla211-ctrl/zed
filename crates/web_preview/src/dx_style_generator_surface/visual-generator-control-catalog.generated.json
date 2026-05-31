@@ -7,195 +7,469 @@
     {
       "generator_id": "linear-gradient",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        },
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "radial-gradient",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        }
       ]
     },
     {
       "generator_id": "conic-gradient",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        },
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "mesh-gradient",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        },
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "noise-texture",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        },
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "color-palette-token-mapper",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        }
       ]
     },
     {
       "generator_id": "shadow",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "text-shadow",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "drop-shadow",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "filter",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "backdrop-filter",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "glassmorphism",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "blur", "label": "Strength", "input": "range", "min": 0, "max": 80, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "blur",
+          "label": "Strength",
+          "input": "range",
+          "min": 0,
+          "max": 80,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "border-radius",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "radius", "label": "Radius", "input": "range", "min": 0, "max": 64, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "radius",
+          "label": "Radius",
+          "input": "range",
+          "min": 0,
+          "max": 64,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "border-image-gradient-border",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        },
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "clip-path-shapes",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "radius", "label": "Radius", "input": "range", "min": 0, "max": 64, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "radius",
+          "label": "Radius",
+          "input": "range",
+          "min": 0,
+          "max": 64,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "css-mask",
       "controls": [
-        { "key": "from", "label": "From color", "input": "color" },
-        { "key": "to", "label": "To color", "input": "color" },
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 }
+        {
+          "key": "from",
+          "label": "From color",
+          "input": "color"
+        },
+        {
+          "key": "to",
+          "label": "To color",
+          "input": "color"
+        },
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "transform-2d",
       "controls": [
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 },
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 },
-        { "key": "easing", "label": "Easing", "input": "text" }
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        },
+        {
+          "key": "duration",
+          "label": "Duration",
+          "input": "range",
+          "min": 100,
+          "max": 3000,
+          "step": 50
+        },
+        {
+          "key": "easing",
+          "label": "Easing",
+          "input": "text"
+        }
       ]
     },
     {
       "generator_id": "transform-3d",
       "controls": [
-        { "key": "angle", "label": "Angle", "input": "range", "min": 0, "max": 360, "step": 1 },
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 },
-        { "key": "easing", "label": "Easing", "input": "text" }
+        {
+          "key": "angle",
+          "label": "Angle",
+          "input": "range",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        },
+        {
+          "key": "duration",
+          "label": "Duration",
+          "input": "range",
+          "min": 100,
+          "max": 3000,
+          "step": 50
+        },
+        {
+          "key": "easing",
+          "label": "Easing",
+          "input": "text"
+        }
       ]
     },
     {
       "generator_id": "transition-builder",
       "controls": [
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 },
-        { "key": "easing", "label": "Easing", "input": "text" }
+        {
+          "key": "duration",
+          "label": "Duration",
+          "input": "range",
+          "min": 100,
+          "max": 3000,
+          "step": 50
+        },
+        {
+          "key": "easing",
+          "label": "Easing",
+          "input": "text"
+        }
       ]
     },
     {
       "generator_id": "keyframe-animation-timeline",
       "controls": [
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 },
-        { "key": "easing", "label": "Easing", "input": "text" }
+        {
+          "key": "duration",
+          "label": "Duration",
+          "input": "range",
+          "min": 100,
+          "max": 3000,
+          "step": 50
+        },
+        {
+          "key": "easing",
+          "label": "Easing",
+          "input": "text"
+        }
       ]
     },
     {
       "generator_id": "easing-cubic-bezier-editor",
       "controls": [
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 },
-        { "key": "easing", "label": "Easing", "input": "text" }
+        {
+          "key": "duration",
+          "label": "Duration",
+          "input": "range",
+          "min": 100,
+          "max": 3000,
+          "step": 50
+        },
+        {
+          "key": "easing",
+          "label": "Easing",
+          "input": "text"
+        }
       ]
     },
     {
       "generator_id": "grid-layout-editor",
       "controls": [
-        { "key": "columns", "label": "Columns/items", "input": "range", "min": 1, "max": 6, "step": 1 },
-        { "key": "gap", "label": "Gap", "input": "range", "min": 0, "max": 48, "step": 1 }
+        {
+          "key": "columns",
+          "label": "Columns/items",
+          "input": "range",
+          "min": 1,
+          "max": 6,
+          "step": 1
+        },
+        {
+          "key": "gap",
+          "label": "Gap",
+          "input": "range",
+          "min": 0,
+          "max": 48,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "flex-layout-editor",
       "controls": [
-        { "key": "columns", "label": "Columns/items", "input": "range", "min": 1, "max": 6, "step": 1 },
-        { "key": "gap", "label": "Gap", "input": "range", "min": 0, "max": 48, "step": 1 }
+        {
+          "key": "gap",
+          "label": "Gap",
+          "input": "range",
+          "min": 0,
+          "max": 48,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "container-query-breakpoint-editor",
       "controls": [
-        { "key": "columns", "label": "Columns/items", "input": "range", "min": 1, "max": 6, "step": 1 },
-        { "key": "gap", "label": "Gap", "input": "range", "min": 0, "max": 48, "step": 1 },
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 }
+        {
+          "key": "columns",
+          "label": "Columns/items",
+          "input": "range",
+          "min": 1,
+          "max": 6,
+          "step": 1
+        }
       ]
     },
     {
       "generator_id": "responsive-spacing-scale-editor",
       "controls": [
-        { "key": "columns", "label": "Columns/items", "input": "range", "min": 1, "max": 6, "step": 1 },
-        { "key": "gap", "label": "Gap", "input": "range", "min": 0, "max": 48, "step": 1 },
-        { "key": "duration", "label": "Duration", "input": "range", "min": 100, "max": 3000, "step": 50 }
+        {
+          "key": "gap",
+          "label": "Gap",
+          "input": "range",
+          "min": 0,
+          "max": 48,
+          "step": 1
+        }
       ]
     }
   ]
