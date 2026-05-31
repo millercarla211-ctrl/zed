@@ -11751,3 +11751,18 @@ PASSED:
 
 NOTES:
 - This remains review-only. It does not enable Apply, mutate source, run Cargo, run `just run`, start a server, or perform live WebView/runtime proof.
+
+[2026-05-31] - DX Style WebView Runtime Proof Readiness
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` and `crates\web_preview\src\dx_style_source_apply.rs` now require the source-owned runtime proof list to include `successful WebView source-review round trip` before future source-write readiness can pass.
+- `script\dx-style-panel-source.test.ts` guards the Web Preview and native blocker code `write_bridge_missing_webview_review_round_trip_runtime_proof`.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Focused conflict-marker scan across changed source/docs files.
+
+NOTES:
+- This remains source-only. It does not run Cargo, run `just run`, start a server, perform WebView runtime proof, enable Apply, or mutate source.
