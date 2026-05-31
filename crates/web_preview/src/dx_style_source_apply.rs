@@ -17,6 +17,8 @@ pub(crate) const DX_STYLE_ACTIVE_EDITOR_SOURCE_REVALIDATION_SCHEMA: &str =
     "zed.web_preview.dx_style.active_editor_source_revalidation";
 pub(crate) const DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA: &str =
     "zed.web_preview.dx_style.native_writer_dry_run_replay.v1";
+const DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA: &str =
+    "zed.web_preview.dx_style.native_writer_commit_plan.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_SOURCE_PATH_BYTES: usize = 4096;
@@ -192,6 +194,14 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "source-apply contract is missing native writer dry-run replay guard".to_string(),
         );
     }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "native writer commit plan",
+    ) {
+        reasons
+            .push("source-apply contract is missing native writer commit plan guard".to_string());
+    }
     if !string_array_contains(contract, "/review_context_kinds", "class_token")
         || !string_array_contains(contract, "/review_context_kinds", "class_list")
         || !string_array_contains(contract, "/review_context_kinds", "css_declaration")
@@ -256,6 +266,15 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons.push(
             "source-apply contract is missing native writer dry-run replay receipt field"
                 .to_string(),
+        );
+    }
+    if !string_array_contains(
+        contract,
+        "/review_receipt_fields",
+        "native_writer_commit_plan",
+    ) {
+        reasons.push(
+            "source-apply contract is missing native writer commit plan receipt field".to_string(),
         );
     }
     if !string_array_contains(contract, "/review_receipt_fields", "source_write_readiness") {
@@ -746,6 +765,10 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let native_writer_dry_run_replay_status = native_writer_dry_run_replay
         .get("status")
         .and_then(Value::as_str);
+    let native_writer_commit_plan = native_writer_commit_plan(native_writer_dry_run_replay);
+    let native_writer_commit_plan_status = native_writer_commit_plan
+        .get("status")
+        .and_then(Value::as_str);
     if native_writer_dry_run_replay_status != Some("matched") {
         reasons.push("native writer dry-run replay did not match active source".to_string());
     }
@@ -1126,6 +1149,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         &dry_run_edit_review_evidence,
         native_revalidation_status,
         native_writer_dry_run_replay_status,
+        native_writer_commit_plan_status,
         reasons.len(),
         web_preview_declared_mutation_capability,
         can_mutate_source,
@@ -1293,6 +1317,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         },
         "dry_run_edit_review": dry_run_edit_review_evidence,
         "native_writer_dry_run_replay": native_writer_dry_run_replay,
+        "native_writer_commit_plan": native_writer_commit_plan,
         "source_write_readiness": source_write_readiness_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
@@ -1336,6 +1361,7 @@ fn source_write_readiness(
     dry_run_edit_review: &Value,
     native_revalidation_status: Option<&str>,
     native_writer_dry_run_replay_status: Option<&str>,
+    native_writer_commit_plan_status: Option<&str>,
     native_review_reason_count: usize,
     web_preview_declared_mutation_capability: bool,
     native_can_mutate_source: bool,
@@ -1388,6 +1414,17 @@ fn source_write_readiness(
     if native_writer_dry_run_replay_status != Some("matched") {
         missing_requirements.push("native_writer_dry_run_replay_missing");
     }
+    let native_writer_commit_plan_ready = if contract_source_mutation_enabled == Some(true) {
+        native_writer_commit_plan_status == Some("ready")
+    } else {
+        matches!(
+            native_writer_commit_plan_status,
+            Some("blocked_review_only" | "ready")
+        )
+    };
+    if !native_writer_commit_plan_ready {
+        missing_requirements.push("native_writer_commit_plan_missing");
+    }
     if native_review_reason_count > 0 {
         missing_requirements.push("native_review_reasons_present");
     }
@@ -1411,6 +1448,13 @@ fn source_write_readiness(
         "native_writer_dry_run_replay",
     ) {
         missing_requirements.push("write_bridge_missing_native_writer_replay_receipt_field");
+    }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "native_writer_commit_plan",
+    ) {
+        missing_requirements.push("write_bridge_missing_native_writer_commit_plan_receipt_field");
     }
     if !web_preview_declared_mutation_capability {
         missing_requirements.push("web_preview_mutation_capability_missing");
@@ -1453,6 +1497,7 @@ fn source_write_readiness(
         "dry_run_edit_review_status": dry_run_edit_review_status,
         "native_revalidation_status": native_revalidation_status,
         "native_writer_dry_run_replay_status": native_writer_dry_run_replay_status,
+        "native_writer_commit_plan_status": native_writer_commit_plan_status,
         "native_review_reason_count": native_review_reason_count,
         "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
         "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,
@@ -1476,6 +1521,71 @@ fn source_write_readiness_refused(reason: &str) -> Value {
             "source_apply_session_refused",
         ],
         "reason": reason,
+    })
+}
+
+fn native_writer_commit_plan(native_writer_dry_run_replay: &Value) -> Value {
+    let replay_status = native_writer_dry_run_replay
+        .get("status")
+        .and_then(Value::as_str);
+    if replay_status != Some("matched") {
+        return json!({
+            "schema": DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA,
+            "status": "blocked_replay_not_matched",
+            "reason": "Native writer commit planning requires a matched dry-run replay against the live editor source.",
+            "source_mutation_enabled": false,
+            "commit_authorized": false,
+            "mutation_performed": false,
+            "replacement_text_redacted": true,
+            "native_writer_dry_run_replay_status": replay_status,
+        });
+    }
+
+    json!({
+        "schema": DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA,
+        "status": "blocked_review_only",
+        "reason": "Native writer commit plan is review-only until the source contract, editor bridge, explicit apply, and runtime validation authorize mutation.",
+        "source_mutation_enabled": false,
+        "commit_authorized": false,
+        "mutation_performed": false,
+        "replacement_text_redacted": true,
+        "source_path": native_writer_dry_run_replay.get("source_path").and_then(Value::as_str),
+        "source_digest_before": native_writer_dry_run_replay
+            .get("source_digest_before")
+            .and_then(Value::as_str),
+        "expected_source_digest_after": native_writer_dry_run_replay
+            .get("source_digest_after")
+            .and_then(Value::as_str),
+        "source_len_bytes_before": native_writer_dry_run_replay
+            .get("source_len_bytes_before")
+            .and_then(Value::as_u64),
+        "source_len_bytes_after": native_writer_dry_run_replay
+            .get("source_len_bytes_after")
+            .and_then(Value::as_u64),
+        "request_source_span": native_writer_dry_run_replay.get("request_source_span").cloned(),
+        "edit_span": native_writer_dry_run_replay.get("edit_span").cloned(),
+        "replacement_text_bytes": native_writer_dry_run_replay
+            .get("replacement_text_bytes")
+            .and_then(Value::as_u64),
+        "replaced_source_digest": native_writer_dry_run_replay
+            .get("replaced_source_digest")
+            .and_then(Value::as_str),
+        "replayed_edit_count": native_writer_dry_run_replay
+            .get("replayed_edit_count")
+            .and_then(Value::as_u64),
+        "required_runtime_proofs": [
+            "authorized runtime validation",
+            "successful WebView source-review round trip",
+            "successful native writer dry-run replay",
+            "post-write source digest verification",
+        ],
+        "missing_authorization": [
+            "source_mutation_contract_disabled",
+            "mutation_capable_editor_write_bridge_missing",
+            "runtime_webview_build_proof_missing",
+            "post_write_source_digest_verification_missing",
+            "explicit_mutation_authorization_missing",
+        ],
     })
 }
 

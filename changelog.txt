@@ -11708,3 +11708,25 @@ PASSED:
 
 NOTES:
 - This keeps source mutation disabled. Runtime/WebView/build proof and a mutation-capable editor writer remain intentionally unrun by instruction.
+
+[2026-05-31] - DX Style Native Commit Plan Evidence
+
+ADDED:
+- `crates\web_preview\src\dx_style_source_apply.rs` now emits a `native_writer_commit_plan` review receipt derived from the matched native writer dry-run replay. It carries source path, edit span, before/after digest evidence, replacement byte count, and redacted replacement text while keeping `mutation_performed=false`.
+- `docs\superpowers\plans\2026-05-31-dx-style-native-commit-plan.md` records the source-only implementation plan for this checkpoint.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_source_apply.rs` and `G:\Dx\style\fixtures\grouped-class-source-apply-contract.json` now name `native writer commit plan` / `native_writer_commit_plan` as source-owned review requirements.
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now require the same commit-plan guard and review receipt field before any future source writer can graduate.
+- `crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs`, Web Preview source-write readiness, and source guards now surface missing commit-plan evidence as explicit blockers instead of relying on dry-run replay alone.
+- `crates\web_preview\src\web_preview_view.rs` now includes the commit-plan receipt in the latest source-apply receipt summary for handoff inspection.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs crates\web_preview\src\web_preview_view.rs G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `git diff --check`
+- Focused conflict-marker scan across changed Zed and DX Style source/fixture/docs files.
+
+NOTES:
+- This remains review-only. It does not enable Apply, mutate source, run Cargo, run `just run`, start a server, or perform live WebView/runtime proof.

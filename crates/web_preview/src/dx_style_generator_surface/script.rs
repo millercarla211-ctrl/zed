@@ -1555,6 +1555,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         missingRequirements.push("cursor_scoped_dry_run_edit_review_missing");
       }
       missingRequirements.push("native_active_editor_source_revalidation_missing");
+      missingRequirements.push("native_writer_commit_plan_missing");
       if (bridge.can_apply !== true) missingRequirements.push("editor_write_bridge_not_ready");
       if (bridge.can_mutate_source !== true) {
         missingRequirements.push("mutation_capable_editor_write_bridge_missing");
@@ -1564,6 +1565,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       }
       if (!bridge.required_source_apply_review_receipt_fields.includes("native_writer_dry_run_replay")) {
         missingRequirements.push("write_bridge_missing_native_writer_replay_receipt_field");
+      }
+      if (!bridge.required_source_apply_review_receipt_fields.includes("native_writer_commit_plan")) {
+        missingRequirements.push("write_bridge_missing_native_writer_commit_plan_receipt_field");
       }
       if (!webPreviewDeclaredMutationCapability) {
         missingRequirements.push("web_preview_mutation_capability_missing");
@@ -1612,6 +1616,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         ),
         reverse_delta_replacement_policy_diagnostics: reverseDeltaReplacementPolicyDiagnostics,
         native_revalidation_status: "not_performed_in_web_preview",
+        native_writer_commit_plan_status: "not_performed_in_web_preview",
         editor_write_bridge_state: bridge.state,
         editor_write_bridge_summary: bridge.summary,
         editor_write_bridge_can_apply: bridge.can_apply,

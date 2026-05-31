@@ -40,6 +40,7 @@
     "trusted grouped-class dry-run receipt",
     "cursor-scoped dry-run structured edit preview",
     "native writer dry-run replay",
+    "native writer commit plan",
     "editor write bridge can_apply",
     "explicit user apply action"
   ],
@@ -61,6 +62,7 @@
     "apply_gate",
     "dry_run_edit_review",
     "native_writer_dry_run_replay",
+    "native_writer_commit_plan",
     "source_write_readiness",
     "native_active_editor_source_revalidation",
     "native_handler"
