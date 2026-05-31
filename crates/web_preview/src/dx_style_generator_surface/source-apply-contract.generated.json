@@ -70,6 +70,7 @@
     "native_mutation_writer_preflight",
     "user_apply_action",
     "source_write_readiness",
+    "native_writer_dispatch",
     "native_active_editor_source_revalidation",
     "native_handler"
   ],

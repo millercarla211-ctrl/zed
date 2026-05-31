@@ -31,6 +31,8 @@ const DX_STYLE_MUTATION_WRITE_RECEIPT_TEMPLATE_SCHEMA: &str =
     "zed.web_preview.dx_style.mutation_write_receipt_template.v1";
 const DX_STYLE_NATIVE_MUTATION_WRITER_PREFLIGHT_SCHEMA: &str =
     "zed.web_preview.dx_style.native_mutation_writer_preflight.v1";
+const DX_STYLE_NATIVE_WRITER_DISPATCH_SCHEMA: &str =
+    "zed.web_preview.dx_style.native_writer_dispatch.v1";
 const DX_STYLE_USER_APPLY_ACTION_SCHEMA: &str = "zed.web_preview.dx_style.user_apply_action.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
@@ -81,6 +83,7 @@ const SOURCE_APPLY_REVIEW_RECEIPT_FIELDS: &[&str] = &[
     "native_mutation_writer_preflight",
     "user_apply_action",
     "source_write_readiness",
+    "native_writer_dispatch",
     "native_active_editor_source_revalidation",
     "native_handler",
 ];
@@ -412,6 +415,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     if !string_array_contains(contract, "/review_receipt_fields", "source_write_readiness") {
         reasons.push(
             "source-apply contract is missing source-write readiness receipt field".to_string(),
+        );
+    }
+    if !string_array_contains(contract, "/review_receipt_fields", "native_writer_dispatch") {
+        reasons.push(
+            "source-apply contract is missing native writer dispatch receipt field".to_string(),
         );
     }
     for field in [
@@ -1330,6 +1338,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         web_preview_declared_mutation_capability,
         can_mutate_source,
     );
+    let native_writer_dispatch = native_writer_dispatch(
+        &source_write_readiness_evidence,
+        &native_mutation_writer_preflight,
+        can_mutate_source,
+    );
 
     let status = if can_review_request {
         "reviewed_with_blockers"
@@ -1500,6 +1513,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "native_mutation_writer_preflight": native_mutation_writer_preflight,
         "user_apply_action": user_apply_action_evidence,
         "source_write_readiness": source_write_readiness_evidence,
+        "native_writer_dispatch": native_writer_dispatch,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
         "native_handler": {
             "can_review_request": can_review_request,
@@ -1532,6 +1546,7 @@ pub(crate) fn source_apply_session_refused_receipt(payload: &Value, reason: &str
             "request_token_present": request.pointer("/source_apply_session/token").and_then(Value::as_str).is_some(),
         },
         "source_write_readiness": source_write_readiness_refused(reason),
+        "native_writer_dispatch": native_writer_dispatch_refused(reason),
     })
 }
 
@@ -1754,6 +1769,13 @@ fn source_write_readiness(
     ) {
         missing_requirements.push("write_bridge_missing_user_apply_action_receipt_field");
     }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "native_writer_dispatch",
+    ) {
+        missing_requirements.push("write_bridge_missing_native_writer_dispatch_receipt_field");
+    }
     if !web_preview_declared_mutation_capability {
         missing_requirements.push("web_preview_mutation_capability_missing");
     }
@@ -1867,6 +1889,61 @@ fn source_write_readiness_refused(reason: &str) -> Value {
             "source_apply_session_refused",
         ],
         "reason": reason,
+    })
+}
+
+fn native_writer_dispatch(
+    source_write_readiness: &Value,
+    native_mutation_writer_preflight: &Value,
+    native_can_mutate_source: bool,
+) -> Value {
+    let safe_to_mutate = source_write_readiness
+        .get("safe_to_mutate")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let preflight_ready = native_mutation_writer_preflight
+        .get("ready_to_write")
+        .and_then(Value::as_bool)
+        == Some(true);
+    let status = if !safe_to_mutate {
+        "blocked_readiness_not_safe"
+    } else if !preflight_ready {
+        "blocked_preflight_not_ready"
+    } else if !native_can_mutate_source {
+        "blocked_writer_unavailable"
+    } else {
+        "blocked_writer_not_installed"
+    };
+
+    json!({
+        "schema": DX_STYLE_NATIVE_WRITER_DISPATCH_SCHEMA,
+        "status": status,
+        "reason": "DX Style native writer dispatch is review-only until mutation capability, runtime proof, and the editor writer implementation are explicitly enabled.",
+        "writer_invoked": false,
+        "mutation_performed": false,
+        "source_write_readiness_status": source_write_readiness.get("status").and_then(Value::as_str),
+        "source_write_safe_to_mutate": safe_to_mutate,
+        "native_mutation_writer_preflight_status": native_mutation_writer_preflight.get("status").and_then(Value::as_str),
+        "native_mutation_writer_preflight_ready": preflight_ready,
+        "native_can_mutate_source": native_can_mutate_source,
+        "native_writer_implementation": "not_installed",
+        "required_before_dispatch": [
+            "source_write_readiness_ready",
+            "native_mutation_writer_preflight_ready",
+            "native_writer_can_mutate_source",
+            "authorized_runtime_validation",
+            "mutation_write_receipt_runtime_implementation",
+        ],
+    })
+}
+
+fn native_writer_dispatch_refused(reason: &str) -> Value {
+    json!({
+        "schema": DX_STYLE_NATIVE_WRITER_DISPATCH_SCHEMA,
+        "status": "refused_untrusted_session",
+        "reason": reason,
+        "writer_invoked": false,
+        "mutation_performed": false,
     })
 }
 

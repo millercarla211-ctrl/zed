@@ -2187,6 +2187,7 @@ impl WebPreviewView {
             "user_apply_action": receipt.get("user_apply_action").cloned(),
             "native_handler": receipt.get("native_handler").cloned(),
             "apply_gate": receipt.get("apply_gate").cloned(),
+            "native_writer_dispatch": receipt.get("native_writer_dispatch").cloned(),
         }))
     }
 

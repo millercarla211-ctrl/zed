@@ -1376,6 +1376,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           native_mutation_writer_preflight:
             nativeMutationWriterPreflightPacket(applyGate),
           source_write_readiness: sourceWriteReadinessPacket(applyGate, output),
+          native_writer_dispatch: nativeWriterDispatchPacket(applyGate, output),
           review_receipt_fields: sourceApplyReviewReceiptFields,
           css_declaration_dry_run_contract: {
             schema: cssDeclarationDryRunSchema,
@@ -1600,6 +1601,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         "native_mutation_writer_preflight",
         "user_apply_action",
         "source_write_readiness",
+        "native_writer_dispatch",
         "native_active_editor_source_revalidation",
         "native_handler"
       ];
@@ -1719,6 +1721,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (!bridge.required_source_apply_review_receipt_fields.includes("user_apply_action")) {
         missingRequirements.push("write_bridge_missing_user_apply_action_receipt_field");
       }
+      if (!bridge.required_source_apply_review_receipt_fields.includes("native_writer_dispatch")) {
+        missingRequirements.push("write_bridge_missing_native_writer_dispatch_receipt_field");
+      }
       if (!webPreviewDeclaredMutationCapability) {
         missingRequirements.push("web_preview_mutation_capability_missing");
       }
@@ -1795,6 +1800,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         runtime_validation_receipt_template_status: "not_performed_in_web_preview",
         mutation_write_receipt_template_status: "not_performed_in_web_preview",
         native_mutation_writer_preflight_status: "not_performed_in_web_preview",
+        native_writer_dispatch_status: "not_performed_in_web_preview",
         user_apply_action_status: "not_performed_in_preview",
         editor_write_bridge_state: bridge.state,
         editor_write_bridge_summary: bridge.summary,
@@ -1868,6 +1874,30 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           "native_writer_unavailable_in_web_preview",
           "authorized_runtime_validation_missing",
           "explicit_mutation_authorization_missing"
+        ]
+      };
+    }
+
+    function nativeWriterDispatchPacket(applyGate, output) {
+      const readiness = sourceWriteReadinessPacket(applyGate, output);
+      const preflight = nativeMutationWriterPreflightPacket(applyGate);
+      return {
+        schema: "zed.web_preview.dx_style.native_writer_dispatch.v1",
+        status: "not_performed_in_web_preview",
+        reason: "Native writer dispatch can only run inside Zed after source-write readiness, mutation preflight, and authorized runtime validation pass.",
+        writer_invoked: false,
+        mutation_performed: false,
+        source_write_readiness_status: readiness.status,
+        source_write_safe_to_mutate: readiness.safe_to_mutate,
+        native_mutation_writer_preflight_status: preflight.status,
+        native_mutation_writer_preflight_ready: preflight.status === "ready",
+        native_writer_implementation: "not_available_in_web_preview",
+        required_before_dispatch: [
+          "source_write_readiness_ready",
+          "native_mutation_writer_preflight_ready",
+          "native_writer_can_mutate_source",
+          "authorized_runtime_validation",
+          "mutation_write_receipt_runtime_implementation"
         ]
       };
     }

@@ -250,6 +250,7 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
             "native_mutation_writer_preflight".to_string(),
             "user_apply_action".to_string(),
             "source_write_readiness".to_string(),
+            "native_writer_dispatch".to_string(),
             "native_active_editor_source_revalidation".to_string(),
             "native_handler".to_string(),
             "apply_gate".to_string(),
