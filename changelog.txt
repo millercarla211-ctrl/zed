@@ -1,3 +1,14 @@
+[2026-05-31] - DX Style Typed Recommendation Match Helper
+
+ADDED:
+- DX Style now exposes `GroupedClassRecommendationMatch` and `grouped_class_recommendation_match` in `G:\Dx\style\src\core\engine\grouped_class_read_model.rs`, and exports them from `G:\Dx\style\src\core\mod.rs`.
+
+CHANGED:
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the typed source-owned recommendation comparison helper.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, or source mutation validation was run; this checkpoint stays source-only by instruction.
+
 [2026-05-31] - DX Style Recommendation Match Vocabulary
 
 ADDED:
