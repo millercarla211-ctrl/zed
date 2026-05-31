@@ -563,13 +563,27 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     }
 
     function groupContextUtilityPreview(group) {
+      return groupContextUtilityPreviewInfo(group).preview;
+    }
+
+    function groupContextUtilityPreviewInfo(group) {
       const utilities = boundedGroupContextUtilities(group);
-      if (!utilities.length) return null;
-      if (!Number.isInteger(groupContextUtilityPreviewMaxChars)) return null;
+      if (!utilities.length || !Number.isInteger(groupContextUtilityPreviewMaxChars)) {
+        return {
+          preview: null,
+          truncated: false,
+          character_count: 0,
+          displayed_character_count: 0
+        };
+      }
       const preview = utilities.join(" ");
-      return preview.length > groupContextUtilityPreviewMaxChars
-        ? `${preview.slice(0, groupContextUtilityPreviewMaxChars)}...`
-        : preview;
+      const truncated = preview.length > groupContextUtilityPreviewMaxChars;
+      return {
+        preview: truncated ? `${preview.slice(0, groupContextUtilityPreviewMaxChars)}...` : preview,
+        truncated,
+        character_count: preview.length,
+        displayed_character_count: Math.min(preview.length, groupContextUtilityPreviewMaxChars)
+      };
     }
 
     function boundedGroupContextUtilities(group) {
@@ -2480,7 +2494,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const applyBlocker = sourceApplyBlocker(applyGate, metadataAligned, zedStyleContext, output);
       const groupContext = zedStyleContext?.group_context || null;
       const groupContextDiagnostics = groupContextVocabularyDiagnostics(zedStyleContext);
-      const groupUtilityPreview = groupContextUtilityPreview(groupContext);
+      const groupUtilityPreviewInfo = groupContextUtilityPreviewInfo(groupContext);
+      const groupUtilityPreview = groupUtilityPreviewInfo.preview;
       const generatorMetadata = catalogMetadataForGenerator(state.generator);
       const contextLines = zedStyleContext ? [
         `context_schema: ${zedStyleContext.schema || "unknown"}`,
@@ -2500,6 +2515,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         groupContext?.source_owned !== undefined ? `group_source_owned: ${groupContext.source_owned}` : null,
         groupContext?.can_expand_inline !== undefined ? `group_can_expand_inline: ${groupContext.can_expand_inline}` : null,
         groupUtilityPreview ? `group_utilities_preview: ${groupUtilityPreview}` : null,
+        groupUtilityPreview ? `group_utilities_preview_chars: ${groupUtilityPreviewInfo.displayed_character_count}/${groupUtilityPreviewInfo.character_count}` : null,
+        groupUtilityPreviewInfo.truncated ? "group_utilities_preview_truncated: true" : null,
         groupContext?.expansion_status ? `group_expansion_status: ${groupContext.expansion_status}` : null,
         groupContext?.registry_receipt ? `group_registry_receipt: ${groupContext.registry_receipt}` : null,
         groupContext?.reverse_css_map_receipt ? `reverse_css_map_receipt: ${groupContext.reverse_css_map_receipt}` : null,

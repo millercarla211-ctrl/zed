@@ -1,3 +1,15 @@
+[2026-05-31] - DX Style Utility Preview Truncation Evidence
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-utility-preview-truncation-plan.md` records the source-only plan for making bounded grouped utility previews explicit.
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now returns grouped utility preview metadata, emits displayed/total character counts, and reports `group_utilities_preview_truncated: true` when the source-owned cap shortens the visible atomic list.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, `todo.txt`, and `changelog.txt` now guard and document grouped utility preview truncation evidence.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Utility Preview Fail Closed
 
 ADDED:
