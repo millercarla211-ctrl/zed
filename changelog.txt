@@ -1,3 +1,23 @@
+[2026-05-31] - DX Style Group Call Read Model
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-group-call-read-model-plan.md` records the source-only plan for typed grouped-call metadata.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_read_model.rs` now exposes `GroupedClassGroupCall` metadata, `GroupedClassGroupCallSyntax`, and `parse_group_call_token` for alias-only, inline-utility, and source-declaration group calls.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the source-owned group-call read model.
+
+PASSED:
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_read_model.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the grouped-call read-model files returned no matches.
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its read-model source change is changed on disk and guarded through the Zed source guard rather than included in the Zed commit.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Preflight Label Polish
 
 CHANGED:

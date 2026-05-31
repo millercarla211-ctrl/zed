@@ -514,6 +514,17 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(contract, /GROUPED_CLASS_CONTRACT_VERSION: u8 = 2/);
   assert.match(contract, /read_model_capabilities/);
   assert.match(readModel, /GroupedClassSourceSpan/);
+  assert.match(readModel, /GroupedClassGroupCallSyntax/);
+  assert.match(readModel, /AliasReference/);
+  assert.match(readModel, /InlineUtilities/);
+  assert.match(readModel, /SourceDeclaration/);
+  assert.match(readModel, /GroupedClassGroupCall/);
+  assert.match(readModel, /parse_group_call_token/);
+  assert.match(readModel, /requires_registry_receipt/);
+  assert.match(readModel, /source_owned/);
+  assert.match(readModel, /can_expand_inline/);
+  assert.match(readModel, /group_call_token_utilities/);
+  assert.match(readModel, /ignores_non_group_arbitrary_utilities/);
   assert.match(readModel, /GroupedClassDryRunPatchPreview/);
   assert.match(readModel, /cursor_token_context: true/);
   assert.match(readModel, /grouping_efficiency_estimates: true/);
