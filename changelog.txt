@@ -1,3 +1,19 @@
+[2026-05-31] - DX Style Source-only Goal Final Polish
+
+CHANGED:
+- `DX.md` now records the final no-`just run` source-only proof set for the active DX Style/Zed goal.
+- `todo.txt` now marks the active DX Style/Zed source-only production-readiness goal as finalized while preserving the runtime/WebView/build proof boundary.
+
+PASSED:
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_source_apply.rs G:\Dx\style\src\core\engine\css_declaration_dry_run.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\web_preview\src\dx_style_generator_surface\css_declaration_dry_run_script.rs crates\web_preview\src\dx_style_source_apply.rs`
+- `git diff --check`
+- Targeted conflict-marker scan over the DX Style/Zed handoff and bridge files.
+
+NOTES:
+- No `just run`, Cargo, build, WebView, server, browser automation, or source mutation validation was run by instruction. This finalizes the source-only goal state, not runtime-green launch proof.
+
 [2026-05-31] - DX Style CSS Declaration Hint Schema Source Ownership
 
 CHANGED:
