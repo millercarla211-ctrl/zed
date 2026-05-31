@@ -1,3 +1,26 @@
+[2026-05-31] - DX Style Group Diagnostic Contract
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-group-diagnostic-contract-plan.md` records the source-only plan for source-owning grouped context diagnostic codes.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` and `G:\Dx\style\fixtures\grouped-class-web-preview-context.json` now expose the grouped context diagnostic code list.
+- `crates\web_preview\src\dx_style_generator_surface\group-context-contract.generated.json` mirrors the updated source-owned fixture.
+- `crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs` passes `diagnostic_codes` into Web Preview metadata.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now reports grouped diagnostics that are not named by the DX Style contract.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, `todo.txt`, and `changelog.txt` now guard and document grouped diagnostic code ownership.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over changed Zed and DX Style files.
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its source/fixture changes are changed on disk and mirrored/guarded through the Zed commit.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Utility Count Integrity
 
 ADDED:

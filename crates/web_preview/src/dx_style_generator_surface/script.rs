@@ -87,6 +87,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       ? normalizedStringValues(groupContextContract.context_fields)
       : [];
     const groupContextContractFieldSet = new Set(groupContextContractFields);
+    const groupContextDiagnosticCodes = Array.isArray(groupContextContract.diagnostic_codes)
+      ? normalizedStringValues(groupContextContract.diagnostic_codes)
+      : [];
+    const groupContextDiagnosticCodeSet = new Set(groupContextDiagnosticCodes);
     const groupContextRequiredFlagFields = [
       "group_context.requires_registry_receipt",
       "group_context.source_owned",
@@ -514,6 +518,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       const group = context?.group_context;
       if (!group || group.status === "none" || group.syntax === "not_grouped") return [];
       const diagnostics = [];
+      if (!groupContextDiagnosticCodeSet.size) {
+        diagnostics.push("group_context_diagnostic_codes_missing");
+      }
       for (const field of groupContextRequiredFlagFields) {
         if (!groupContextContractFieldSet.has(field)) {
           diagnostics.push(`group_context_contract_missing_field:${field}`);
@@ -585,6 +592,17 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         diagnostics.push("group_context_inline_expansion_missing");
       }
       return [...new Set(diagnostics)];
+    }
+
+    function groupContextDiagnosticCode(diagnostic) {
+      return String(diagnostic || "").split(":")[0];
+    }
+
+    function unownedGroupContextDiagnostics(diagnostics) {
+      if (!groupContextDiagnosticCodeSet.size) return diagnostics;
+      return diagnostics.filter((diagnostic) =>
+        !groupContextDiagnosticCodeSet.has(groupContextDiagnosticCode(diagnostic))
+      );
     }
 
     function groupContextUtilityPreview(group) {
@@ -2525,6 +2543,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const applyBlocker = sourceApplyBlocker(applyGate, metadataAligned, zedStyleContext, output);
       const groupContext = zedStyleContext?.group_context || null;
       const groupContextDiagnostics = groupContextVocabularyDiagnostics(zedStyleContext);
+      const groupContextUnownedDiagnostics = unownedGroupContextDiagnostics(groupContextDiagnostics);
       const groupUtilityPreviewInfo = groupContextUtilityPreviewInfo(groupContext);
       const groupUtilityPreview = groupUtilityPreviewInfo.preview;
       const generatorMetadata = catalogMetadataForGenerator(state.generator);
@@ -2642,6 +2661,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_utility_preview_max_chars: ${groupContextUtilityPreviewMaxChars}`,
         `group_context_candidate_min_utility_count: ${groupContextCandidateMin || "unknown"}`,
         `group_context_contract_fields: ${groupContextContractFields.length}`,
+        `group_context_diagnostic_codes: ${groupContextDiagnosticCodes.length}`,
         `group_context_required_flag_fields: ${groupContextRequiredFlagFields.length}`,
         `group_context_syntax_values: ${groupContextSyntaxValues.length}`,
         `group_context_status_values: ${groupContextStatusValues.length}`,
@@ -2722,6 +2742,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         ...payloadDiagnostics.map((diagnostic) => `source_apply_payload_diagnostic: ${diagnostic}`),
         `group_context_vocabulary_diagnostics: ${groupContextDiagnostics.length}`,
         ...groupContextDiagnostics.map((diagnostic) => `group_context_vocabulary_diagnostic: ${diagnostic}`),
+        `group_context_unowned_diagnostics: ${groupContextUnownedDiagnostics.length}`,
+        ...groupContextUnownedDiagnostics.map((diagnostic) => `group_context_unowned_diagnostic: ${diagnostic}`),
         `metadata_status: ${metadataDiagnostics.status}`,
         `metadata_generators: ${metadataDiagnostics.generatorCount}`,
         `metadata_missing_controls: ${metadataDiagnostics.missingControls.length}`,

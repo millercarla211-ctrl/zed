@@ -922,6 +922,16 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupWebPreviewContextFixture.context_fields.includes("group_context.can_expand_inline"),
   );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_utility_count_mismatch",
+    ),
+  );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_diagnostic_codes_missing",
+    ),
+  );
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_SCHEMA/);
   assert.match(groupRegistryReceipt, /dx\.style\.grouped-class-registry-receipt/);
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_FIXTURE_PATH/);
@@ -2858,6 +2868,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceGroupContextContract, /group_call_status_by_syntax/);
   assert.match(surfaceGroupContextContract, /max_alias_bytes/);
   assert.match(surfaceGroupContextContract, /max_utility_count/);
+  assert.match(surfaceGroupContextContract, /diagnostic_codes/);
   assert.match(surfaceGroupContextContract, /utility_preview_max_chars/);
   assert.match(surfaceGroupContextContract, /candidate_min_utility_count/);
   assert.match(surfaceReverseCssDeltaContract, /DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_SCHEMA/);
@@ -3541,6 +3552,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_alias_exceeds_contract_limit/);
   assert.match(surfaceScript, /group_context_utility_count_missing/);
   assert.match(surfaceScript, /group_context_utility_count_mismatch/);
+  assert.match(surfaceScript, /group_context_diagnostic_codes_missing/);
+  assert.match(surfaceScript, /group_context_diagnostic_codes/);
+  assert.match(surfaceScript, /group_context_unowned_diagnostics/);
+  assert.match(surfaceScript, /unownedGroupContextDiagnostics/);
   assert.match(surfaceScript, /reportedUtilityCount/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);
