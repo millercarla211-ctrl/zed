@@ -1425,10 +1425,19 @@ fn source_write_readiness(
         && !string_array_contains(
             editor_write_bridge,
             "/required_runtime_proofs",
+            "successful native writer dry-run replay",
+        )
+    {
+        missing_requirements.push("write_bridge_missing_native_writer_replay_runtime_proof");
+    }
+    if runtime_validation_required == Some(true)
+        && !string_array_contains(
+            editor_write_bridge,
+            "/required_runtime_proofs",
             "post-write source digest verification",
         )
     {
-        missing_requirements.push("write_bridge_runtime_proofs_missing");
+        missing_requirements.push("write_bridge_missing_post_write_digest_runtime_proof");
     }
 
     let safe_to_mutate = missing_requirements.is_empty();

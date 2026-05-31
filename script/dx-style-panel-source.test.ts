@@ -2087,7 +2087,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /write_bridge_missing_native_writer_replay_receipt_field/);
   assert.match(sourceApply, /native_writer_can_mutate_false/);
   assert.match(sourceApply, /runtime_webview_build_proof_missing/);
-  assert.match(sourceApply, /write_bridge_runtime_proofs_missing/);
+  assert.match(sourceApply, /write_bridge_missing_native_writer_replay_runtime_proof/);
+  assert.match(sourceApply, /write_bridge_missing_post_write_digest_runtime_proof/);
   assert.match(sourceApply, /source_write_readiness_refused/);
   assert.match(sourceApply, /refused_untrusted_session/);
   assert.match(sourceApply, /fn dry_run_edit_review/);
@@ -2878,6 +2879,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /write_bridge_missing_replacement_payload_diagnostics_receipt_field/);
   assert.match(surfaceScript, /write_bridge_missing_native_writer_replay_receipt_field/);
   assert.match(surfaceScript, /write_bridge_runtime_proofs_missing/);
+  assert.match(surfaceScript, /write_bridge_missing_native_writer_replay_runtime_proof/);
+  assert.match(surfaceScript, /write_bridge_missing_post_write_digest_runtime_proof/);
   assert.match(surfaceScript, /required_review_receipt_field_count: bridge\.required_review_receipt_field_count/);
   assert.match(surfaceScript, /required_runtime_proof_count: bridge\.required_runtime_proof_count/);
   assert.match(surfaceScript, /reverse_delta_replacement_policy_guard_present/);

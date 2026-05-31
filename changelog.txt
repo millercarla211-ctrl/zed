@@ -11694,3 +11694,17 @@ PASSED:
 
 NOTES:
 - This is still source-only replay evidence. It does not mutate files, does not enable Apply, and does not replace the required authorized runtime/WebView/build validation window.
+
+[2026-05-31] - DX Style Runtime Proof Readiness
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now requires the bridge runtime proof list to include `successful native writer dry-run replay` and `post-write source digest verification` when source-write readiness is evaluated in Web Preview.
+- `crates\web_preview\src\dx_style_source_apply.rs` now performs the same specific runtime-proof checks in native source-write readiness and reports separate missing-proof blocker codes.
+- `script\dx-style-panel-source.test.ts` guards both Web Preview and native blocker codes so future bridge-runtime proof drift cannot collapse into a generic non-empty list check.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\dx_style_source_apply.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+
+NOTES:
+- This keeps source mutation disabled. Runtime/WebView/build proof and a mutation-capable editor writer remain intentionally unrun by instruction.
