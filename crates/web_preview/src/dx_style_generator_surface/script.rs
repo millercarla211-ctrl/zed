@@ -588,6 +588,23 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         diagnostics.push("group_context_utility_count_mismatch");
       }
       if (Array.isArray(group.utilities) && group.utilities.length
+        && !Number.isInteger(group.raw_atomic_bytes)) {
+        diagnostics.push("group_context_raw_atomic_bytes_missing");
+      }
+      if (alias && Array.isArray(group.utilities) && group.utilities.length
+        && !Number.isInteger(group.grouped_reference_bytes)) {
+        diagnostics.push("group_context_grouped_reference_bytes_missing");
+      }
+      if (alias && Number.isInteger(group.raw_atomic_bytes)
+        && Number.isInteger(group.grouped_reference_bytes)
+        && !Number.isInteger(group.grouping_savings_bytes)) {
+        diagnostics.push("group_context_grouping_savings_bytes_missing");
+      }
+      if (Array.isArray(group.utilities) && group.utilities.length
+        && !group.recommended_representation) {
+        diagnostics.push("group_context_recommended_representation_missing");
+      }
+      if (Array.isArray(group.utilities) && group.utilities.length
         && group.can_expand_inline !== true) {
         diagnostics.push("group_context_inline_expansion_missing");
       }
@@ -2306,6 +2323,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           <dt>Reverse CSS map</dt><dd>${escapeHtml(group?.reverse_css_map_receipt || "not available")}</dd>
           <dt>Reverse CSS status</dt><dd>${escapeHtml(group?.reverse_css_map_status || "not available")}</dd>
           <dt>Utilities</dt><dd>${reportedUtilityCount} / ${groupContextMaxUtilityCount || "unknown"}</dd>
+          <dt>Recommendation</dt><dd>${escapeHtml(group?.recommended_representation || "not available")}</dd>
+          <dt>Grouping bytes</dt><dd>${Number.isInteger(group?.grouped_reference_bytes) ? group.grouped_reference_bytes : "n/a"} / ${Number.isInteger(group?.raw_atomic_bytes) ? group.raw_atomic_bytes : "n/a"}</dd>
+          <dt>Grouping savings</dt><dd>${Number.isInteger(group?.grouping_savings_bytes) ? group.grouping_savings_bytes : "n/a"}</dd>
         </dl>
         ${group?.source_state ? `<span>${escapeHtml(group.source_state)}</span>` : ""}
         ${utilities}
@@ -2567,6 +2587,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         groupUtilityPreview ? `group_utilities_preview: ${groupUtilityPreview}` : null,
         groupUtilityPreview ? `group_utilities_preview_chars: ${groupUtilityPreviewInfo.displayed_character_count}/${groupUtilityPreviewInfo.character_count}` : null,
         groupUtilityPreviewInfo.truncated ? "group_utilities_preview_truncated: true" : null,
+        Number.isInteger(groupContext?.raw_atomic_bytes) ? `group_raw_atomic_bytes: ${groupContext.raw_atomic_bytes}` : null,
+        Number.isInteger(groupContext?.grouped_reference_bytes) ? `group_grouped_reference_bytes: ${groupContext.grouped_reference_bytes}` : null,
+        Number.isInteger(groupContext?.grouping_savings_bytes) ? `group_grouping_savings_bytes: ${groupContext.grouping_savings_bytes}` : null,
+        groupContext?.recommended_representation ? `group_recommended_representation: ${groupContext.recommended_representation}` : null,
         groupContext?.expansion_status ? `group_expansion_status: ${groupContext.expansion_status}` : null,
         groupContext?.registry_receipt ? `group_registry_receipt: ${groupContext.registry_receipt}` : null,
         groupContext?.reverse_css_map_receipt ? `reverse_css_map_receipt: ${groupContext.reverse_css_map_receipt}` : null,

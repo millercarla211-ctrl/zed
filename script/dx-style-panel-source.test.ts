@@ -923,6 +923,14 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     groupWebPreviewContextFixture.context_fields.includes("group_context.can_expand_inline"),
   );
   assert.ok(
+    groupWebPreviewContextFixture.context_fields.includes("group_context.raw_atomic_bytes"),
+  );
+  assert.ok(
+    groupWebPreviewContextFixture.context_fields.includes(
+      "group_context.recommended_representation",
+    ),
+  );
+  assert.ok(
     groupWebPreviewContextFixture.diagnostic_codes.includes(
       "group_context_utility_count_mismatch",
     ),
@@ -930,6 +938,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.ok(
     groupWebPreviewContextFixture.diagnostic_codes.includes(
       "group_context_diagnostic_codes_missing",
+    ),
+  );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_raw_atomic_bytes_missing",
     ),
   );
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_SCHEMA/);
@@ -3556,6 +3569,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_diagnostic_codes/);
   assert.match(surfaceScript, /group_context_unowned_diagnostics/);
   assert.match(surfaceScript, /unownedGroupContextDiagnostics/);
+  assert.match(surfaceScript, /group_context_raw_atomic_bytes_missing/);
+  assert.match(surfaceScript, /group_context_grouped_reference_bytes_missing/);
+  assert.match(surfaceScript, /group_context_grouping_savings_bytes_missing/);
+  assert.match(surfaceScript, /group_context_recommended_representation_missing/);
+  assert.match(surfaceScript, /group_raw_atomic_bytes/);
+  assert.match(surfaceScript, /group_grouped_reference_bytes/);
+  assert.match(surfaceScript, /group_grouping_savings_bytes/);
+  assert.match(surfaceScript, /group_recommended_representation/);
   assert.match(surfaceScript, /reportedUtilityCount/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);
@@ -3709,6 +3730,10 @@ test("DX Style has a real right-dock GPUI shell", () => {
     "crates/agent_ui/src/dx_style_panel/cursor_context_tokens.rs",
   );
   const groupContext = read("crates/agent_ui/src/dx_style_panel/group_context.rs");
+  const groupContextToken = read("crates/agent_ui/src/dx_style_panel/group_context_token.rs");
+  const groupingEfficiency = read(
+    "crates/agent_ui/src/dx_style_panel/grouping_efficiency.rs",
+  );
   const groupRegistry = read("crates/agent_ui/src/dx_style_panel/group_registry.rs");
   const receiptRoots = read("crates/agent_ui/src/dx_style_panel/receipt_roots.rs");
   const reverseCssMap = read("crates/agent_ui/src/dx_style_panel/reverse_css_map.rs");
@@ -3739,6 +3764,8 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(root, /mod cursor_context/);
   assert.match(root, /mod cursor_context_tokens/);
   assert.match(root, /mod group_context/);
+  assert.match(root, /mod group_context_token/);
+  assert.match(root, /mod grouping_efficiency/);
   assert.match(root, /mod group_registry/);
   assert.match(root, /mod editor_write_bridge/);
   assert.match(root, /mod panel_view/);
@@ -3844,10 +3871,10 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(cursorContextTokens, /paren_depth/);
   assert.match(groupContext, /GROUP_CONTEXT_SCHEMA/);
   assert.match(groupContext, /zed\.dx_style\.group_context\.v1/);
-  assert.match(groupContext, /GROUP_CONTEXT_MAX_ALIAS_BYTES: usize = 128/);
-  assert.match(groupContext, /GROUP_CONTEXT_MAX_UTILITY_COUNT: usize = 32/);
-  assert.match(groupContext, /GROUP_CONTEXT_MAX_UTILITY_BYTES: usize = 256/);
-  assert.match(groupContext, /GROUP_CONTEXT_CANDIDATE_MIN_UTILITY_COUNT: usize = 4/);
+  assert.match(groupContextToken, /GROUP_CONTEXT_MAX_ALIAS_BYTES: usize = 128/);
+  assert.match(groupContextToken, /GROUP_CONTEXT_MAX_UTILITY_COUNT: usize = 32/);
+  assert.match(groupContextToken, /GROUP_CONTEXT_MAX_UTILITY_BYTES: usize = 256/);
+  assert.match(groupContextToken, /GROUP_CONTEXT_CANDIDATE_MIN_UTILITY_COUNT: usize = 4/);
   assert.match(groupContext, /from_tokens/);
   assert.match(groupContext, /registry_group_entry/);
   assert.match(groupContext, /source_path: Option<&str>/);
@@ -3859,18 +3886,27 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(groupContext, /reverse_css_map_status/);
   assert.match(groupContext, /reverse_css_map_summary/);
   assert.match(groupContext, /group_call_context/);
-  assert.match(groupContext, /parse_group_call/);
+  assert.match(groupContextToken, /parse_group_call/);
   assert.match(groupContext, /source_group_declaration/);
   assert.match(groupContext, /source_declaration/);
   assert.match(groupContext, /inline_utilities/);
   assert.match(groupContext, /"requires_registry_receipt"/);
   assert.match(groupContext, /"source_owned"/);
   assert.match(groupContext, /"can_expand_inline"/);
+  assert.match(groupContext, /"raw_atomic_bytes"/);
+  assert.match(groupContext, /"grouped_reference_bytes"/);
+  assert.match(groupContext, /"grouping_savings_bytes"/);
+  assert.match(groupContext, /"recommended_representation"/);
+  assert.match(groupContext, /grouping_efficiency/);
+  assert.match(groupingEfficiency, /group_candidate_needs_alias/);
+  assert.match(groupingEfficiency, /grouped_reference/);
+  assert.match(groupingEfficiency, /raw_atomic_bytes/);
+  assert.match(groupingEfficiency, /grouping_savings_bytes/);
   assert.match(groupContext, /self\.status == "alias_reference"/);
   assert.match(groupContext, /!self\.utilities\.is_empty\(\)/);
   assert.doesNotMatch(groupContext, /alias_with_atomic_utilities/);
-  assert.match(groupContext, /looks_like_atomic_utility/);
-  assert.match(groupContext, /utility\.contains\('-'\)/);
+  assert.match(groupContextToken, /looks_like_atomic_utility/);
+  assert.match(groupContextToken, /utility\.contains\('-'\)/);
   assert.match(groupContext, /needs_project_group_contract/);
   assert.match(groupContext, /candidate_requires_project_repetition_scan/);
   assert.match(groupContext, /grouping analysis/);

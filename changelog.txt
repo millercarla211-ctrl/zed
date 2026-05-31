@@ -1,3 +1,27 @@
+[2026-05-31] - DX Style Grouping Efficiency Context
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-grouping-efficiency-context-plan.md` records the source-only plan for surfacing grouped-vs-atomic size evidence.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs` and `G:\Dx\style\fixtures\grouped-class-web-preview-context.json` now name grouping efficiency context fields and diagnostics.
+- `crates\web_preview\src\dx_style_generator_surface\group-context-contract.generated.json` mirrors the updated source-owned fixture.
+- `crates\agent_ui\src\dx_style_panel\group_context.rs` now computes raw atomic bytes, compact alias-reference bytes, savings, and a recommended representation for active grouped contexts.
+- `crates\agent_ui\src\dx_style_panel\group_context_token.rs` now owns grouped-token parsing helpers and `crates\agent_ui\src\dx_style_panel\grouping_efficiency.rs` owns grouping-size estimates, keeping `group_context.rs` below the source guard line budget.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now validates and surfaces grouping efficiency evidence in output and grouped context review.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, `todo.txt`, and `changelog.txt` now guard and document grouping efficiency context evidence.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel.rs crates\agent_ui\src\dx_style_panel\group_context.rs crates\agent_ui\src\dx_style_panel\group_context_token.rs crates\agent_ui\src\dx_style_panel\grouping_efficiency.rs crates\web_preview\src\dx_style_generator_surface\group_context_contract.rs G:\Dx\style\src\core\engine\grouped_class_web_preview_context.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over changed Zed and DX Style files.
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its source/fixture changes are changed on disk and mirrored/guarded through the Zed commit.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Group Diagnostic Contract
 
 ADDED:

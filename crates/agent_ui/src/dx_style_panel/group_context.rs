@@ -1,15 +1,15 @@
 use serde_json::{Value, json};
 
 use super::cursor_context_tokens::tokens_in_value;
+use super::group_context_token::{
+    GROUP_CONTEXT_CANDIDATE_MIN_UTILITY_COUNT, bounded_utilities, looks_like_atomic_utility,
+    parse_group_call,
+};
 use super::group_registry::registry_group_entry;
+use super::grouping_efficiency::grouping_efficiency;
 use super::reverse_css_map::reverse_css_map_summary;
 
 const GROUP_CONTEXT_SCHEMA: &str = "zed.dx_style.group_context.v1";
-const GROUP_CONTEXT_MAX_ALIAS_BYTES: usize = 128;
-const GROUP_CONTEXT_MAX_UTILITY_COUNT: usize = 32;
-const GROUP_CONTEXT_MAX_UTILITY_BYTES: usize = 256;
-const GROUP_CONTEXT_CANDIDATE_MIN_UTILITY_COUNT: usize = 4;
-const ATOMIC_KEYWORDS: [&str; 6] = ["flex", "grid", "block", "inline", "hidden", "contents"];
 
 #[derive(Clone)]
 pub(super) struct ActiveGroupContext {
@@ -76,6 +76,11 @@ impl ActiveGroupContext {
     }
 
     pub(super) fn to_json(&self) -> Value {
+        let grouping = grouping_efficiency(
+            self.alias.as_deref(),
+            &self.utilities,
+            self.candidate_token_count,
+        );
         json!({
             "schema": GROUP_CONTEXT_SCHEMA,
             "status": self.status,
@@ -83,6 +88,10 @@ impl ActiveGroupContext {
             "syntax": self.syntax,
             "utilities": self.utilities,
             "utility_count": self.utilities.len(),
+            "raw_atomic_bytes": grouping.raw_atomic_bytes,
+            "grouped_reference_bytes": grouping.grouped_reference_bytes,
+            "grouping_savings_bytes": grouping.grouping_savings_bytes,
+            "recommended_representation": grouping.recommended_representation,
             "expansion_status": self.expansion_status,
             "candidate_token_count": self.candidate_token_count,
             "source_state": self.source_state,
@@ -168,40 +177,4 @@ fn group_call_context(
         reverse_css_map_receipt: None,
         reverse_css_map_status: None,
     })
-}
-
-fn parse_group_call(token: &str) -> Option<(&str, &str, bool)> {
-    let trimmed = token.trim();
-    let source_declaration = trimmed.starts_with('@');
-    let body_end = trimmed.strip_suffix(')')?;
-    let open = body_end.find('(')?;
-    let alias = body_end[..open]
-        .trim()
-        .strip_prefix('@')
-        .unwrap_or(body_end[..open].trim());
-    if alias.is_empty()
-        || alias.len() > GROUP_CONTEXT_MAX_ALIAS_BYTES
-        || !alias
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-        || !alias.as_bytes()[0].is_ascii_alphabetic()
-    {
-        return None;
-    }
-    Some((alias, &body_end[open + 1..], source_declaration))
-}
-
-fn bounded_utilities<'a>(utilities: impl Iterator<Item = &'a str>) -> Vec<String> {
-    utilities
-        .filter(|utility| !utility.is_empty() && utility.len() <= GROUP_CONTEXT_MAX_UTILITY_BYTES)
-        .take(GROUP_CONTEXT_MAX_UTILITY_COUNT)
-        .map(str::to_string)
-        .collect()
-}
-
-fn looks_like_atomic_utility(utility: &str) -> bool {
-    utility.contains('-')
-        || utility.contains(':')
-        || utility.contains('[')
-        || ATOMIC_KEYWORDS.contains(&utility)
 }
