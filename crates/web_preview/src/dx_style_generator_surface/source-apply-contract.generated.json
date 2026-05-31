@@ -65,6 +65,7 @@
     "native_writer_dry_run_replay",
     "native_writer_commit_plan",
     "post_write_digest_verification_plan",
+    "runtime_validation_receipt_template",
     "user_apply_action",
     "source_write_readiness",
     "native_active_editor_source_revalidation",
