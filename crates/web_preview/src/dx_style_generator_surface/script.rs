@@ -559,14 +559,24 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
     }
 
     function groupContextUtilityPreview(group) {
-      const utilities = Array.isArray(group?.utilities)
-        ? group.utilities.filter((utility) => typeof utility === "string" && utility.length)
-        : [];
+      const utilities = boundedGroupContextUtilities(group);
       if (!utilities.length) return null;
       const preview = utilities.join(" ");
       return preview.length > groupContextUtilityPreviewMaxChars
         ? `${preview.slice(0, groupContextUtilityPreviewMaxChars)}...`
         : preview;
+    }
+
+    function boundedGroupContextUtilities(group) {
+      const utilities = Array.isArray(group?.utilities) ? group.utilities : [];
+      const maxCount = groupContextMaxUtilityCount || utilities.length;
+      return utilities
+        .filter((utility) =>
+          typeof utility === "string"
+          && utility.length
+          && (!groupContextMaxUtilityBytes || utf8ByteLength(utility) <= groupContextMaxUtilityBytes)
+        )
+        .slice(0, maxCount);
     }
 
     function exceedsContractLimit(value, limit) {
@@ -2207,8 +2217,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
 
     function renderGroupContextReview() {
       const group = zedStyleContext?.group_context || null;
-      const utilities = Array.isArray(group?.utilities) && group.utilities.length
-        ? `<ul>${group.utilities.map((utility) => `<li>${escapeHtml(utility)}</li>`).join("")}</ul>`
+      const totalUtilityCount = Array.isArray(group?.utilities) ? group.utilities.length : 0;
+      const boundedUtilities = boundedGroupContextUtilities(group);
+      const utilities = boundedUtilities.length
+        ? `<span>Showing ${boundedUtilities.length} of ${totalUtilityCount} bounded utilities</span><ul>${boundedUtilities.map((utility) => `<li>${escapeHtml(utility)}</li>`).join("")}</ul>`
         : "";
       return `
         <strong>Grouped class context</strong>
