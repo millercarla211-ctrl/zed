@@ -30739,9 +30739,13 @@ impl WebPreviewView {
             let source_after = editor.text(cx);
             let source_digest_after = crate::dx_style_source_apply::active_source_digest(&source_after);
             let post_write_readback_digest_match = source_digest_after == expected_source_digest_after;
-            serde_json::json!({
+            let mut dispatch_receipt = serde_json::json!({
                 "schema": "zed.web_preview.dx_style.native_writer_dispatch.v1",
                 "mutation_write_receipt_schema": "zed.web_preview.dx_style.mutation_write_receipt.v1",
+                "source_apply_receipt_schema": receipt.get("schema").and_then(Value::as_str),
+                "runtime_validation_receipt_schema": receipt
+                    .pointer("/runtime_validation_receipt/schema")
+                    .and_then(Value::as_str),
                 "status": if post_write_readback_digest_match { "dispatched" } else { "failed_post_write_digest_mismatch" },
                 "writer_invoked": true,
                 "mutation_performed": transaction_id.is_some(),
@@ -30765,8 +30769,34 @@ impl WebPreviewView {
                 "post_write_readback_digest": source_digest_after,
                 "post_write_readback_digest_match": post_write_readback_digest_match,
                 "verification_performed": true,
+                "written_at": Self::current_epoch_millis(),
                 "native_writer_implementation": "editor_transaction",
-            })
+            });
+            let missing_mutation_write_receipt_fields =
+                dx_style_missing_json_fields_from_array(
+                    receipt,
+                    "/source_write_readiness/required_mutation_write_receipt_fields",
+                    &dispatch_receipt,
+                );
+            let mutation_write_receipt_field_coverage_complete =
+                missing_mutation_write_receipt_fields.is_empty();
+            if let Some(dispatch_receipt) = dispatch_receipt.as_object_mut() {
+                if !mutation_write_receipt_field_coverage_complete {
+                    dispatch_receipt.insert(
+                        "status".to_string(),
+                        serde_json::json!("failed_mutation_write_receipt_fields_missing"),
+                    );
+                }
+                dispatch_receipt.insert(
+                    "missing_mutation_write_receipt_fields".to_string(),
+                    serde_json::json!(missing_mutation_write_receipt_fields),
+                );
+                dispatch_receipt.insert(
+                    "mutation_write_receipt_field_coverage_complete".to_string(),
+                    serde_json::json!(mutation_write_receipt_field_coverage_complete),
+                );
+            }
+            dispatch_receipt
         })
     }
 
@@ -38209,6 +38239,22 @@ fn dx_style_native_writer_dispatch_blocked(
             "mutation_write_receipt_runtime_implementation",
         ],
     })
+}
+
+fn dx_style_missing_json_fields_from_array(
+    source: &Value,
+    fields_pointer: &str,
+    target: &Value,
+) -> Vec<String> {
+    source
+        .pointer(fields_pointer)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|field| !field.is_empty() && target.get(*field).is_none())
+        .map(str::to_string)
+        .collect()
 }
 
 fn dx_style_source_apply_session_source_identity_from_context_json(

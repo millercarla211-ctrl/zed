@@ -1934,6 +1934,14 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /MultiBufferOffset\(edit_start\)\.\.MultiBufferOffset\(edit_end\)/);
   assert.match(webPreviewView, /single_editor_transaction/);
   assert.match(webPreviewView, /post_write_readback_digest_match/);
+  assert.match(webPreviewView, /source_apply_receipt_schema/);
+  assert.match(webPreviewView, /runtime_validation_receipt_schema/);
+  assert.match(webPreviewView, /written_at/);
+  assert.match(webPreviewView, /fn dx_style_missing_json_fields_from_array/);
+  assert.match(webPreviewView, /source_write_readiness\/required_mutation_write_receipt_fields/);
+  assert.match(webPreviewView, /missing_mutation_write_receipt_fields/);
+  assert.match(webPreviewView, /mutation_write_receipt_field_coverage_complete/);
+  assert.match(webPreviewView, /failed_mutation_write_receipt_fields_missing/);
   assert.match(webPreviewView, /"native_writer_implementation": "editor_transaction"/);
   assert.match(webPreviewView, /"native_writer_dispatch"\.to_string\(\),\s*native_writer_dispatch/s);
   assert.match(nativeWriterReplay, /DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA/);

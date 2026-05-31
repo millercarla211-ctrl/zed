@@ -1,3 +1,23 @@
+[2026-05-31] - DX Style Mutation Receipt Field Coverage
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-mutation-receipt-field-coverage-plan.md` records the source-only plan for checking actual mutation write receipt field coverage in the native dispatcher.
+
+CHANGED:
+- WebPreviewView native writer dispatch now compares the emitted dispatch/mutation receipt against `source_write_readiness.required_mutation_write_receipt_fields`.
+- Dispatch receipts now include source-apply receipt schema, runtime validation receipt schema, and `written_at` evidence for future mutation write receipt coverage.
+- Dispatch now reports `missing_mutation_write_receipt_fields` and `mutation_write_receipt_field_coverage_complete`, and fails closed as `failed_mutation_write_receipt_fields_missing` if a future authorized dispatch lacks required receipt fields.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the mutation receipt field coverage gate.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\web_preview_view.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed mutation receipt field coverage files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Runtime Receipt Field Coverage
 
 ADDED:
