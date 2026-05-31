@@ -1934,6 +1934,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(webPreviewView, /MultiBufferOffset\(edit_start\)\.\.MultiBufferOffset\(edit_end\)/);
   assert.match(webPreviewView, /single_editor_transaction/);
   assert.match(webPreviewView, /post_write_readback_digest_match/);
+  assert.match(webPreviewView, /let single_editor_transaction = transaction_id\.is_some\(\)/);
+  assert.match(webPreviewView, /single_editor_transaction && post_write_readback_digest_match/);
+  assert.match(webPreviewView, /failed_no_editor_transaction/);
+  assert.match(webPreviewView, /failed_post_write_digest_mismatch/);
   assert.match(webPreviewView, /source_apply_receipt_schema/);
   assert.match(webPreviewView, /runtime_validation_receipt_schema/);
   assert.match(webPreviewView, /written_at/);

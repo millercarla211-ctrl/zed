@@ -1,3 +1,22 @@
+[2026-05-31] - DX Style Dispatch Success Invariant
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-dispatch-success-invariant-plan.md` records the source-only plan for tightening native writer dispatch success semantics.
+
+CHANGED:
+- WebPreviewView native writer dispatch now reports `dispatched` only when an editor transaction id exists, post-write readback digest matches, and mutation receipt field coverage is complete.
+- Missing editor transaction, digest mismatch, and missing mutation write receipt fields now produce distinct fail-closed statuses before any future authorized write can claim success.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the stricter dispatch success invariant.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\web_preview\src\web_preview_view.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the changed dispatch success invariant files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Mutation Receipt Field Coverage
 
 ADDED:

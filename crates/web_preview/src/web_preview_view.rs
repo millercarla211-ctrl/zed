@@ -30739,6 +30739,7 @@ impl WebPreviewView {
             let source_after = editor.text(cx);
             let source_digest_after = crate::dx_style_source_apply::active_source_digest(&source_after);
             let post_write_readback_digest_match = source_digest_after == expected_source_digest_after;
+            let single_editor_transaction = transaction_id.is_some();
             let mut dispatch_receipt = serde_json::json!({
                 "schema": "zed.web_preview.dx_style.native_writer_dispatch.v1",
                 "mutation_write_receipt_schema": "zed.web_preview.dx_style.mutation_write_receipt.v1",
@@ -30746,9 +30747,9 @@ impl WebPreviewView {
                 "runtime_validation_receipt_schema": receipt
                     .pointer("/runtime_validation_receipt/schema")
                     .and_then(Value::as_str),
-                "status": if post_write_readback_digest_match { "dispatched" } else { "failed_post_write_digest_mismatch" },
+                "status": if single_editor_transaction && post_write_readback_digest_match { "dispatched" } else if !single_editor_transaction { "failed_no_editor_transaction" } else { "failed_post_write_digest_mismatch" },
                 "writer_invoked": true,
-                "mutation_performed": transaction_id.is_some(),
+                "mutation_performed": single_editor_transaction,
                 "source_path": source_path,
                 "edit_span": {
                     "start_byte": edit_start_byte,
@@ -30764,7 +30765,7 @@ impl WebPreviewView {
                 "source_len_bytes_after": source_after.len(),
                 "pre_write_digest_match": true,
                 "pre_write_source_len_match": true,
-                "single_editor_transaction": transaction_id.is_some(),
+                "single_editor_transaction": single_editor_transaction,
                 "undo_group_id": transaction_id.map(|transaction_id| format!("{transaction_id:?}")),
                 "post_write_readback_digest": source_digest_after,
                 "post_write_readback_digest_match": post_write_readback_digest_match,
@@ -30781,7 +30782,17 @@ impl WebPreviewView {
             let mutation_write_receipt_field_coverage_complete =
                 missing_mutation_write_receipt_fields.is_empty();
             if let Some(dispatch_receipt) = dispatch_receipt.as_object_mut() {
-                if !mutation_write_receipt_field_coverage_complete {
+                if !single_editor_transaction {
+                    dispatch_receipt.insert(
+                        "status".to_string(),
+                        serde_json::json!("failed_no_editor_transaction"),
+                    );
+                } else if !post_write_readback_digest_match {
+                    dispatch_receipt.insert(
+                        "status".to_string(),
+                        serde_json::json!("failed_post_write_digest_mismatch"),
+                    );
+                } else if !mutation_write_receipt_field_coverage_complete {
                     dispatch_receipt.insert(
                         "status".to_string(),
                         serde_json::json!("failed_mutation_write_receipt_fields_missing"),
