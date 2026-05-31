@@ -19,6 +19,8 @@ pub(crate) const DX_STYLE_NATIVE_WRITER_DRY_RUN_REPLAY_SCHEMA: &str =
     "zed.web_preview.dx_style.native_writer_dry_run_replay.v1";
 const DX_STYLE_NATIVE_WRITER_COMMIT_PLAN_SCHEMA: &str =
     "zed.web_preview.dx_style.native_writer_commit_plan.v1";
+const DX_STYLE_POST_WRITE_DIGEST_VERIFICATION_PLAN_SCHEMA: &str =
+    "zed.web_preview.dx_style.post_write_digest_verification_plan.v1";
 const DX_STYLE_USER_APPLY_ACTION_SCHEMA: &str = "zed.web_preview.dx_style.user_apply_action.v1";
 pub(crate) const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
@@ -63,6 +65,7 @@ const SOURCE_APPLY_REVIEW_RECEIPT_FIELDS: &[&str] = &[
     "dry_run_edit_review",
     "native_writer_dry_run_replay",
     "native_writer_commit_plan",
+    "post_write_digest_verification_plan",
     "user_apply_action",
     "source_write_readiness",
     "native_active_editor_source_revalidation",
@@ -234,6 +237,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         reasons
             .push("source-apply contract is missing native writer commit plan guard".to_string());
     }
+    if !string_array_contains(
+        contract,
+        "/required_editor_guards",
+        "post-write source digest verification plan",
+    ) {
+        reasons.push(
+            "source-apply contract is missing post-write digest verification plan guard"
+                .to_string(),
+        );
+    }
     if !string_array_contains(contract, "/review_context_kinds", "class_token")
         || !string_array_contains(contract, "/review_context_kinds", "class_list")
         || !string_array_contains(contract, "/review_context_kinds", "css_declaration")
@@ -307,6 +320,16 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     ) {
         reasons.push(
             "source-apply contract is missing native writer commit plan receipt field".to_string(),
+        );
+    }
+    if !string_array_contains(
+        contract,
+        "/review_receipt_fields",
+        "post_write_digest_verification_plan",
+    ) {
+        reasons.push(
+            "source-apply contract is missing post-write digest verification plan receipt field"
+                .to_string(),
         );
     }
     if !string_array_contains(contract, "/review_receipt_fields", "user_apply_action") {
@@ -805,6 +828,11 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
     let native_writer_commit_plan_status = native_writer_commit_plan
         .get("status")
         .and_then(Value::as_str);
+    let post_write_digest_verification_plan =
+        post_write_digest_verification_plan(&native_writer_commit_plan);
+    let post_write_digest_verification_plan_status = post_write_digest_verification_plan
+        .get("status")
+        .and_then(Value::as_str);
     let user_apply_action_evidence = user_apply_action_review(
         user_apply_action,
         contract_source_mutation_enabled,
@@ -1194,6 +1222,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         native_revalidation_status,
         native_writer_dry_run_replay_status,
         native_writer_commit_plan_status,
+        post_write_digest_verification_plan_status,
         user_apply_action_status,
         reasons.len(),
         web_preview_declared_mutation_capability,
@@ -1363,6 +1392,7 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
         "dry_run_edit_review": dry_run_edit_review_evidence,
         "native_writer_dry_run_replay": native_writer_dry_run_replay,
         "native_writer_commit_plan": native_writer_commit_plan,
+        "post_write_digest_verification_plan": post_write_digest_verification_plan,
         "user_apply_action": user_apply_action_evidence,
         "source_write_readiness": source_write_readiness_evidence,
         "native_active_editor_source_revalidation": native_active_editor_source_revalidation,
@@ -1408,6 +1438,7 @@ fn source_write_readiness(
     native_revalidation_status: Option<&str>,
     native_writer_dry_run_replay_status: Option<&str>,
     native_writer_commit_plan_status: Option<&str>,
+    post_write_digest_verification_plan_status: Option<&str>,
     user_apply_action_status: Option<&str>,
     native_review_reason_count: usize,
     web_preview_declared_mutation_capability: bool,
@@ -1475,6 +1506,18 @@ fn source_write_readiness(
     if !native_writer_commit_plan_ready {
         missing_requirements.push("native_writer_commit_plan_missing");
     }
+    let post_write_digest_verification_plan_ready =
+        if contract_source_mutation_enabled == Some(true) {
+            post_write_digest_verification_plan_status == Some("ready")
+        } else {
+            matches!(
+                post_write_digest_verification_plan_status,
+                Some("blocked_runtime_unverified" | "ready")
+            )
+        };
+    if !post_write_digest_verification_plan_ready {
+        missing_requirements.push("post_write_digest_verification_plan_missing");
+    }
     let user_apply_action_ready = if contract_source_mutation_enabled == Some(true) {
         user_apply_action_status == Some("mutate_source_confirmed")
     } else {
@@ -1516,6 +1559,14 @@ fn source_write_readiness(
         "native_writer_commit_plan",
     ) {
         missing_requirements.push("write_bridge_missing_native_writer_commit_plan_receipt_field");
+    }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "post_write_digest_verification_plan",
+    ) {
+        missing_requirements
+            .push("write_bridge_missing_post_write_digest_verification_plan_receipt_field");
     }
     if !string_array_contains(
         editor_write_bridge,
@@ -1590,6 +1641,7 @@ fn source_write_readiness(
         "native_revalidation_status": native_revalidation_status,
         "native_writer_dry_run_replay_status": native_writer_dry_run_replay_status,
         "native_writer_commit_plan_status": native_writer_commit_plan_status,
+        "post_write_digest_verification_plan_status": post_write_digest_verification_plan_status,
         "user_apply_action_status": user_apply_action_status,
         "native_review_reason_count": native_review_reason_count,
         "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
@@ -1800,6 +1852,70 @@ fn native_writer_commit_plan(native_writer_dry_run_replay: &Value) -> Value {
             "post_write_source_digest_verification_missing",
             "explicit_mutation_authorization_missing",
         ],
+    })
+}
+
+fn post_write_digest_verification_plan(native_writer_commit_plan: &Value) -> Value {
+    let commit_plan_status = native_writer_commit_plan
+        .get("status")
+        .and_then(Value::as_str);
+    if !matches!(commit_plan_status, Some("blocked_review_only" | "ready")) {
+        return json!({
+            "schema": DX_STYLE_POST_WRITE_DIGEST_VERIFICATION_PLAN_SCHEMA,
+            "status": "blocked_commit_plan_not_ready",
+            "reason": "Post-write digest verification planning requires a matched native writer commit plan.",
+            "verification_performed": false,
+            "mutation_performed": false,
+            "native_writer_commit_plan_status": commit_plan_status,
+            "required_runtime_proof": "post-write source digest verification",
+            "missing_runtime_proof": "post_write_source_digest_verification_missing",
+        });
+    }
+
+    let source_path = native_writer_commit_plan
+        .get("source_path")
+        .and_then(Value::as_str);
+    let expected_source_digest_after = native_writer_commit_plan
+        .get("expected_source_digest_after")
+        .and_then(Value::as_str);
+    let expected_source_len_bytes_after = native_writer_commit_plan
+        .get("source_len_bytes_after")
+        .and_then(Value::as_u64);
+    let edit_span = native_writer_commit_plan.get("edit_span").cloned();
+    let replacement_text_bytes = native_writer_commit_plan
+        .get("replacement_text_bytes")
+        .and_then(Value::as_u64);
+    let plan_inputs_ready = source_path.is_some_and(|path| !path.is_empty())
+        && expected_source_digest_after.is_some_and(is_source_digest)
+        && expected_source_len_bytes_after.is_some()
+        && edit_span.as_ref().is_some_and(Value::is_object)
+        && replacement_text_bytes.is_some();
+
+    json!({
+        "schema": DX_STYLE_POST_WRITE_DIGEST_VERIFICATION_PLAN_SCHEMA,
+        "status": if plan_inputs_ready {
+            "blocked_runtime_unverified"
+        } else {
+            "blocked_commit_plan_incomplete"
+        },
+        "reason": if plan_inputs_ready {
+            "Post-write digest verification is planned but not performed until mutation and readback are authorized at runtime."
+        } else {
+            "Post-write digest verification planning is missing commit plan path, digest, length, span, or replacement-byte evidence."
+        },
+        "verification_performed": false,
+        "mutation_performed": false,
+        "native_writer_commit_plan_status": commit_plan_status,
+        "source_path": source_path,
+        "source_digest_before": native_writer_commit_plan
+            .get("source_digest_before")
+            .and_then(Value::as_str),
+        "expected_source_digest_after": expected_source_digest_after,
+        "expected_source_len_bytes_after": expected_source_len_bytes_after,
+        "edit_span": edit_span,
+        "replacement_text_bytes": replacement_text_bytes,
+        "required_runtime_proof": "post-write source digest verification",
+        "missing_runtime_proof": "post_write_source_digest_verification_missing",
     })
 }
 

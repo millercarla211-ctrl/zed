@@ -41,6 +41,7 @@
     "cursor-scoped dry-run structured edit preview",
     "native writer dry-run replay",
     "native writer commit plan",
+    "post-write source digest verification plan",
     "editor write bridge can_apply",
     "explicit user apply action"
   ],
@@ -63,6 +64,7 @@
     "dry_run_edit_review",
     "native_writer_dry_run_replay",
     "native_writer_commit_plan",
+    "post_write_digest_verification_plan",
     "user_apply_action",
     "source_write_readiness",
     "native_active_editor_source_revalidation",
