@@ -960,6 +960,16 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "group_context_grouping_savings_bytes_mismatch",
     ),
   );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_recommended_representation_unsupported",
+    ),
+  );
+  assert.deepEqual(groupWebPreviewContextFixture.recommended_representation_values, [
+    "grouped_reference",
+    "atomic_utilities",
+    "group_candidate_needs_alias",
+  ]);
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_SCHEMA/);
   assert.match(groupRegistryReceipt, /dx\.style\.grouped-class-registry-receipt/);
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_FIXTURE_PATH/);
@@ -2897,6 +2907,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceGroupContextContract, /max_alias_bytes/);
   assert.match(surfaceGroupContextContract, /max_utility_count/);
   assert.match(surfaceGroupContextContract, /diagnostic_codes/);
+  assert.match(surfaceGroupContextContract, /recommended_representation_values/);
   assert.match(surfaceGroupContextContract, /utility_preview_max_chars/);
   assert.match(surfaceGroupContextContract, /candidate_min_utility_count/);
   assert.match(surfaceReverseCssDeltaContract, /DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_SCHEMA/);
@@ -3594,6 +3605,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /groupContextGroupedReferenceBytes/);
   assert.match(surfaceScript, /groupContextGroupingSavingsBytes/);
   assert.match(surfaceScript, /group_context_recommended_representation_missing/);
+  assert.match(surfaceScript, /group_context_recommended_representation_unsupported/);
+  assert.match(surfaceScript, /groupContextRecommendedRepresentationValues/);
+  assert.match(surfaceScript, /groupContextRecommendedRepresentationSet/);
+  assert.match(surfaceScript, /group_context_recommended_representation_values/);
   assert.match(surfaceScript, /group_raw_atomic_bytes/);
   assert.match(surfaceScript, /group_grouped_reference_bytes/);
   assert.match(surfaceScript, /group_grouping_savings_bytes/);

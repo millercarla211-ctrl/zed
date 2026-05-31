@@ -98,7 +98,13 @@
     "group_context_grouped_reference_bytes_mismatch",
     "group_context_grouping_savings_bytes_mismatch",
     "group_context_recommended_representation_missing",
+    "group_context_recommended_representation_unsupported",
     "group_context_inline_expansion_missing"
+  ],
+  "recommended_representation_values": [
+    "grouped_reference",
+    "atomic_utilities",
+    "group_candidate_needs_alias"
   ],
   "max_alias_bytes": 128,
   "max_utility_count": 32,

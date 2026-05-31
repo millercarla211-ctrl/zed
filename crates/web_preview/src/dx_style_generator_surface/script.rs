@@ -91,6 +91,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       ? normalizedStringValues(groupContextContract.diagnostic_codes)
       : [];
     const groupContextDiagnosticCodeSet = new Set(groupContextDiagnosticCodes);
+    const groupContextRecommendedRepresentationValues =
+      Array.isArray(groupContextContract.recommended_representation_values)
+        ? normalizedStringValues(groupContextContract.recommended_representation_values)
+        : [];
+    const groupContextRecommendedRepresentationSet =
+      new Set(groupContextRecommendedRepresentationValues);
     const groupContextRequiredFlagFields = [
       "group_context.requires_registry_receipt",
       "group_context.source_owned",
@@ -621,6 +627,11 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       if (Array.isArray(group.utilities) && group.utilities.length
         && !group.recommended_representation) {
         diagnostics.push("group_context_recommended_representation_missing");
+      }
+      if (group.recommended_representation
+        && groupContextRecommendedRepresentationSet.size
+        && !groupContextRecommendedRepresentationSet.has(String(group.recommended_representation))) {
+        diagnostics.push("group_context_recommended_representation_unsupported");
       }
       if (Array.isArray(group.utilities) && group.utilities.length
         && group.can_expand_inline !== true) {
@@ -2726,6 +2737,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         `group_context_candidate_min_utility_count: ${groupContextCandidateMin || "unknown"}`,
         `group_context_contract_fields: ${groupContextContractFields.length}`,
         `group_context_diagnostic_codes: ${groupContextDiagnosticCodes.length}`,
+        `group_context_recommended_representation_values: ${groupContextRecommendedRepresentationValues.length}`,
         `group_context_required_flag_fields: ${groupContextRequiredFlagFields.length}`,
         `group_context_syntax_values: ${groupContextSyntaxValues.length}`,
         `group_context_status_values: ${groupContextStatusValues.length}`,
