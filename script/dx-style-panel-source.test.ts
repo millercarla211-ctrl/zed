@@ -3525,6 +3525,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_max_utility_count/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);
+  assert.match(surfaceScript, /groupContextUtilityPreview/);
+  assert.match(surfaceScript, /groupContextUtilityPreviewMaxChars/);
   assert.match(surfaceScript, /group_context_contract_fields/);
   assert.match(surfaceScript, /group_context_required_flag_fields/);
   assert.match(surfaceScript, /group_context_syntax_values/);
@@ -3541,6 +3543,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_inline_expansion_missing/);
   assert.match(surfaceScript, /group_requires_registry_receipt/);
   assert.match(surfaceScript, /group_can_expand_inline/);
+  assert.match(surfaceScript, /group_utilities_preview/);
   assert.match(surfaceScript, /reverse_css_delta_contract_schema/);
   assert.match(surfaceScript, /reverse_css_delta_contract_source/);
   assert.match(surfaceScript, /reverse_css_delta_supported_properties/);

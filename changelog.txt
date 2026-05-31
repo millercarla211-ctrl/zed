@@ -1,3 +1,19 @@
+[2026-05-31] - DX Style Group Utility Preview
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-group-utility-preview-plan.md` records the source-only plan for showing active grouped atomic utilities in Web Preview review diagnostics.
+
+CHANGED:
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now emits a bounded `group_utilities_preview` diagnostic when active group context includes utilities.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the grouped utility preview boundary.
+
+PASSED:
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Group Context Field Contract
 
 ADDED:

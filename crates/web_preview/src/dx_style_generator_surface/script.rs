@@ -90,6 +90,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       "group_context.source_owned",
       "group_context.can_expand_inline"
     ];
+    const groupContextUtilityPreviewMaxChars = 512;
     const reverseCssDeltaContractSchema = reverseCssDeltaContract.__schema || "unknown";
     const reverseCssDeltaContractSource = reverseCssDeltaContract.__source || "embedded:dx-style-reverse-css-delta-contract-fixture";
     const reverseCssDeltaMutationEnabled = reverseCssDeltaContract.source_mutation_enabled === true;
@@ -555,6 +556,17 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         diagnostics.push("group_context_inline_expansion_missing");
       }
       return [...new Set(diagnostics)];
+    }
+
+    function groupContextUtilityPreview(group) {
+      const utilities = Array.isArray(group?.utilities)
+        ? group.utilities.filter((utility) => typeof utility === "string" && utility.length)
+        : [];
+      if (!utilities.length) return null;
+      const preview = utilities.join(" ");
+      return preview.length > groupContextUtilityPreviewMaxChars
+        ? `${preview.slice(0, groupContextUtilityPreviewMaxChars)}...`
+        : preview;
     }
 
     function exceedsContractLimit(value, limit) {
@@ -2448,6 +2460,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const applyBlocker = sourceApplyBlocker(applyGate, metadataAligned, zedStyleContext, output);
       const groupContext = zedStyleContext?.group_context || null;
       const groupContextDiagnostics = groupContextVocabularyDiagnostics(zedStyleContext);
+      const groupUtilityPreview = groupContextUtilityPreview(groupContext);
       const generatorMetadata = catalogMetadataForGenerator(state.generator);
       const contextLines = zedStyleContext ? [
         `context_schema: ${zedStyleContext.schema || "unknown"}`,
@@ -2466,6 +2479,7 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         groupContext?.requires_registry_receipt !== undefined ? `group_requires_registry_receipt: ${groupContext.requires_registry_receipt}` : null,
         groupContext?.source_owned !== undefined ? `group_source_owned: ${groupContext.source_owned}` : null,
         groupContext?.can_expand_inline !== undefined ? `group_can_expand_inline: ${groupContext.can_expand_inline}` : null,
+        groupUtilityPreview ? `group_utilities_preview: ${groupUtilityPreview}` : null,
         groupContext?.expansion_status ? `group_expansion_status: ${groupContext.expansion_status}` : null,
         groupContext?.registry_receipt ? `group_registry_receipt: ${groupContext.registry_receipt}` : null,
         groupContext?.reverse_css_map_receipt ? `reverse_css_map_receipt: ${groupContext.reverse_css_map_receipt}` : null,
