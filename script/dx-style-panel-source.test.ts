@@ -965,6 +965,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "group_context_recommended_representation_unsupported",
     ),
   );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_recommended_representation_mismatch",
+    ),
+  );
   assert.deepEqual(groupWebPreviewContextFixture.recommended_representation_values, [
     "grouped_reference",
     "atomic_utilities",
@@ -3606,8 +3611,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /groupContextGroupingSavingsBytes/);
   assert.match(surfaceScript, /group_context_recommended_representation_missing/);
   assert.match(surfaceScript, /group_context_recommended_representation_unsupported/);
+  assert.match(surfaceScript, /group_context_recommended_representation_mismatch/);
   assert.match(surfaceScript, /groupContextRecommendedRepresentationValues/);
   assert.match(surfaceScript, /groupContextRecommendedRepresentationSet/);
+  assert.match(surfaceScript, /groupContextExpectedRecommendation/);
   assert.match(surfaceScript, /group_context_recommended_representation_values/);
   assert.match(surfaceScript, /group_raw_atomic_bytes/);
   assert.match(surfaceScript, /group_grouped_reference_bytes/);

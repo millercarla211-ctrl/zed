@@ -99,6 +99,7 @@
     "group_context_grouping_savings_bytes_mismatch",
     "group_context_recommended_representation_missing",
     "group_context_recommended_representation_unsupported",
+    "group_context_recommended_representation_mismatch",
     "group_context_inline_expansion_missing"
   ],
   "recommended_representation_values": [

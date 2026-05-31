@@ -633,6 +633,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && !groupContextRecommendedRepresentationSet.has(String(group.recommended_representation))) {
         diagnostics.push("group_context_recommended_representation_unsupported");
       }
+      const expectedRecommendedRepresentation = groupContextExpectedRecommendation(group);
+      if (group.recommended_representation
+        && expectedRecommendedRepresentation
+        && group.recommended_representation !== expectedRecommendedRepresentation) {
+        diagnostics.push("group_context_recommended_representation_mismatch");
+      }
       if (Array.isArray(group.utilities) && group.utilities.length
         && group.can_expand_inline !== true) {
         diagnostics.push("group_context_inline_expansion_missing");
@@ -659,6 +665,19 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       const groupedReferenceBytes = groupContextGroupedReferenceBytes(group);
       return Number.isInteger(rawAtomicBytes) && Number.isInteger(groupedReferenceBytes)
         ? rawAtomicBytes - groupedReferenceBytes
+        : null;
+    }
+
+    function groupContextExpectedRecommendation(group) {
+      const savingsBytes = groupContextGroupingSavingsBytes(group);
+      if (Number.isInteger(savingsBytes)) {
+        return savingsBytes > 0 ? "grouped_reference" : "atomic_utilities";
+      }
+      if (!group?.alias && Number.isInteger(group?.candidate_token_count)) {
+        return "group_candidate_needs_alias";
+      }
+      return Array.isArray(group?.utilities) && group.utilities.length
+        ? "atomic_utilities"
         : null;
     }
 
