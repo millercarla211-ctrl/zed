@@ -11656,3 +11656,21 @@ PASSED:
 NOTES:
 - Native source mutation remains disabled; this slice only makes review receipts stricter and more explainable.
 - Skipped Cargo build/check/test/clippy, `just run`, local servers/apps, browser automation, and live WebView/runtime proof by direct instruction.
+
+[2026-05-31] - DX Style Write Bridge Preflight Proof Requirements
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs` and `G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json` now name the source-apply review receipt fields and runtime proofs required before any future mutation-capable editor writer can be trusted.
+- `crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs` now reads those source-owned proof lists into the native Style panel bridge snapshot with bounded list parsing and keeps `can_apply` false.
+- `crates\web_preview\src\dx_style_generator_surface\script.rs` now exposes the required receipt fields and runtime proofs in copied review packets, source-write readiness, and the Web Preview bridge review.
+- `crates\web_preview\src\dx_style_source_apply.rs` now preserves the proof lists in native source-apply receipts and refuses readiness when replacement diagnostics receipt evidence or runtime proof requirements are missing.
+- `script\dx-style-panel-source.test.ts` now guards the DX Style source/fixture proof lists, the Zed bridge fallback, Web Preview review packet counts, readiness blocker codes, and visible bridge review labels.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs crates\web_preview\src\dx_style_generator_surface\script.rs crates\web_preview\src\dx_style_source_apply.rs`
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_editor_write_bridge.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+
+NOTES:
+- Source mutation remains disabled. This is a source-only proof-list checkpoint; Cargo, `just run`, local servers/apps, browser automation, WebView runtime proof, and live editor mutation proof remain skipped by direct instruction.

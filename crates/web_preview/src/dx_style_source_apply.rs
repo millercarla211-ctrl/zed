@@ -1135,6 +1135,9 @@ pub(crate) fn source_apply_review_receipt(payload: &Value) -> Value {
             "editor_write_bridge": {
                 "state": editor_write_bridge.get("state").and_then(Value::as_str),
                 "can_apply": editor_write_bridge.get("can_apply").and_then(Value::as_bool),
+                "can_mutate_source": editor_write_bridge.get("can_mutate_source").and_then(Value::as_bool),
+                "required_source_apply_review_receipt_fields": string_array_at(editor_write_bridge, "/required_source_apply_review_receipt_fields"),
+                "required_runtime_proofs": string_array_at(editor_write_bridge, "/required_runtime_proofs"),
             }
         },
         "dry_run_review": {
@@ -1245,6 +1248,14 @@ fn source_write_readiness(
     if editor_write_bridge_can_mutate_source != Some(true) {
         missing_requirements.push("mutation_capable_editor_write_bridge_missing");
     }
+    if !string_array_contains(
+        editor_write_bridge,
+        "/required_source_apply_review_receipt_fields",
+        "reverse_css_delta_replacement_payload_diagnostics",
+    ) {
+        missing_requirements
+            .push("write_bridge_missing_replacement_payload_diagnostics_receipt_field");
+    }
     if !web_preview_declared_mutation_capability {
         missing_requirements.push("web_preview_mutation_capability_missing");
     }
@@ -1253,6 +1264,15 @@ fn source_write_readiness(
     }
     if runtime_validation_required == Some(true) {
         missing_requirements.push("runtime_webview_build_proof_missing");
+    }
+    if runtime_validation_required == Some(true)
+        && !string_array_contains(
+            editor_write_bridge,
+            "/required_runtime_proofs",
+            "post-write source digest verification",
+        )
+    {
+        missing_requirements.push("write_bridge_runtime_proofs_missing");
     }
 
     let safe_to_mutate = missing_requirements.is_empty();
@@ -1271,6 +1291,8 @@ fn source_write_readiness(
         "editor_write_bridge_can_apply": editor_write_bridge_can_apply,
         "editor_write_bridge_can_mutate_source": editor_write_bridge_can_mutate_source,
         "editor_write_bridge_state": editor_write_bridge.get("state").and_then(Value::as_str),
+        "required_source_apply_review_receipt_fields": string_array_at(editor_write_bridge, "/required_source_apply_review_receipt_fields"),
+        "required_runtime_proofs": string_array_at(editor_write_bridge, "/required_runtime_proofs"),
         "runtime_validation_required": runtime_validation_required,
         "web_preview_declared_mutation_capability": web_preview_declared_mutation_capability,
         "native_can_mutate_source": native_can_mutate_source,

@@ -1455,10 +1455,14 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
           required_native_handler_count: 0,
           required_handler_capability_count: 0,
           required_native_handler_capability_count: 0,
+          required_review_receipt_field_count: 0,
+          required_runtime_proof_count: 0,
           required_receipts: [],
           required_editor_guards: [],
           required_native_handlers: [],
-          required_native_handler_capabilities: []
+          required_native_handler_capabilities: [],
+          required_source_apply_review_receipt_fields: [],
+          required_runtime_proofs: []
         };
       }
       const requiredReceipts = Array.isArray(bridge.required_receipts) ? bridge.required_receipts : [];
@@ -1466,6 +1470,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const requiredHandlers = Array.isArray(bridge.required_native_handlers) ? bridge.required_native_handlers : [];
       const requiredCapabilities = Array.isArray(bridge.required_native_handler_capabilities)
         ? bridge.required_native_handler_capabilities
+        : [];
+      const requiredReviewReceiptFields = Array.isArray(bridge.required_source_apply_review_receipt_fields)
+        ? bridge.required_source_apply_review_receipt_fields
+        : [];
+      const requiredRuntimeProofs = Array.isArray(bridge.required_runtime_proofs)
+        ? bridge.required_runtime_proofs
         : [];
       return {
         present: true,
@@ -1488,10 +1498,14 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         required_native_handler_count: requiredHandlers.length,
         required_handler_capability_count: requiredCapabilities.length,
         required_native_handler_capability_count: requiredCapabilities.length,
+        required_review_receipt_field_count: requiredReviewReceiptFields.length,
+        required_runtime_proof_count: requiredRuntimeProofs.length,
         required_receipts: requiredReceipts,
         required_editor_guards: requiredGuards,
         required_native_handlers: requiredHandlers,
-        required_native_handler_capabilities: requiredCapabilities
+        required_native_handler_capabilities: requiredCapabilities,
+        required_source_apply_review_receipt_fields: requiredReviewReceiptFields,
+        required_runtime_proofs: requiredRuntimeProofs
       };
     }
 
@@ -1545,12 +1559,18 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       if (bridge.can_mutate_source !== true) {
         missingRequirements.push("mutation_capable_editor_write_bridge_missing");
       }
+      if (!bridge.required_source_apply_review_receipt_fields.includes("reverse_css_delta_replacement_payload_diagnostics")) {
+        missingRequirements.push("write_bridge_missing_replacement_payload_diagnostics_receipt_field");
+      }
       if (!webPreviewDeclaredMutationCapability) {
         missingRequirements.push("web_preview_mutation_capability_missing");
       }
       if (handlerState !== "ready") missingRequirements.push("native_writer_can_mutate_false");
       if (bridge.runtime_validation_required === true) {
         missingRequirements.push("runtime_webview_build_proof_missing");
+      }
+      if (bridge.runtime_validation_required === true && !bridge.required_runtime_proofs.length) {
+        missingRequirements.push("write_bridge_runtime_proofs_missing");
       }
       if (sourceApplyMutationEnabled) {
         missingRequirements.push(...reverseDeltaReplacementPolicyDiagnostics);
@@ -1587,6 +1607,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         editor_write_bridge_summary: bridge.summary,
         editor_write_bridge_can_apply: bridge.can_apply,
         editor_write_bridge_can_mutate_source: bridge.can_mutate_source,
+        required_review_receipt_field_count: bridge.required_review_receipt_field_count,
+        required_runtime_proof_count: bridge.required_runtime_proof_count,
         runtime_validation_required: bridge.runtime_validation_required,
         web_preview_declared_mutation_capability: webPreviewDeclaredMutationCapability,
         native_handler_state: handlerState,
@@ -1699,6 +1721,12 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
       const handlerCapabilities = Array.isArray(bridge.required_native_handler_capabilities)
         ? bridge.required_native_handler_capabilities.map((capability) => `<li>${escapeHtml(capability)}</li>`).join("")
         : "";
+      const reviewReceiptFields = Array.isArray(bridge.required_source_apply_review_receipt_fields)
+        ? bridge.required_source_apply_review_receipt_fields.map((field) => `<li>${escapeHtml(field)}</li>`).join("")
+        : "";
+      const runtimeProofs = Array.isArray(bridge.required_runtime_proofs)
+        ? bridge.required_runtime_proofs.map((proof) => `<li>${escapeHtml(proof)}</li>`).join("")
+        : "";
       return `
         ${sourceApplyContractReview}
         <strong>Write bridge preflight</strong>
@@ -1712,6 +1740,8 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         ${guards ? `<span>Required guards</span><ul>${guards}</ul>` : ""}
         ${handlers ? `<span>Required native handlers</span><ul>${handlers}</ul>` : ""}
         ${handlerCapabilities ? `<span>Required handler capabilities</span><ul>${handlerCapabilities}</ul>` : ""}
+        ${reviewReceiptFields ? `<span>Required source-apply receipt fields</span><ul>${reviewReceiptFields}</ul>` : ""}
+        ${runtimeProofs ? `<span>Required runtime proofs</span><ul>${runtimeProofs}</ul>` : ""}
       `;
     }
 

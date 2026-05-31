@@ -133,6 +133,26 @@ const expectedEditorWriteBridgeGuards = [
 
 const expectedEditorWriteBridgeHandlers = ["window.__DX_STYLE_SOURCE_APPLY__"];
 const expectedEditorWriteBridgeCapabilities = ["can_review_request", "can_mutate_source"];
+const expectedEditorWriteBridgeReviewReceiptFields = [
+  "source_apply_session",
+  "preview_output",
+  "css_declaration_dry_run_diagnostics",
+  "css_declaration_dry_run_preview_diagnostics",
+  "reverse_css_delta_contract",
+  "reverse_css_delta_preview",
+  "reverse_css_delta_replacement_payload_diagnostics",
+  "dry_run_edit_review",
+  "source_write_readiness",
+  "native_active_editor_source_revalidation",
+  "native_handler",
+  "apply_gate",
+];
+const expectedEditorWriteBridgeRuntimeProofs = [
+  "authorized runtime validation",
+  "successful WebView source-review round trip",
+  "successful native writer dry-run replay",
+  "post-write source digest verification",
+];
 const expectedReverseDeltaValueStrategies = [
   "design_token_suffix",
   "arbitrary_bracket_value",
@@ -474,6 +494,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(editorWriteBridgePreflight, /authorized runtime validation/);
   assert.match(editorWriteBridgePreflight, /required_native_handlers/);
   assert.match(editorWriteBridgePreflight, /required_native_handler_capabilities/);
+  assert.match(editorWriteBridgePreflight, /required_source_apply_review_receipt_fields/);
+  assert.match(editorWriteBridgePreflight, /required_runtime_proofs/);
+  assert.match(editorWriteBridgePreflight, /reverse_css_delta_replacement_payload_diagnostics/);
+  assert.match(editorWriteBridgePreflight, /successful WebView source-review round trip/);
+  assert.match(editorWriteBridgePreflight, /post-write source digest verification/);
   assert.match(editorWriteBridgePreflight, /window\.__DX_STYLE_SOURCE_APPLY__/);
   assert.match(editorWriteBridgePreflight, /can_mutate_source/);
   assert.equal(
@@ -496,12 +521,28 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
     expectedEditorWriteBridgeCapabilities,
   );
   assert.deepEqual(
+    editorWriteBridgeFixture.required_source_apply_review_receipt_fields,
+    expectedEditorWriteBridgeReviewReceiptFields,
+  );
+  assert.deepEqual(
+    editorWriteBridgeFixture.required_runtime_proofs,
+    expectedEditorWriteBridgeRuntimeProofs,
+  );
+  assert.deepEqual(
     rustStringVec(editorWriteBridgePreflight, "required_receipts"),
     expectedEditorWriteBridgeReceipts,
   );
   assert.deepEqual(
     rustStringVec(editorWriteBridgePreflight, "required_editor_guards"),
     expectedEditorWriteBridgeGuards,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridgePreflight, "required_source_apply_review_receipt_fields"),
+    expectedEditorWriteBridgeReviewReceiptFields,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridgePreflight, "required_runtime_proofs"),
+    expectedEditorWriteBridgeRuntimeProofs,
   );
   assert.doesNotMatch(
     editorWriteBridgePreflight,
@@ -1993,6 +2034,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /let dry_run_edit_review_evidence = dry_run_edit_review/);
   assert.match(sourceApply, /"dry_run_edit_review": dry_run_edit_review_evidence/);
   assert.match(sourceApply, /"source_write_readiness": source_write_readiness_evidence/);
+  assert.match(sourceApply, /"required_source_apply_review_receipt_fields": string_array_at\(editor_write_bridge, "\/required_source_apply_review_receipt_fields"\)/);
+  assert.match(sourceApply, /"required_runtime_proofs": string_array_at\(editor_write_bridge, "\/required_runtime_proofs"\)/);
   assert.match(sourceApply, /fn source_write_readiness/);
   assert.match(sourceApply, /"mutation_ready": safe_to_mutate/);
   assert.match(sourceApply, /source_mutation_contract_disabled/);
@@ -2001,8 +2044,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(sourceApply, /native_review_reasons_present/);
   assert.match(sourceApply, /editor_write_bridge_not_ready/);
   assert.match(sourceApply, /mutation_capable_editor_write_bridge_missing/);
+  assert.match(sourceApply, /write_bridge_missing_replacement_payload_diagnostics_receipt_field/);
   assert.match(sourceApply, /native_writer_can_mutate_false/);
   assert.match(sourceApply, /runtime_webview_build_proof_missing/);
+  assert.match(sourceApply, /write_bridge_runtime_proofs_missing/);
   assert.match(sourceApply, /source_write_readiness_refused/);
   assert.match(sourceApply, /refused_untrusted_session/);
   assert.match(sourceApply, /fn dry_run_edit_review/);
@@ -2760,6 +2805,16 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /required_native_handler_count: requiredHandlers\.length/);
   assert.match(surfaceScript, /required_handler_capability_count: requiredCapabilities\.length/);
   assert.match(surfaceScript, /required_native_handler_capability_count: requiredCapabilities\.length/);
+  assert.match(surfaceScript, /required_review_receipt_field_count: 0/);
+  assert.match(surfaceScript, /required_runtime_proof_count: 0/);
+  assert.match(surfaceScript, /required_source_apply_review_receipt_fields: \[\]/);
+  assert.match(surfaceScript, /required_runtime_proofs: \[\]/);
+  assert.match(surfaceScript, /const requiredReviewReceiptFields = Array\.isArray\(bridge\.required_source_apply_review_receipt_fields\)/);
+  assert.match(surfaceScript, /const requiredRuntimeProofs = Array\.isArray\(bridge\.required_runtime_proofs\)/);
+  assert.match(surfaceScript, /required_review_receipt_field_count: requiredReviewReceiptFields\.length/);
+  assert.match(surfaceScript, /required_runtime_proof_count: requiredRuntimeProofs\.length/);
+  assert.match(surfaceScript, /required_source_apply_review_receipt_fields: requiredReviewReceiptFields/);
+  assert.match(surfaceScript, /required_runtime_proofs: requiredRuntimeProofs/);
   assert.match(surfaceScript, /runtime_validation_required: bridge\.runtime_validation_required !== false/);
   assert.match(surfaceScript, /function sourceWriteReadinessPacket\(applyGate, output\)/);
   assert.match(surfaceScript, /schema: "zed\.web_preview\.dx_style\.source_write_readiness\.v1"/);
@@ -2770,6 +2825,10 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /native_active_editor_source_revalidation_missing/);
   assert.match(surfaceScript, /editor_write_bridge_not_ready/);
   assert.match(surfaceScript, /mutation_capable_editor_write_bridge_missing/);
+  assert.match(surfaceScript, /write_bridge_missing_replacement_payload_diagnostics_receipt_field/);
+  assert.match(surfaceScript, /write_bridge_runtime_proofs_missing/);
+  assert.match(surfaceScript, /required_review_receipt_field_count: bridge\.required_review_receipt_field_count/);
+  assert.match(surfaceScript, /required_runtime_proof_count: bridge\.required_runtime_proof_count/);
   assert.match(surfaceScript, /reverse_delta_replacement_policy_guard_present/);
   assert.match(surfaceScript, /reverse_delta_replacement_policy_diagnostics/);
   assert.match(surfaceScript, /native_writer_can_mutate_false/);
@@ -2888,6 +2947,8 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /renderGeneratorSafetyReview/);
   assert.match(surfaceScript, /Generator source safety/);
   assert.match(surfaceScript, /renderBridgeReview/);
+  assert.match(surfaceScript, /Required source-apply receipt fields/);
+  assert.match(surfaceScript, /Required runtime proofs/);
   assert.match(surfaceScript, /renderGroupContextReview/);
   assert.match(surfaceScript, /renderSourceApplyContractReview/);
   assert.match(surfaceScript, /renderCssDeclarationDryRunContractReview/);
@@ -3298,15 +3359,19 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /preflight_fixture_path/);
   assert.match(editorWriteBridge, /read_preflight_fixture/);
   assert.match(editorWriteBridge, /MAX_EDITOR_WRITE_BRIDGE_PREFLIGHT_BYTES/);
-  assert.match(editorWriteBridge, /PREFLIGHT_LIST_LIMIT/);
+  assert.match(editorWriteBridge, /PREFLIGHT_LIST_LIMIT: usize = 32/);
   assert.match(editorWriteBridge, /string_list/);
   assert.match(editorWriteBridge, /fallback_preflight/);
   assert.match(editorWriteBridge, /required_editor_guards/);
   assert.match(editorWriteBridge, /required_native_handlers/);
   assert.match(editorWriteBridge, /required_native_handler_capabilities/);
+  assert.match(editorWriteBridge, /required_source_apply_review_receipt_fields/);
+  assert.match(editorWriteBridge, /required_runtime_proofs/);
   assert.match(editorWriteBridge, /same-session native editor identity/);
   assert.match(editorWriteBridge, /cursor-scoped dry-run structured edit preview/);
+  assert.match(editorWriteBridge, /reverse_css_delta_replacement_payload_diagnostics/);
   assert.match(editorWriteBridge, /authorized runtime validation/);
+  assert.match(editorWriteBridge, /post-write source digest verification/);
   assert.match(editorWriteBridge, /zed\.web_preview\.dx_style_source_apply_receipt\.v1/);
   assert.deepEqual(
     rustStringVec(editorWriteBridge, "required_receipts"),
@@ -3323,6 +3388,14 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.deepEqual(
     rustStringVec(editorWriteBridge, "required_native_handler_capabilities"),
     expectedEditorWriteBridgeCapabilities,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridge, "required_source_apply_review_receipt_fields"),
+    expectedEditorWriteBridgeReviewReceiptFields,
+  );
+  assert.deepEqual(
+    rustStringVec(editorWriteBridge, "required_runtime_proofs"),
+    expectedEditorWriteBridgeRuntimeProofs,
   );
   assert.match(editorWriteBridge, /window\.__DX_STYLE_SOURCE_APPLY__/);
   assert.match(editorWriteBridge, /can_mutate_source/);

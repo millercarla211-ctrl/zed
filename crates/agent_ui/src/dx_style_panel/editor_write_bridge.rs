@@ -20,6 +20,8 @@ pub(super) struct StyleEditorWriteBridgeSnapshot {
     pub(super) required_editor_guards: Vec<String>,
     pub(super) required_native_handlers: Vec<String>,
     pub(super) required_native_handler_capabilities: Vec<String>,
+    pub(super) required_source_apply_review_receipt_fields: Vec<String>,
+    pub(super) required_runtime_proofs: Vec<String>,
     pub(super) runtime_validation_required: bool,
     pub(super) can_apply: bool,
 }
@@ -39,6 +41,8 @@ impl StyleEditorWriteBridgeSnapshot {
             "required_editor_guards": self.required_editor_guards,
             "required_native_handlers": self.required_native_handlers,
             "required_native_handler_capabilities": self.required_native_handler_capabilities,
+            "required_source_apply_review_receipt_fields": self.required_source_apply_review_receipt_fields,
+            "required_runtime_proofs": self.required_runtime_proofs,
             "runtime_validation_required": self.runtime_validation_required,
             "can_apply": self.can_apply,
         })
@@ -50,7 +54,7 @@ const GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_SCHEMA: &str =
 const GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_FIXTURE: &str =
     r"G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json";
 const MAX_EDITOR_WRITE_BRIDGE_PREFLIGHT_BYTES: u64 = 64 * 1024;
-const PREFLIGHT_LIST_LIMIT: usize = 16;
+const PREFLIGHT_LIST_LIMIT: usize = 32;
 
 pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnapshot {
     let preflight_path = PathBuf::from(GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_FIXTURE);
@@ -59,11 +63,13 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
     StyleEditorWriteBridgeSnapshot {
         state: preflight.state,
         summary: format!(
-            "{} receipt(s), {} guard(s), {} native handler(s), {} handler capability(s), runtime validation {}",
+            "{} receipt(s), {} guard(s), {} native handler(s), {} handler capability(s), {} review field(s), {} runtime proof(s), runtime validation {}",
             preflight.required_receipts.len(),
             preflight.required_editor_guards.len(),
             preflight.required_native_handlers.len(),
             preflight.required_native_handler_capabilities.len(),
+            preflight.required_source_apply_review_receipt_fields.len(),
+            preflight.required_runtime_proofs.len(),
             if preflight.runtime_validation_required {
                 "required"
             } else {
@@ -73,7 +79,8 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
         reason: concat!(
             "dx.style.grouped-class-editor-write-bridge-preflight is source-owned but not enabled. ",
             "Editor source writes require trusted source spans, same-session editor identity, ",
-            "cursor-scoped dry-run edit review, explicit user apply, and runtime validation before Apply can mutate files."
+            "cursor-scoped dry-run edit review, complete source-apply review receipt fields, ",
+            "explicit user apply, and runtime validation before Apply can mutate files."
         )
         .to_string(),
         preflight_schema: GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_SCHEMA.to_string(),
@@ -85,6 +92,9 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
         required_editor_guards: preflight.required_editor_guards,
         required_native_handlers: preflight.required_native_handlers,
         required_native_handler_capabilities: preflight.required_native_handler_capabilities,
+        required_source_apply_review_receipt_fields: preflight
+            .required_source_apply_review_receipt_fields,
+        required_runtime_proofs: preflight.required_runtime_proofs,
         runtime_validation_required: preflight.runtime_validation_required,
         can_apply: false,
     }
@@ -99,6 +109,8 @@ struct EditorWriteBridgePreflight {
     required_editor_guards: Vec<String>,
     required_native_handlers: Vec<String>,
     required_native_handler_capabilities: Vec<String>,
+    required_source_apply_review_receipt_fields: Vec<String>,
+    required_runtime_proofs: Vec<String>,
     runtime_validation_required: bool,
 }
 
@@ -133,6 +145,11 @@ fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {
             &value,
             "required_native_handler_capabilities",
         ),
+        required_source_apply_review_receipt_fields: string_list(
+            &value,
+            "required_source_apply_review_receipt_fields",
+        ),
+        required_runtime_proofs: string_list(&value, "required_runtime_proofs"),
         runtime_validation_required: value
             .get("runtime_validation_required")
             .and_then(Value::as_bool)
@@ -176,6 +193,26 @@ fn fallback_preflight() -> EditorWriteBridgePreflight {
         required_native_handler_capabilities: vec![
             "can_review_request".to_string(),
             "can_mutate_source".to_string(),
+        ],
+        required_source_apply_review_receipt_fields: vec![
+            "source_apply_session".to_string(),
+            "preview_output".to_string(),
+            "css_declaration_dry_run_diagnostics".to_string(),
+            "css_declaration_dry_run_preview_diagnostics".to_string(),
+            "reverse_css_delta_contract".to_string(),
+            "reverse_css_delta_preview".to_string(),
+            "reverse_css_delta_replacement_payload_diagnostics".to_string(),
+            "dry_run_edit_review".to_string(),
+            "source_write_readiness".to_string(),
+            "native_active_editor_source_revalidation".to_string(),
+            "native_handler".to_string(),
+            "apply_gate".to_string(),
+        ],
+        required_runtime_proofs: vec![
+            "authorized runtime validation".to_string(),
+            "successful WebView source-review round trip".to_string(),
+            "successful native writer dry-run replay".to_string(),
+            "post-write source digest verification".to_string(),
         ],
         runtime_validation_required: true,
     }
