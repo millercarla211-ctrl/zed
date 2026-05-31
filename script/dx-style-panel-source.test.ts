@@ -950,6 +950,16 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
       "group_context_raw_atomic_bytes_missing",
     ),
   );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_raw_atomic_bytes_mismatch",
+    ),
+  );
+  assert.ok(
+    groupWebPreviewContextFixture.diagnostic_codes.includes(
+      "group_context_grouping_savings_bytes_mismatch",
+    ),
+  );
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_SCHEMA/);
   assert.match(groupRegistryReceipt, /dx\.style\.grouped-class-registry-receipt/);
   assert.match(groupRegistryReceipt, /GROUPED_CLASS_REGISTRY_RECEIPT_FIXTURE_PATH/);
@@ -3577,6 +3587,12 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_raw_atomic_bytes_missing/);
   assert.match(surfaceScript, /group_context_grouped_reference_bytes_missing/);
   assert.match(surfaceScript, /group_context_grouping_savings_bytes_missing/);
+  assert.match(surfaceScript, /group_context_raw_atomic_bytes_mismatch/);
+  assert.match(surfaceScript, /group_context_grouped_reference_bytes_mismatch/);
+  assert.match(surfaceScript, /group_context_grouping_savings_bytes_mismatch/);
+  assert.match(surfaceScript, /groupContextRawAtomicBytes/);
+  assert.match(surfaceScript, /groupContextGroupedReferenceBytes/);
+  assert.match(surfaceScript, /groupContextGroupingSavingsBytes/);
   assert.match(surfaceScript, /group_context_recommended_representation_missing/);
   assert.match(surfaceScript, /group_raw_atomic_bytes/);
   assert.match(surfaceScript, /group_grouped_reference_bytes/);

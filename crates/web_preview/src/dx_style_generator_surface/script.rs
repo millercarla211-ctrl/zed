@@ -591,14 +591,32 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         && !Number.isInteger(group.raw_atomic_bytes)) {
         diagnostics.push("group_context_raw_atomic_bytes_missing");
       }
+      const expectedRawAtomicBytes = groupContextRawAtomicBytes(group);
+      if (Number.isInteger(group.raw_atomic_bytes)
+        && Number.isInteger(expectedRawAtomicBytes)
+        && group.raw_atomic_bytes !== expectedRawAtomicBytes) {
+        diagnostics.push("group_context_raw_atomic_bytes_mismatch");
+      }
       if (alias && Array.isArray(group.utilities) && group.utilities.length
         && !Number.isInteger(group.grouped_reference_bytes)) {
         diagnostics.push("group_context_grouped_reference_bytes_missing");
+      }
+      const expectedGroupedReferenceBytes = groupContextGroupedReferenceBytes(group);
+      if (Number.isInteger(group.grouped_reference_bytes)
+        && Number.isInteger(expectedGroupedReferenceBytes)
+        && group.grouped_reference_bytes !== expectedGroupedReferenceBytes) {
+        diagnostics.push("group_context_grouped_reference_bytes_mismatch");
       }
       if (alias && Number.isInteger(group.raw_atomic_bytes)
         && Number.isInteger(group.grouped_reference_bytes)
         && !Number.isInteger(group.grouping_savings_bytes)) {
         diagnostics.push("group_context_grouping_savings_bytes_missing");
+      }
+      const expectedGroupingSavingsBytes = groupContextGroupingSavingsBytes(group);
+      if (Number.isInteger(group.grouping_savings_bytes)
+        && Number.isInteger(expectedGroupingSavingsBytes)
+        && group.grouping_savings_bytes !== expectedGroupingSavingsBytes) {
+        diagnostics.push("group_context_grouping_savings_bytes_mismatch");
       }
       if (Array.isArray(group.utilities) && group.utilities.length
         && !group.recommended_representation) {
@@ -609,6 +627,28 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
         diagnostics.push("group_context_inline_expansion_missing");
       }
       return [...new Set(diagnostics)];
+    }
+
+    function groupContextRawAtomicBytes(group) {
+      const utilities = Array.isArray(group?.utilities) ? group.utilities : [];
+      if (!utilities.length || utilities.some((utility) => typeof utility !== "string")) {
+        return null;
+      }
+      return utilities.join(" ").length;
+    }
+
+    function groupContextGroupedReferenceBytes(group) {
+      return typeof group?.alias === "string" && group.alias.length
+        ? group.alias.length + 2
+        : null;
+    }
+
+    function groupContextGroupingSavingsBytes(group) {
+      const rawAtomicBytes = groupContextRawAtomicBytes(group);
+      const groupedReferenceBytes = groupContextGroupedReferenceBytes(group);
+      return Number.isInteger(rawAtomicBytes) && Number.isInteger(groupedReferenceBytes)
+        ? rawAtomicBytes - groupedReferenceBytes
+        : null;
     }
 
     function groupContextDiagnosticCode(diagnostic) {

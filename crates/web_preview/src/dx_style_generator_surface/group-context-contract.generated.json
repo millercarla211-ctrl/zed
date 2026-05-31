@@ -94,6 +94,9 @@
     "group_context_raw_atomic_bytes_missing",
     "group_context_grouped_reference_bytes_missing",
     "group_context_grouping_savings_bytes_missing",
+    "group_context_raw_atomic_bytes_mismatch",
+    "group_context_grouped_reference_bytes_mismatch",
+    "group_context_grouping_savings_bytes_mismatch",
     "group_context_recommended_representation_missing",
     "group_context_inline_expansion_missing"
   ],
