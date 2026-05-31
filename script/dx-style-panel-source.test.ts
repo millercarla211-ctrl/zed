@@ -880,6 +880,10 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(groupWebPreviewContext, /GROUPED_CLASS_WEB_PREVIEW_MAX_UTILITY_BYTES: usize = 256/);
   assert.match(
     groupWebPreviewContext,
+    /GROUPED_CLASS_WEB_PREVIEW_UTILITY_PREVIEW_MAX_CHARS: usize = 512/,
+  );
+  assert.match(
+    groupWebPreviewContext,
     /GROUPED_CLASS_WEB_PREVIEW_CANDIDATE_MIN_UTILITY_COUNT: usize = 4/,
   );
   assert.equal(
@@ -891,6 +895,7 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.equal(groupWebPreviewContextFixture.max_alias_bytes, 128);
   assert.equal(groupWebPreviewContextFixture.max_utility_count, 32);
   assert.equal(groupWebPreviewContextFixture.max_utility_bytes, 256);
+  assert.equal(groupWebPreviewContextFixture.utility_preview_max_chars, 512);
   assert.equal(groupWebPreviewContextFixture.candidate_min_utility_count, 4);
   assert.ok(groupWebPreviewContextFixture.supported_token_shapes.includes("alias()"));
   assert.ok(groupWebPreviewContextFixture.group_call_syntax_values.includes("inline_utilities"));
@@ -2853,6 +2858,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceGroupContextContract, /group_call_status_by_syntax/);
   assert.match(surfaceGroupContextContract, /max_alias_bytes/);
   assert.match(surfaceGroupContextContract, /max_utility_count/);
+  assert.match(surfaceGroupContextContract, /utility_preview_max_chars/);
   assert.match(surfaceGroupContextContract, /candidate_min_utility_count/);
   assert.match(surfaceReverseCssDeltaContract, /DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_SCHEMA/);
   assert.match(surfaceReverseCssDeltaContract, /DX_STYLE_REVERSE_CSS_DELTA_CONTRACT_PATH_ENV/);
@@ -3523,6 +3529,7 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_contract_source/);
   assert.match(surfaceScript, /group_context_max_alias_bytes/);
   assert.match(surfaceScript, /group_context_max_utility_count/);
+  assert.match(surfaceScript, /group_context_utility_preview_max_chars/);
   assert.match(surfaceScript, /group_context_candidate_min_utility_count/);
   assert.match(surfaceScript, /groupContextRequiredFlagFields/);
   assert.match(surfaceScript, /groupContextUtilityPreview/);

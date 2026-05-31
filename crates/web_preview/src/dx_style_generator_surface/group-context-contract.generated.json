@@ -69,6 +69,7 @@
   "max_alias_bytes": 128,
   "max_utility_count": 32,
   "max_utility_bytes": 256,
+  "utility_preview_max_chars": 512,
   "candidate_min_utility_count": 4,
   "requires_project_group_registry_for_alias_reference": true
 }

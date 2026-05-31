@@ -61,6 +61,7 @@ fn group_context_fixture_to_web_preview_json(fixture: Value, source_path: &str) 
         "max_alias_bytes": fixture.get("max_alias_bytes")?.as_u64()?,
         "max_utility_count": fixture.get("max_utility_count")?.as_u64()?,
         "max_utility_bytes": fixture.get("max_utility_bytes")?.as_u64()?,
+        "utility_preview_max_chars": fixture.get("utility_preview_max_chars")?.as_u64()?,
         "candidate_min_utility_count": fixture.get("candidate_min_utility_count")?.as_u64()?,
         "requires_project_group_registry_for_alias_reference": fixture
             .get("requires_project_group_registry_for_alias_reference")?
