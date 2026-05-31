@@ -519,6 +519,15 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       if (expectedStatuses.length && status && !expectedStatuses.includes(status)) {
         diagnostics.push(`group_context_status_mismatch:${syntax}:${status}`);
       }
+      if (status === "alias_reference" && group.requires_registry_receipt !== true) {
+        diagnostics.push("group_context_registry_requirement_missing");
+      }
+      if (status !== "alias_reference" && group.requires_registry_receipt === true) {
+        diagnostics.push("group_context_registry_requirement_stale");
+      }
+      if (status !== "alias_reference" && group.source_owned !== true) {
+        diagnostics.push("group_context_source_owned_missing");
+      }
       if ((syntax === "inline_utilities" || syntax === "source_declaration")
         && !Array.isArray(group.utilities)) {
         diagnostics.push("group_context_utilities_missing");
@@ -526,6 +535,10 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_CONSTANTS__
       if ((syntax === "inline_utilities" || syntax === "source_declaration")
         && Array.isArray(group.utilities) && !group.utilities.length) {
         diagnostics.push("group_context_utilities_empty");
+      }
+      if (Array.isArray(group.utilities) && group.utilities.length
+        && group.can_expand_inline !== true) {
+        diagnostics.push("group_context_inline_expansion_missing");
       }
       return [...new Set(diagnostics)];
     }
@@ -2436,6 +2449,9 @@ __DX_STYLE_CSS_DECLARATION_DRY_RUN_REVIEW__
         groupContext?.status ? `group_context: ${groupContext.status}` : null,
         groupContext?.alias ? `group_alias: ${groupContext.alias}` : null,
         groupContext?.syntax ? `group_syntax: ${groupContext.syntax}` : null,
+        groupContext?.requires_registry_receipt !== undefined ? `group_requires_registry_receipt: ${groupContext.requires_registry_receipt}` : null,
+        groupContext?.source_owned !== undefined ? `group_source_owned: ${groupContext.source_owned}` : null,
+        groupContext?.can_expand_inline !== undefined ? `group_can_expand_inline: ${groupContext.can_expand_inline}` : null,
         groupContext?.expansion_status ? `group_expansion_status: ${groupContext.expansion_status}` : null,
         groupContext?.registry_receipt ? `group_registry_receipt: ${groupContext.registry_receipt}` : null,
         groupContext?.reverse_css_map_receipt ? `reverse_css_map_receipt: ${groupContext.reverse_css_map_receipt}` : null,

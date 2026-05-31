@@ -3523,6 +3523,11 @@ test("Web Preview owns the DX Style generator surface action", () => {
   assert.match(surfaceScript, /group_context_status_rules/);
   assert.match(surfaceScript, /group_context_vocabulary_diagnostics/);
   assert.match(surfaceScript, /group_context_status_mismatch/);
+  assert.match(surfaceScript, /group_context_registry_requirement_missing/);
+  assert.match(surfaceScript, /group_context_source_owned_missing/);
+  assert.match(surfaceScript, /group_context_inline_expansion_missing/);
+  assert.match(surfaceScript, /group_requires_registry_receipt/);
+  assert.match(surfaceScript, /group_can_expand_inline/);
   assert.match(surfaceScript, /reverse_css_delta_contract_schema/);
   assert.match(surfaceScript, /reverse_css_delta_contract_source/);
   assert.match(surfaceScript, /reverse_css_delta_supported_properties/);
@@ -3801,6 +3806,11 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(groupContext, /source_group_declaration/);
   assert.match(groupContext, /source_declaration/);
   assert.match(groupContext, /inline_utilities/);
+  assert.match(groupContext, /"requires_registry_receipt"/);
+  assert.match(groupContext, /"source_owned"/);
+  assert.match(groupContext, /"can_expand_inline"/);
+  assert.match(groupContext, /self\.status == "alias_reference"/);
+  assert.match(groupContext, /!self\.utilities\.is_empty\(\)/);
   assert.doesNotMatch(groupContext, /alias_with_atomic_utilities/);
   assert.match(groupContext, /looks_like_atomic_utility/);
   assert.match(groupContext, /utility\.contains\('-'\)/);

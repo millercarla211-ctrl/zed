@@ -9,6 +9,7 @@ const GROUP_CONTEXT_MAX_ALIAS_BYTES: usize = 128;
 const GROUP_CONTEXT_MAX_UTILITY_COUNT: usize = 32;
 const GROUP_CONTEXT_MAX_UTILITY_BYTES: usize = 256;
 const GROUP_CONTEXT_CANDIDATE_MIN_UTILITY_COUNT: usize = 4;
+const ATOMIC_KEYWORDS: [&str; 6] = ["flex", "grid", "block", "inline", "hidden", "contents"];
 
 #[derive(Clone)]
 pub(super) struct ActiveGroupContext {
@@ -85,6 +86,9 @@ impl ActiveGroupContext {
             "expansion_status": self.expansion_status,
             "candidate_token_count": self.candidate_token_count,
             "source_state": self.source_state,
+            "requires_registry_receipt": self.status == "alias_reference" && self.registry_receipt.is_none(),
+            "source_owned": self.syntax != "not_grouped" && (self.status != "alias_reference" || self.registry_receipt.is_some()),
+            "can_expand_inline": !self.utilities.is_empty(),
             "registry_receipt": self.registry_receipt,
             "reverse_css_map_receipt": self.reverse_css_map_receipt,
             "reverse_css_map_status": self.reverse_css_map_status,
@@ -177,7 +181,9 @@ fn parse_group_call(token: &str) -> Option<(&str, &str, bool)> {
         .unwrap_or(body_end[..open].trim());
     if alias.is_empty()
         || alias.len() > GROUP_CONTEXT_MAX_ALIAS_BYTES
-        || !alias.bytes().all(is_alias_byte)
+        || !alias
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
         || !alias.as_bytes()[0].is_ascii_alphabetic()
     {
         return None;
@@ -193,16 +199,9 @@ fn bounded_utilities<'a>(utilities: impl Iterator<Item = &'a str>) -> Vec<String
         .collect()
 }
 
-fn is_alias_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')
-}
-
 fn looks_like_atomic_utility(utility: &str) -> bool {
     utility.contains('-')
         || utility.contains(':')
         || utility.contains('[')
-        || matches!(
-            utility,
-            "flex" | "grid" | "block" | "inline" | "hidden" | "contents"
-        )
+        || ATOMIC_KEYWORDS.contains(&utility)
 }
