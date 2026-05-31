@@ -15,6 +15,8 @@ pub(super) struct StyleEditorWriteBridgeSnapshot {
     pub(super) preflight_schema_version: u64,
     pub(super) preflight_scope: String,
     pub(super) preflight_fixture_path: String,
+    pub(super) preflight_source: String,
+    pub(super) preflight_source_detail: String,
     pub(super) can_mutate_source: bool,
     pub(super) required_receipts: Vec<String>,
     pub(super) required_editor_guards: Vec<String>,
@@ -40,6 +42,8 @@ impl StyleEditorWriteBridgeSnapshot {
             "preflight_schema_version": self.preflight_schema_version,
             "preflight_scope": self.preflight_scope,
             "preflight_fixture_path": self.preflight_fixture_path,
+            "preflight_source": self.preflight_source,
+            "preflight_source_detail": self.preflight_source_detail,
             "can_mutate_source": self.can_mutate_source,
             "required_receipts": self.required_receipts,
             "required_editor_guards": self.required_editor_guards,
@@ -61,6 +65,8 @@ const GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_SCHEMA: &str =
     "dx.style.grouped-class-editor-write-bridge-preflight";
 const GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_FIXTURE: &str =
     r"G:\Dx\style\fixtures\grouped-class-editor-write-bridge-preflight.json";
+const GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_PATH: &str =
+    "crates/agent_ui/src/dx_style_panel/editor-write-bridge-preflight.generated.json";
 const GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_JSON: &str =
     include_str!("editor-write-bridge-preflight.generated.json");
 const MAX_EDITOR_WRITE_BRIDGE_PREFLIGHT_BYTES: u64 = 64 * 1024;
@@ -68,9 +74,34 @@ const PREFLIGHT_LIST_LIMIT: usize = 32;
 
 pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnapshot {
     let preflight_path = PathBuf::from(GROUPED_CLASS_EDITOR_WRITE_BRIDGE_PREFLIGHT_FIXTURE);
-    let preflight = read_preflight_fixture(&preflight_path)
-        .or_else(generated_preflight)
-        .unwrap_or_else(emergency_preflight);
+    let ResolvedEditorWriteBridgePreflight {
+        preflight,
+        source,
+        source_detail,
+    } = read_preflight_fixture(&preflight_path)
+        .map(|preflight| {
+            resolved_preflight(
+                preflight,
+                "live_style_fixture",
+                preflight_path.display().to_string(),
+            )
+        })
+        .or_else(|| {
+            generated_preflight().map(|preflight| {
+                resolved_preflight(
+                    preflight,
+                    "generated_zed_mirror",
+                    GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_PATH.to_string(),
+                )
+            })
+        })
+        .unwrap_or_else(|| {
+            resolved_preflight(
+                emergency_preflight(),
+                "emergency_fail_closed",
+                "embedded fail-closed preflight".to_string(),
+            )
+        });
 
     StyleEditorWriteBridgeSnapshot {
         state: preflight.state,
@@ -101,6 +132,8 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
         preflight_schema_version: preflight.schema_version,
         preflight_scope: preflight.scope,
         preflight_fixture_path: preflight_path.display().to_string(),
+        preflight_source: source,
+        preflight_source_detail: source_detail,
         can_mutate_source: preflight.can_mutate_source,
         required_receipts: preflight.required_receipts,
         required_editor_guards: preflight.required_editor_guards,
@@ -119,6 +152,12 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
     }
 }
 
+struct ResolvedEditorWriteBridgePreflight {
+    preflight: EditorWriteBridgePreflight,
+    source: String,
+    source_detail: String,
+}
+
 struct EditorWriteBridgePreflight {
     schema_version: u64,
     scope: String,
@@ -135,6 +174,18 @@ struct EditorWriteBridgePreflight {
     mutation_write_receipt_schema: String,
     required_mutation_write_receipt_fields: Vec<String>,
     runtime_validation_required: bool,
+}
+
+fn resolved_preflight(
+    preflight: EditorWriteBridgePreflight,
+    source: &str,
+    source_detail: String,
+) -> ResolvedEditorWriteBridgePreflight {
+    ResolvedEditorWriteBridgePreflight {
+        preflight,
+        source: source.to_string(),
+        source_detail,
+    }
 }
 
 fn read_preflight_fixture(path: &Path) -> Option<EditorWriteBridgePreflight> {

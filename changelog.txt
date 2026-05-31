@@ -1,3 +1,23 @@
+[2026-05-31] - DX Style Preflight Provenance
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-preflight-provenance-plan.md` records the source-only plan for exposing editor write-bridge preflight provenance.
+
+CHANGED:
+- `crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs` now records whether the preflight came from the live DX Style fixture, generated Zed mirror, or fail-closed emergency fallback, plus the resolved source detail.
+- `crates\agent_ui\src\dx_style_panel\panel_view.rs` now shows a compact Preflight metric beside the Bridge summary.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the visible preflight provenance boundary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs crates\agent_ui\src\dx_style_panel\panel_view.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the preflight provenance files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Generated Write-Bridge Preflight
 
 ADDED:

@@ -60,6 +60,8 @@ fn style_summary(
     cx: &App,
 ) -> impl IntoElement {
     let gate = &active_context.apply_gate;
+    let generator_count = format!("{} planned", snapshot.visual_generator_count);
+    let preflight_source = gate.editor_write_bridge.preflight_source.clone();
     let mismatch = gate
         .receipt_mismatch
         .as_ref()
@@ -82,10 +84,7 @@ fn style_summary(
                 "Web Preview host missing".to_string()
             },
         ))
-        .child(metric(
-            "Generators",
-            format!("{} planned", snapshot.visual_generator_count),
-        ))
+        .child(metric("Generators", generator_count))
         .child(metric("Context", active_context.status.clone()))
         .when_some(active_context.source_state.clone(), |this, state| {
             this.child(metric("Source", state))
@@ -127,6 +126,7 @@ fn style_summary(
         .child(metric("Apply", gate.state.clone()))
         .child(metric("Match", gate.receipt_match.clone()))
         .child(metric("Bridge", gate.editor_write_bridge.summary.clone()))
+        .child(metric("Preflight", preflight_source))
         .child(metric("Gate", gate.reason.clone()))
         .when_some(mismatch, |this, reason| {
             this.child(metric("Mismatch", reason))
