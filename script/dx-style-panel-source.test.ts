@@ -3865,10 +3865,14 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(editorWriteBridge, /summary: format!/);
   assert.match(editorWriteBridge, /preflight_fixture_path/);
   assert.match(editorWriteBridge, /preflight_source/);
+  assert.match(editorWriteBridge, /preflight_source_label/);
   assert.match(editorWriteBridge, /preflight_source_detail/);
   assert.match(editorWriteBridge, /live_style_fixture/);
+  assert.match(editorWriteBridge, /Live DX Style fixture/);
   assert.match(editorWriteBridge, /generated_zed_mirror/);
+  assert.match(editorWriteBridge, /Generated Zed mirror/);
   assert.match(editorWriteBridge, /emergency_fail_closed/);
+  assert.match(editorWriteBridge, /Emergency fail-closed/);
   assert.match(editorWriteBridge, /GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_PATH/);
   assert.match(editorWriteBridge, /read_preflight_fixture/);
   assert.match(editorWriteBridge, /GENERATED_EDITOR_WRITE_BRIDGE_PREFLIGHT_JSON/);
@@ -3971,7 +3975,7 @@ test("DX Style has a real right-dock GPUI shell", () => {
   assert.match(panelView, /Span bytes/);
   assert.match(panelView, /span_byte_range/);
   assert.match(panelView, /editor_write_bridge\.summary/);
-  assert.match(panelView, /editor_write_bridge\.preflight_source/);
+  assert.match(panelView, /editor_write_bridge\.preflight_source_label/);
   assert.match(panelView, /Mismatch/);
   assert.match(panelView, /receipt\.edit_count/);
   assert.match(panelView, /receipt\.edits\.first\(\)/);

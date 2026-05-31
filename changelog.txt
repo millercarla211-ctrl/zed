@@ -1,3 +1,20 @@
+[2026-05-31] - DX Style Preflight Label Polish
+
+CHANGED:
+- `crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs` now carries both the machine-readable preflight source enum and a user-facing preflight source label.
+- `crates\agent_ui\src\dx_style_panel\panel_view.rs` now shows the friendly label in the Preflight metric instead of raw enum text.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, and `todo.txt` now guard and document the label boundary.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\dx_style_panel\editor_write_bridge.rs crates\agent_ui\src\dx_style_panel\panel_view.rs`
+- `node G:\Dx\style\scripts\sync_zed_visual_generator_fixtures.mjs --check`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+- Targeted conflict-marker scan over the preflight label files returned no matches.
+
+NOTES:
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Preflight Provenance
 
 ADDED:

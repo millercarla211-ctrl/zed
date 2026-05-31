@@ -61,7 +61,7 @@ fn style_summary(
 ) -> impl IntoElement {
     let gate = &active_context.apply_gate;
     let generator_count = format!("{} planned", snapshot.visual_generator_count);
-    let preflight_source = gate.editor_write_bridge.preflight_source.clone();
+    let preflight_source = gate.editor_write_bridge.preflight_source_label.clone();
     let mismatch = gate
         .receipt_mismatch
         .as_ref()

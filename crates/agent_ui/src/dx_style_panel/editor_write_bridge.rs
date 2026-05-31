@@ -16,6 +16,7 @@ pub(super) struct StyleEditorWriteBridgeSnapshot {
     pub(super) preflight_scope: String,
     pub(super) preflight_fixture_path: String,
     pub(super) preflight_source: String,
+    pub(super) preflight_source_label: String,
     pub(super) preflight_source_detail: String,
     pub(super) can_mutate_source: bool,
     pub(super) required_receipts: Vec<String>,
@@ -43,6 +44,7 @@ impl StyleEditorWriteBridgeSnapshot {
             "preflight_scope": self.preflight_scope,
             "preflight_fixture_path": self.preflight_fixture_path,
             "preflight_source": self.preflight_source,
+            "preflight_source_label": self.preflight_source_label,
             "preflight_source_detail": self.preflight_source_detail,
             "can_mutate_source": self.can_mutate_source,
             "required_receipts": self.required_receipts,
@@ -133,6 +135,7 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
         preflight_scope: preflight.scope,
         preflight_fixture_path: preflight_path.display().to_string(),
         preflight_source: source,
+        preflight_source_label: source_label,
         preflight_source_detail: source_detail,
         can_mutate_source: preflight.can_mutate_source,
         required_receipts: preflight.required_receipts,
@@ -155,6 +158,7 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
 struct ResolvedEditorWriteBridgePreflight {
     preflight: EditorWriteBridgePreflight,
     source: String,
+    source_label: String,
     source_detail: String,
 }
 
@@ -184,7 +188,17 @@ fn resolved_preflight(
     ResolvedEditorWriteBridgePreflight {
         preflight,
         source: source.to_string(),
+        source_label: preflight_source_label(source).to_string(),
         source_detail,
+    }
+}
+
+fn preflight_source_label(source: &str) -> &'static str {
+    match source {
+        "live_style_fixture" => "Live DX Style fixture",
+        "generated_zed_mirror" => "Generated Zed mirror",
+        "emergency_fail_closed" => "Emergency fail-closed",
+        _ => "Unknown preflight source",
     }
 }
 
