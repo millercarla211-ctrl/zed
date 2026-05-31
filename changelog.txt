@@ -1,3 +1,21 @@
+[2026-05-31] - DX Style Source Grouping Efficiency
+
+ADDED:
+- `docs/superpowers/plans/2026-05-31-dx-style-source-grouping-efficiency-plan.md` records the source-only plan for moving grouped-vs-atomic size estimation into DX Style's own read model.
+
+CHANGED:
+- `G:\Dx\style\src\core\engine\grouped_class_read_model.rs` now defines `GroupedClassGroupingEfficiency`, `GroupedClassRecommendedRepresentation`, and `grouped_class_grouping_efficiency`.
+- `script\dx-style-panel-source.test.ts`, `DX.md`, `todo.txt`, and `changelog.txt` now guard and document the source-owned DX Style grouping efficiency read model.
+
+PASSED:
+- `rustfmt --edition 2024 --check G:\Dx\style\src\core\engine\grouped_class_read_model.rs`
+- `node --test script\dx-style-panel-source.test.ts script\dx-handoff-source-guard-registry.test.ts script\dx-launch-workspace-source.test.ts`
+- `git diff --check`
+
+NOTES:
+- `G:\Dx\style` is not a git repository in this workspace, so its source change is changed on disk and guarded through the Zed commit.
+- Source mutation remains disabled. No `just run`, Cargo command, build, server, browser automation, live WebView validation, live Zed launch, or mutation proof was run.
+
 [2026-05-31] - DX Style Grouping Efficiency Context
 
 ADDED:

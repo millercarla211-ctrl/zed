@@ -528,6 +528,11 @@ test("DX Style grouped-class read model is source-owned and editor-facing", () =
   assert.match(readModel, /GroupedClassDryRunPatchPreview/);
   assert.match(readModel, /cursor_token_context: true/);
   assert.match(readModel, /grouping_efficiency_estimates: true/);
+  assert.match(readModel, /GroupedClassGroupingEfficiency/);
+  assert.match(readModel, /GroupedClassRecommendedRepresentation/);
+  assert.match(readModel, /grouped_class_grouping_efficiency/);
+  assert.match(readModel, /raw_atomic_bytes/);
+  assert.match(readModel, /GroupCandidateNeedsAlias/);
   assert.match(readModel, /broad_tsx_ast_rewrites: false/);
   assert.match(cursorContext, /GROUPED_CLASS_CURSOR_CONTEXT_SCHEMA/);
   assert.match(cursorContext, /grouped_class_cursor_context/);
