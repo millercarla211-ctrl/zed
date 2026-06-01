@@ -13,6 +13,9 @@ enum ModelIcon {
 pub struct ModelSelectorHeader {
     title: SharedString,
     has_border: bool,
+    count: Option<usize>,
+    expanded: Option<bool>,
+    on_toggle: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
 }
 
 impl ModelSelectorHeader {
@@ -20,12 +23,51 @@ impl ModelSelectorHeader {
         Self {
             title: title.into(),
             has_border,
+            count: None,
+            expanded: None,
+            on_toggle: None,
         }
+    }
+
+    pub fn count(mut self, count: usize) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    pub fn expanded(mut self, expanded: bool) -> Self {
+        self.expanded = Some(expanded);
+        self
+    }
+
+    pub fn on_toggle(
+        mut self,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_toggle = Some(Box::new(handler));
+        self
     }
 }
 
 impl RenderOnce for ModelSelectorHeader {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let title = self.title;
+        let count = self.count;
+        let on_toggle = self.on_toggle;
+        let toggle_icon = self.expanded.map(|expanded| {
+            if expanded {
+                IconName::ChevronDown
+            } else {
+                IconName::ChevronRight
+            }
+        });
+        let toggle_tooltip = self.expanded.map(|expanded| {
+            if expanded {
+                "Collapse provider models"
+            } else {
+                "Expand provider models"
+            }
+        });
+
         div()
             .px_2()
             .pb_1()
@@ -36,9 +78,36 @@ impl RenderOnce for ModelSelectorHeader {
                     .border_color(cx.theme().colors().border_variant)
             })
             .child(
-                Label::new(self.title)
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted),
+                h_flex()
+                    .w_full()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        div().flex_1().child(
+                            Label::new(title.clone())
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted),
+                        ),
+                    )
+                    .when_some(count, |this, count| {
+                        this.child(Chip::new(count.to_string()))
+                    })
+                    .when_some(toggle_icon, |this, icon| {
+                        let title_key = title.as_ref().to_string();
+                        this.child(
+                            IconButton::new(format!("model-provider-toggle-{title_key}"), icon)
+                                .icon_size(IconSize::XSmall)
+                                .style(ButtonStyle::Subtle)
+                                .when_some(toggle_tooltip, |this, tooltip| {
+                                    this.tooltip(Tooltip::text(tooltip))
+                                })
+                                .on_click(move |event, window, cx| {
+                                    if let Some(on_toggle) = on_toggle.as_ref() {
+                                        on_toggle(event, window, cx);
+                                    }
+                                }),
+                        )
+                    }),
             )
     }
 }

@@ -12600,6 +12600,29 @@ NOTES:
 - This keeps insertion behind explicit user actions and preserves drag-and-drop plus the existing recent/pinned Insert buttons.
 - No Cargo, build, or `just run` command was run for this source patch.
 
+[2026-06-02] - AI Panel Model Picker Provider Groups
+
+CHANGED:
+- `crates\agent_ui\src\language_model_selector.rs` now represents provider sections as provider headers with model counts instead of plain separators.
+- `crates\agent_ui\src\language_model_selector.rs` now tracks collapsed provider groups in the AI panel model picker and rebuilds entries when a provider header is toggled.
+- `crates\agent_ui\src\language_model_selector.rs` keeps provider groups expanded while search text is present so matching models remain visible.
+- `crates\agent_ui\src\ui\model_selector_components.rs` now lets model selector headers render a count badge and right-side expand/collapse control while preserving the plain Favorite/Recommended header behavior.
+- `crates\agent_ui\src\language_model_selector.rs` adds a focused source-level test for provider header counts and collapsed entries.
+
+FIXED:
+- `crates\web_preview\src\web_preview_view.rs` imports the animation extension trait required by the Web Preview loading spinner.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\language_model_selector.rs crates\agent_ui\src\ui\model_selector_components.rs`
+- Focused source scan for collapsed provider group state, provider headers, model-count badges, expand/collapse controls, and the provider-collapse test.
+- `git diff --check -- crates/agent_ui/src/language_model_selector.rs crates/agent_ui/src/ui/model_selector_components.rs`
+- Focused conflict-marker scan across the changed model-picker files.
+- Authorized `just run` with `CARGO_BUILD_JOBS=6` completed the Zed and CLI dev builds and launched `G:\Zed\target\debug\zed.exe`.
+
+NOTES:
+- This is scoped to the AI panel language model picker path. Settings-provider configuration surfaces were not changed.
+- The first authorized `just run` attempts exposed the provider-toggle `ElementId` type issue and the missing Web Preview spinner trait import; both were fixed before the successful run.
+
 [2026-06-01] - Onboarding Web Preview Fullscreen Visibility
 
 FIXED:

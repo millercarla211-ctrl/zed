@@ -29,8 +29,8 @@ use std::{
 #[cfg(target_os = "windows")]
 use std::{io::Cursor, num::NonZeroIsize};
 use ui::{
-    Color, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize, Label, LabelSize,
-    PopoverMenu, Tooltip, prelude::*,
+    Color, CommonAnimationExt, ContextMenu, ContextMenuEntry, IconButton, IconName, IconSize,
+    Label, LabelSize, PopoverMenu, Tooltip, prelude::*,
 };
 use uuid::Uuid;
 use workspace::item::{
