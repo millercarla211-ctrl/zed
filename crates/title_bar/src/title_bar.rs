@@ -923,7 +923,7 @@ impl TitleBar {
     fn screen_kind_icon(kind: WorkspaceScreenKind) -> IconName {
         match kind {
             WorkspaceScreenKind::Editor => IconName::Code,
-            WorkspaceScreenKind::Browser => IconName::ToolWeb,
+            WorkspaceScreenKind::Browser => IconName::Public,
             WorkspaceScreenKind::Terminal => IconName::Terminal,
             WorkspaceScreenKind::LiquidGlass => IconName::Sparkle,
             WorkspaceScreenKind::Other => IconName::Circle,
@@ -956,14 +956,14 @@ impl TitleBar {
             ),
             self.render_title_right_panel_button(
                 "titlebar-shadcn-ui-panel",
-                IconName::Box,
+                IconName::Blocks,
                 "UI",
                 shadcn_ui_panel::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("UI"),
             ),
             self.render_title_right_panel_button(
                 "titlebar-dx-style-panel",
-                IconName::Sparkle,
+                IconName::Sliders,
                 "Style",
                 zed_actions::dx_style::TogglePanel.boxed_clone(),
                 active_right_panel == Some("Style"),

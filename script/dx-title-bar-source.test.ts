@@ -4,6 +4,8 @@ import test from "node:test";
 
 const sourcePath = "crates/title_bar/src/application_menu.rs";
 const source = readFileSync(sourcePath, "utf8").replace(/\r\n/g, "\n");
+const titleBarPath = "crates/title_bar/src/title_bar.rs";
+const titleBarSource = readFileSync(titleBarPath, "utf8").replace(/\r\n/g, "\n");
 
 test("application menu activation checks stale entry indexes before handle use", () => {
   const activation = functionBody("navigate_menus_in_direction");
@@ -35,9 +37,34 @@ test("application menu activation checks stale entry indexes before handle use",
   );
 });
 
+test("title bar screen and right-tool buttons use domain-specific icons", () => {
+  assert.match(
+    titleBarSource,
+    /WorkspaceScreenKind::Browser => IconName::Public/,
+    "Browser screen dock button should use a globe/public icon",
+  );
+  assert.match(
+    titleBarSource,
+    /"titlebar-shadcn-ui-panel",\s*IconName::Blocks,\s*"UI"/s,
+    "UI panel titlebar button should use the component blocks icon",
+  );
+  assert.match(
+    titleBarSource,
+    /"titlebar-dx-style-panel",\s*IconName::Sliders,\s*"Style"/s,
+    "Style panel titlebar button should use the controls/sliders icon",
+  );
+  assert.doesNotMatch(
+    titleBarSource,
+    /WorkspaceScreenKind::Browser => IconName::ToolWeb/,
+    "Browser screen dock button should not use the generic tool-web icon",
+  );
+});
+
 test("title-bar source guard stays scoped to worker-owned files", () => {
   assert.equal(sourcePath, "crates/title_bar/src/application_menu.rs");
+  assert.equal(titleBarPath, "crates/title_bar/src/title_bar.rs");
   assert.doesNotMatch(sourcePath, /test/i);
+  assert.doesNotMatch(titleBarPath, /test/i);
 });
 
 function functionBody(name: string): string {

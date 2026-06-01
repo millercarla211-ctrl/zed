@@ -1,4 +1,5 @@
 COMPLETED:
+- Title bar Browser, UI, and Style buttons now use clearer domain-specific icons: Public for Browser, Blocks for UI, and Sliders for Style.
 - Empty New Window and Close Project workspaces now skip the throwaway untitled editor when AI is enabled, leaving the center itemless so the real AgentPanel can become the fullscreen empty-workspace surface after loading.
 - AI panel ACP model picker now renders grouped model sections as collapsible provider headers with count badges, while search results force groups open so matches remain visible.
 - Project panel selections now show a selected-count action strip above the file tree, with real Copy, Cut for move, Duplicate, Trash, and Clear actions wired to existing project-panel operations.

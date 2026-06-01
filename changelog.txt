@@ -1,3 +1,19 @@
+[2026-06-02] - Title Bar Tool Icon Polish
+
+CHANGED:
+- `crates\title_bar\src\title_bar.rs` now uses `IconName::Public` for the Browser screen dock button.
+- The top-right UI and Style tool buttons now use `IconName::Blocks` and `IconName::Sliders` for clearer component and style-generator affordances.
+- `script\dx-title-bar-source.test.ts` now guards the titlebar icon choices.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\title_bar\src\title_bar.rs`
+- `C:\Users\Computer\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --test script\dx-title-bar-source.test.ts`
+- `git diff --check -- crates/title_bar/src/title_bar.rs script/dx-title-bar-source.test.ts`
+- Targeted source scan for titlebar icon wiring and conflict markers.
+
+NOTES:
+- No `just run`, Cargo, build, server, browser automation, or runtime UI screenshot validation was run for this source-only checkpoint.
+
 [2026-06-02] - Empty Workspace Agent Start Surface
 
 CHANGED:
