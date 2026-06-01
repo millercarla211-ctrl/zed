@@ -225,24 +225,7 @@ pub fn init(cx: &mut App) {
         with_active_or_new_workspace(cx, |workspace, window, cx| {
             workspace
                 .with_local_workspace(window, cx, |workspace, window, cx| {
-                    let existing = workspace
-                        .active_pane()
-                        .read(cx)
-                        .items()
-                        .find_map(|item| item.downcast::<Onboarding>());
-
-                    if let Some(existing) = existing {
-                        workspace.activate_item(&existing, true, true, window, cx);
-                    } else {
-                        let settings_page = Onboarding::new(workspace, cx);
-                        workspace.add_item_to_active_pane(
-                            Box::new(settings_page),
-                            None,
-                            true,
-                            window,
-                            cx,
-                        )
-                    }
+                    open_onboarding_page(workspace, window, cx);
                 })
                 .detach();
         });
@@ -333,22 +316,7 @@ pub fn show_onboarding_view(app_state: Arc<AppState>, cx: &mut App) -> Task<anyh
         cx,
         |workspace, window, cx| {
             {
-                for dock_position in [
-                    DockPosition::Left,
-                    DockPosition::Right,
-                    DockPosition::Bottom,
-                ] {
-                    if workspace.is_dock_at_position_open(dock_position, cx) {
-                        workspace.toggle_dock(dock_position, window, cx);
-                    }
-                }
-
-                let onboarding_page = Onboarding::new(workspace, cx);
-                workspace.add_item_to_center(Box::new(onboarding_page.clone()), window, cx);
-
-                window.focus(&onboarding_page.focus_handle(cx), cx);
-
-                cx.notify();
+                open_onboarding_page(workspace, window, cx);
             };
             let kvp = KeyValueStore::global(cx);
             db::write_and_log(cx, move || async move {
@@ -357,6 +325,40 @@ pub fn show_onboarding_view(app_state: Arc<AppState>, cx: &mut App) -> Task<anyh
             });
         },
     )
+}
+
+fn open_onboarding_page(
+    workspace: &mut Workspace,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    for dock_position in [
+        DockPosition::Left,
+        DockPosition::Right,
+        DockPosition::Bottom,
+    ] {
+        if workspace.is_dock_at_position_open(dock_position, cx) {
+            workspace.toggle_dock(dock_position, window, cx);
+        }
+    }
+
+    let existing = workspace
+        .active_pane()
+        .read(cx)
+        .items()
+        .find_map(|item| item.downcast::<Onboarding>());
+
+    if let Some(existing) = existing {
+        workspace.activate_item(&existing, true, true, window, cx);
+        window.focus(&existing.focus_handle(cx), cx);
+        cx.notify();
+        return;
+    }
+
+    let onboarding_page = Onboarding::new(workspace, cx);
+    workspace.add_item_to_center(Box::new(onboarding_page.clone()), window, cx);
+    window.focus(&onboarding_page.focus_handle(cx), cx);
+    cx.notify();
 }
 
 fn provider_status_icon(state: &str) -> IconName {

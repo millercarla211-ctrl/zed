@@ -1,3 +1,18 @@
+[2026-06-02] - Onboarding Web Preview Entry Consistency
+
+CHANGED:
+- `crates\onboarding\src\onboarding.rs` now shares the same onboarding open helper between first-run onboarding and the manual `OpenOnboarding` action.
+- Manual onboarding now closes open left, right, and bottom docks before showing the Web Preview onboarding surface.
+- Manual onboarding now opens or focuses onboarding in the centered workspace item path instead of adding it to the active pane.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\onboarding\src\onboarding.rs`
+- `git diff --check -- crates/onboarding/src/onboarding.rs`
+- Targeted conflict-marker scan over the touched file.
+
+NOTES:
+- No `just run`, Cargo, build, server, or browser automation was run for this small source-only checkpoint.
+
 [2026-06-02] - Sidebar Automation Action Consistency
 
 FIXED:
