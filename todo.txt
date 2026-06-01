@@ -1,4 +1,5 @@
 COMPLETED:
+- Project panel selections now show a selected-count action strip above the file tree, with real Copy, Cut for move, Duplicate, Trash, and Clear actions wired to existing project-panel operations.
 - Icons, Fonts, Media, UI, and Style right panels now share the same 360px default width for consistent top-right tool panel sizing.
 - Manual Open Onboarding now uses the same dock-closed centered Web Preview onboarding path as first-run onboarding, including focusing an existing onboarding item instead of opening it in the active pane.
 - Expanded and collapsed sidebar Automations buttons now call the same real DX automation draft handler instead of mixing Automations with project-debug tasks.

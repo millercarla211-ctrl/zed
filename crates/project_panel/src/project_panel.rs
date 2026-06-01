@@ -3934,6 +3934,116 @@ impl ProjectPanel {
         cap_project_panel_entry_set(marked_entries, "marked-selection").unwrap_or_default()
     }
 
+    fn selected_entries_count(&self, cx: &App) -> usize {
+        self.disjoint_effective_entries(cx).len()
+    }
+
+    fn selected_entries_count_label(selected_count: usize) -> String {
+        if selected_count == 1 {
+            "1 selected".to_string()
+        } else {
+            format!("{selected_count} selected")
+        }
+    }
+
+    fn render_selected_entries_toolbar(
+        selected_count: usize,
+        is_read_only: bool,
+        is_remote: bool,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        h_flex()
+            .id("project-panel-selection-toolbar")
+            .w_full()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .border_b_1()
+            .border_color(cx.theme().colors().border.opacity(0.6))
+            .bg(cx.theme().colors().panel_background)
+            .child(
+                Label::new(Self::selected_entries_count_label(selected_count))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            )
+            .child(
+                h_flex()
+                    .items_center()
+                    .gap_0p5()
+                    .child(
+                        IconButton::new("project-panel-copy-selection", IconName::Copy)
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Copy selected"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.focus_handle(cx).focus(window, cx);
+                                this.copy(&Copy {}, window, cx);
+                            })),
+                    )
+                    .when(!is_read_only, |this| {
+                        this.child(
+                            IconButton::new("project-panel-cut-selection", IconName::Scissors)
+                                .shape(IconButtonShape::Square)
+                                .style(ButtonStyle::Subtle)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text("Cut selected for move"))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.focus_handle(cx).focus(window, cx);
+                                    this.cut(&Cut {}, window, cx);
+                                })),
+                        )
+                    })
+                    .when(!is_read_only, |this| {
+                        this.child(
+                            IconButton::new(
+                                "project-panel-duplicate-selection",
+                                IconName::BookCopy,
+                            )
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Duplicate selected"))
+                            .on_click(cx.listener(
+                                |this, _, window, cx| {
+                                    this.focus_handle(cx).focus(window, cx);
+                                    this.duplicate(&Duplicate {}, window, cx);
+                                },
+                            )),
+                        )
+                    })
+                    .when(!is_read_only && !is_remote, |this| {
+                        this.child(
+                            IconButton::new("project-panel-trash-selection", IconName::Trash)
+                                .shape(IconButtonShape::Square)
+                                .style(ButtonStyle::Subtle)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text("Trash selected"))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.focus_handle(cx).focus(window, cx);
+                                    this.trash(&Trash { skip_prompt: false }, window, cx);
+                                })),
+                        )
+                    })
+                    .child(
+                        IconButton::new("project-panel-clear-selection", IconName::Close)
+                            .shape(IconButtonShape::Square)
+                            .style(ButtonStyle::Subtle)
+                            .icon_size(IconSize::Small)
+                            .tooltip(Tooltip::text("Clear selection"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.selection = None;
+                                this.marked_entries.clear();
+                                this.focus_handle(cx).focus(window, cx);
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .into_any_element()
+    }
+
     /// Finds the currently selected subentry for a given leaf entry id. If a given entry
     /// has no ancestors, the project entry ID that's passed in is returned as-is.
     fn resolve_entry(&self, id: ProjectEntryId) -> ProjectEntryId {
@@ -7011,6 +7121,16 @@ fn format_file_size(bytes: u64) -> String {
 impl Render for ProjectPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_worktree = !self.state.visible_entries.is_empty();
+        let selected_entry_count = self.selected_entries_count(cx);
+        let (is_read_only, is_remote) = {
+            let project = self.project.read(cx);
+            (project.is_read_only(cx), project.is_remote())
+        };
+        let selected_entries_toolbar = (selected_entry_count > 0
+            && self.state.edit_state.is_none())
+        .then(|| {
+            Self::render_selected_entries_toolbar(selected_entry_count, is_read_only, is_remote, cx)
+        });
         let project = self.project.read(cx);
         let panel_settings = ProjectPanelSettings::get_global(cx);
         let indent_size = panel_settings.indent_size;
@@ -7186,6 +7306,9 @@ impl Render for ProjectPanel {
                 .track_focus(&self.focus_handle(cx))
                 .child(
                     v_flex()
+                        .when_some(selected_entries_toolbar, |this, toolbar| {
+                            this.child(toolbar)
+                        })
                         .child(
                             uniform_list("entries", item_count, {
                                 cx.processor(|this, range: Range<usize>, window, cx| {

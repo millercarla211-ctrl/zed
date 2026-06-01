@@ -1,3 +1,22 @@
+[2026-06-02] - Project Panel Selection Action Strip
+
+ADDED:
+- `crates\project_panel\src\project_panel.rs` now renders a selected-count action strip above the file tree whenever effective non-root entries are selected.
+- The strip exposes real Copy, Cut for move, Duplicate, local Trash, and Clear Selection controls wired to existing ProjectPanel operations.
+
+NOTES:
+- Mutating controls are hidden for read-only projects, and Trash stays hidden for remote projects.
+- The strip is hidden while the inline filename editor is active.
+- This does not implement marquee drag-selection or async media metadata extraction yet.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\project_panel\src\project_panel.rs`
+- `git diff --check -- crates/project_panel/src/project_panel.rs`
+- Targeted source scan for selected strip IDs, action names, icon names, and conflict markers.
+
+NOTES:
+- No `just run`, Cargo, build, server, or browser automation was run for this source-only checkpoint.
+
 [2026-06-02] - Right Tool Panel Width Alignment
 
 CHANGED:
