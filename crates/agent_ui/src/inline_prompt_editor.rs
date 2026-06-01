@@ -17,7 +17,6 @@ use language_model::{LanguageModel, LanguageModelRegistry};
 use markdown::{HeadingLevelStyles, Markdown, MarkdownElement, MarkdownStyle};
 use parking_lot::Mutex;
 use project::Project;
-use prompt_store::PromptStore;
 use settings::Settings;
 use std::ops::Range;
 use std::rc::Rc;
@@ -1306,7 +1305,6 @@ impl PromptEditor<BufferCodegen> {
         session_id: Uuid,
         fs: Arc<dyn Fs>,
         thread_store: Entity<ThreadStore>,
-        prompt_store: Option<Entity<PromptStore>>,
         project: WeakEntity<Project>,
         workspace: WeakEntity<Workspace>,
         window: &mut Window,
@@ -1345,8 +1343,7 @@ impl PromptEditor<BufferCodegen> {
             editor
         });
 
-        let mention_set = cx
-            .new(|_cx| MentionSet::new(project, Some(thread_store.clone()), prompt_store.clone()));
+        let mention_set = cx.new(|_cx| MentionSet::new(project, Some(thread_store.clone())));
 
         let model_selector_menu_handle = PopoverMenuHandle::default();
 
@@ -1462,7 +1459,6 @@ impl PromptEditor<TerminalCodegen> {
         session_id: Uuid,
         fs: Arc<dyn Fs>,
         thread_store: Entity<ThreadStore>,
-        prompt_store: Option<Entity<PromptStore>>,
         project: WeakEntity<Project>,
         workspace: WeakEntity<Workspace>,
         window: &mut Window,
@@ -1496,8 +1492,7 @@ impl PromptEditor<TerminalCodegen> {
             editor
         });
 
-        let mention_set = cx
-            .new(|_cx| MentionSet::new(project, Some(thread_store.clone()), prompt_store.clone()));
+        let mention_set = cx.new(|_cx| MentionSet::new(project, Some(thread_store.clone())));
 
         let model_selector_menu_handle = PopoverMenuHandle::default();
 
@@ -1749,7 +1744,6 @@ mod tests {
                     cx.background_executor(),
                     PathStyle::local(),
                 )
-                .unwrap()
                 .subscribe(cx)
             })
         });
@@ -1774,7 +1768,6 @@ mod tests {
                     session_id,
                     fs,
                     thread_store,
-                    None,
                     project,
                     workspace.downgrade(),
                     window,

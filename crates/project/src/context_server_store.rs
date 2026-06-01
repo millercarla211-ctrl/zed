@@ -419,7 +419,7 @@ impl ContextServerConfiguration {
                 remote,
             } => {
                 let Some(descriptor) =
-                    cx.update(|cx| registry.read(cx).context_server_descriptor(&id.0))?
+                    cx.update(|cx| registry.read(cx).context_server_descriptor(&id.0))
                 else {
                     return Ok(None);
                 };

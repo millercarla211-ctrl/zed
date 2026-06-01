@@ -30,6 +30,11 @@ pub(super) fn launch_contract_status_rows(
         ));
     }
 
+    rows.push(metric_row(
+        "Contract Root",
+        snapshot.root.display().to_string(),
+    ));
+
     if let Some(error) = snapshot.last_error.as_ref() {
         rows.push(signal_row(
             "dx-launch-contract-warning".into(),

@@ -1,4 +1,3 @@
-use serde_json::Value;
 use std::{path::PathBuf, time::SystemTime};
 
 use crate::dx_deploy_check_roots::check_receipt_roots;

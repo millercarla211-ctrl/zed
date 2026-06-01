@@ -1688,11 +1688,10 @@ impl Render for PanelButtons {
                                             "Add to Right Dock Stack",
                                             None,
                                             move |window, cx| {
-                                                let did_change = dock_for_stack
-                                                    .update(cx, |dock, cx| {
+                                                let did_change =
+                                                    dock_for_stack.update(cx, |dock, cx| {
                                                         dock.stack_panel(panel_id, window, cx)
-                                                    })
-                                                    .unwrap_or(false);
+                                                    });
                                                 if did_change
                                                     && let Some(ws) = workspace_for_stack.upgrade()
                                                 {
@@ -1710,11 +1709,10 @@ impl Render for PanelButtons {
                                             "Remove from Right Dock Stack",
                                             None,
                                             move |window, cx| {
-                                                let did_change = dock_for_unstack
-                                                    .update(cx, |dock, cx| {
+                                                let did_change =
+                                                    dock_for_unstack.update(cx, |dock, cx| {
                                                         dock.unstack_panel(panel_id, window, cx)
-                                                    })
-                                                    .unwrap_or(false);
+                                                    });
                                                 if did_change
                                                     && let Some(ws) =
                                                         workspace_for_unstack.upgrade()
@@ -1733,11 +1731,10 @@ impl Render for PanelButtons {
                                             "Show Only This Panel",
                                             None,
                                             move |window, cx| {
-                                                let did_change = dock_for_single
-                                                    .update(cx, |dock, cx| {
+                                                let did_change =
+                                                    dock_for_single.update(cx, |dock, cx| {
                                                         dock.show_single_panel(panel_id, window, cx)
-                                                    })
-                                                    .unwrap_or(false);
+                                                    });
                                                 if did_change
                                                     && let Some(ws) = workspace_for_single.upgrade()
                                                 {

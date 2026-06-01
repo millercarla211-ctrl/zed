@@ -1,5 +1,6 @@
 use gpui::{
-    Action, App, Context, EventEmitter, FocusHandle, Focusable, IntoElement, Render, WeakEntity,
+    Action, App, AppContext, Context, EventEmitter, FocusHandle, Focusable, IntoElement, Render,
+    WeakEntity,
 };
 use gpui::{Window, px};
 use ui::IconName;
@@ -56,7 +57,7 @@ impl DxStylePanel {
         }
     }
 
-    fn active_style_context(&self, cx: &App) -> active_context::ActiveStyleContextSnapshot {
+    fn active_style_context(&self, cx: &mut App) -> active_context::ActiveStyleContextSnapshot {
         active_context::active_style_context(&self.workspace, cx)
     }
 }

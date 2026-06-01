@@ -17,7 +17,7 @@ pub(in super::super) fn runtime_proof_plan_row(
         plan.requires_visual_evidence,
         plan.requires_import,
     );
-    let mut stack = v_flex()
+    let stack = v_flex()
         .id("dx-runtime-proof-latest-plan")
         .gap_0p5()
         .min_w_0()

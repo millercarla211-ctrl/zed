@@ -5,7 +5,10 @@ use crate::dx_receipts::DxReceiptSnapshot;
 
 use super::super::{metric_row, muted_card, source_row};
 
-pub(super) fn receipt_source_state(snapshot: &DxReceiptSnapshot, cx: &mut App) -> AnyElement {
+pub(in crate::dx_launch_workspace) fn receipt_source_state(
+    snapshot: &DxReceiptSnapshot,
+    cx: &mut App,
+) -> AnyElement {
     if !snapshot.root_exists {
         return muted_card(
             format!("Receipts not found: {}", snapshot.root.display()),

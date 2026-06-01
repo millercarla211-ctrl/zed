@@ -414,9 +414,13 @@ impl AgentConfiguration {
             error.clone()
         } else {
             format!(
-                "{} task(s), {} automation(s), receipts {}, cli {}",
+                "{} task(s), {} automation(s), accounts {}/{} connected ({} need connection, {} need auth), receipts {}, cli {}",
                 snapshot.active_task_count,
                 snapshot.automation_count,
+                snapshot.connected_accounts_summary.connected,
+                snapshot.connected_accounts_summary.configured,
+                snapshot.connected_accounts_summary.needs_connection,
+                snapshot.connected_accounts_summary.needs_auth,
                 if snapshot.root_exists {
                     "ready"
                 } else {
@@ -1115,13 +1119,15 @@ impl AgentConfiguration {
         if inbox.present {
             stack = stack.child(
                 Label::new(format!(
-                    "Inbox: {}, {} latest, {} missing, {} malformed, {} stale, {} expired",
+                    "Inbox: {}, {} receipt(s), {} latest, {} missing, {} malformed, {} stale, {} expired; next: {}",
                     inbox.status,
+                    inbox.receipt_count,
                     inbox.latest_count,
                     inbox.missing_latest_count,
                     inbox.malformed_count,
                     inbox.stale_count,
-                    inbox.expired_count
+                    inbox.expired_count,
+                    inbox.next_action
                 ))
                 .size(LabelSize::Small)
                 .color(Color::Muted),
@@ -2865,20 +2871,18 @@ fn show_deferred_agent_configuration_status(
     let workspace = workspace.clone();
     cx.defer(move |cx| {
         if let Some(workspace) = workspace.upgrade() {
-            workspace
-                .update(cx, |workspace, cx| {
-                    let status_toast = StatusToast::new(message, cx, |this, _cx| {
-                        this.icon(
-                            Icon::new(IconName::Warning)
-                                .size(IconSize::Small)
-                                .color(Color::Warning),
-                        )
-                        .dismiss_button(true)
-                    });
+            workspace.update(cx, |workspace, cx| {
+                let status_toast = StatusToast::new(message, cx, |this, _cx| {
+                    this.icon(
+                        Icon::new(IconName::Warning)
+                            .size(IconSize::Small)
+                            .color(Color::Warning),
+                    )
+                    .dismiss_button(true)
+                });
 
-                    workspace.toggle_status_toast(status_toast, cx);
-                })
-                .log_err();
+                workspace.toggle_status_toast(status_toast, cx);
+            });
         }
     });
 }

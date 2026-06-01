@@ -1,7 +1,7 @@
 use std::{
     fs::{self, File},
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use super::{DxStudioProjectDetection, MAX_DX_MARKER_SCAN_BYTES, MAX_DX_MARKER_SCAN_FILES};

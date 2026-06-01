@@ -5596,6 +5596,12 @@ impl ProjectPanel {
             .flatten();
         let sticky_index = details.sticky.as_ref().map(|this| this.sticky_index);
         let settings = ProjectPanelSettings::get_global(cx);
+        let file_icons = settings.file_icons;
+        let drag_and_drop = settings.drag_and_drop;
+        let indent_size = settings.indent_size;
+        let entry_spacing = settings.entry_spacing;
+        let bold_folder_labels = settings.bold_folder_labels;
+        let show_git_status_indicator = settings.git_status_indicator;
         let show_editor = details.is_editing && !details.is_processing;
 
         let selection = SelectedEntry {
@@ -5611,7 +5617,7 @@ impl ProjectPanel {
         let file_name = details.filename.clone();
 
         let mut icon = details.icon.clone();
-        if settings.file_icons && show_editor && details.kind.is_file() {
+        if file_icons && show_editor && details.kind.is_file() {
             let filename = self.filename_editor.read(cx).text(cx);
             if filename.len() > 2 {
                 icon = FileIcons::get_icon(Path::new(&filename), cx);
@@ -5739,8 +5745,7 @@ impl ProjectPanel {
                 false
             }
         };
-        let git_indicator = settings
-            .git_status_indicator
+        let git_indicator = show_git_status_indicator
             .then(|| git_status_indicator(details.git_status))
             .flatten();
 
@@ -5770,7 +5775,7 @@ impl ProjectPanel {
                             .bg(item_colors.drag_over)
                     },
                 )
-                .when(settings.drag_and_drop, |this| {
+                .when(drag_and_drop, |this| {
                     this.on_drag_move::<ExternalPaths>(cx.listener(
                         move |this, event: &DragMoveEvent<ExternalPaths>, _, cx| {
                             let is_current_target =
@@ -6087,8 +6092,8 @@ impl ProjectPanel {
             .child(
                 ListItem::new(id)
                     .indent_level(depth)
-                    .indent_step_size(px(settings.indent_size))
-                    .spacing(match settings.entry_spacing {
+                    .indent_step_size(px(indent_size))
+                    .spacing(match entry_spacing {
                         ProjectPanelEntrySpacing::Comfortable => ListItemSpacing::Dense,
                         ProjectPanelEntrySpacing::Standard => ListItemSpacing::ExtraDense,
                     })
@@ -6227,8 +6232,8 @@ impl ProjectPanel {
                                         is_sticky,
                                         kind.is_file(),
                                         is_active || is_marked,
-                                        settings.drag_and_drop,
-                                        settings.bold_folder_labels,
+                                        drag_and_drop,
+                                        bold_folder_labels,
                                         item_colors.drag_over,
                                         folded_directory_drag_target,
                                         filename_text_color,
@@ -6240,7 +6245,7 @@ impl ProjectPanel {
                                     file_name,
                                     kind,
                                     filename_text_color,
-                                    settings.bold_folder_labels && kind.is_dir(),
+                                    bold_folder_labels && kind.is_dir(),
                                 )),
                             }
                         })
@@ -7403,7 +7408,7 @@ impl Render for ProjectPanel {
                             div()
                                 .id("project-panel-blank-area")
                                 .block_mouse_except_scroll()
-                                .flex_grow()
+                                .flex_grow_1()
                                 .on_scroll_wheel({
                                     let scroll_handle = self.scroll_handle.clone();
                                     let entity_id = cx.entity().entity_id();

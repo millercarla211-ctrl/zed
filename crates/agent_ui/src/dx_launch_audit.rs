@@ -3,7 +3,7 @@ mod packets;
 mod review;
 mod status_summaries;
 
-use self::packet_fields::{array_len, bool_field, bool_label, string_field, usize_field};
+use self::packet_fields::{array_len, bool_field, string_field, usize_field};
 use self::packets::read_checked_packet;
 use self::review::{command_fanout_count, redaction_requires_review};
 use self::status_summaries::{

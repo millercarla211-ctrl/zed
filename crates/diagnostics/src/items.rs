@@ -63,13 +63,19 @@ impl Render for DiagnosticIndicator {
 
         let status = if let Some(diagnostic) = &self.current_diagnostic {
             let message = diagnostic_status_message(diagnostic);
+            let diagnostics_already_active = self.any_active_diagnostics(cx);
+            let tooltip = if !diagnostics_already_active {
+                "Expand Diagnostics"
+            } else {
+                "Next Diagnostic"
+            };
             Some(
                 Button::new("diagnostic_message", message)
                     .label_size(LabelSize::Small)
                     .truncate(true)
-                    .tooltip(|_window, cx| {
+                    .tooltip(move |_window, cx| {
                         Tooltip::for_action(
-                            "Next Diagnostic",
+                            tooltip,
                             &editor::actions::GoToDiagnostic::default(),
                             cx,
                         )
@@ -172,10 +178,18 @@ impl DiagnosticIndicator {
         }
     }
 
+    fn any_active_diagnostics(&self, cx: &mut Context<Self>) -> bool {
+        if let Some(editor) = self.active_editor.as_ref().and_then(|e| e.upgrade()) {
+            editor.read(cx).any_active_diagnostics()
+        } else {
+            false
+        }
+    }
+
     fn go_to_next_diagnostic(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(editor) = self.active_editor.as_ref().and_then(|e| e.upgrade()) {
             editor.update(cx, |editor, cx| {
-                editor.go_to_diagnostic_impl(
+                editor.go_to_diagnostic_at_cursor(
                     editor::Direction::Next,
                     GoToDiagnosticSeverityFilter::default(),
                     window,

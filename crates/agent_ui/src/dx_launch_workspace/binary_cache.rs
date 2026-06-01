@@ -36,6 +36,12 @@ pub(super) fn binary_cache_state(snapshot: &DxBinaryCacheSnapshot, cx: &App) -> 
 }
 
 fn binary_cache_row(id: SharedString, row: &DxBinaryCacheRow, cx: &App) -> AnyElement {
+    let state = if row.present {
+        format!("{} - present", row.state)
+    } else {
+        format!("{} - missing", row.state)
+    };
+
     v_flex()
         .id(id)
         .gap_0p5()
@@ -44,7 +50,7 @@ fn binary_cache_row(id: SharedString, row: &DxBinaryCacheRow, cx: &App) -> AnyEl
         .px_1()
         .py_0p5()
         .bg(cx.theme().colors().element_background)
-        .child(metric_row(row.label.clone(), row.state.clone()))
+        .child(metric_row(row.label.clone(), state))
         .child(
             Label::new(binary_cache_row_detail_label(&row.detail))
                 .size(LabelSize::XSmall)

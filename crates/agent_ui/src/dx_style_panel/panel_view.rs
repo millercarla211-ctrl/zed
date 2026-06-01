@@ -11,7 +11,7 @@ pub(super) fn render_panel(
     snapshot: &DxStylePanelSnapshot,
     active_context: &ActiveStyleContextSnapshot,
     cx: &App,
-) -> impl IntoElement {
+) -> impl IntoElement + use<> {
     let source_context_json = active_context.web_preview_context_json();
     let can_open_generator =
         snapshot.web_preview_bridge_ready && active_context.can_open_generator();
@@ -58,7 +58,7 @@ fn style_summary(
     snapshot: &DxStylePanelSnapshot,
     active_context: &ActiveStyleContextSnapshot,
     cx: &App,
-) -> impl IntoElement {
+) -> impl IntoElement + use<> {
     let gate = &active_context.apply_gate;
     let generator_count = format!("{} planned", snapshot.visual_generator_count);
     let preflight_source = gate.editor_write_bridge.preflight_source_label.clone();
@@ -165,7 +165,7 @@ fn style_summary(
                 .truncate(),
         )
 }
-fn style_rows(snapshot: &DxStylePanelSnapshot, cx: &App) -> impl IntoElement {
+fn style_rows(snapshot: &DxStylePanelSnapshot, cx: &App) -> impl IntoElement + use<> {
     let mut stack = v_flex().gap_1().min_w_0();
     for (ix, row) in snapshot.rows.iter().take(STYLE_PANEL_ROW_LIMIT).enumerate() {
         stack = stack.child(style_row(
@@ -198,7 +198,7 @@ fn style_rows(snapshot: &DxStylePanelSnapshot, cx: &App) -> impl IntoElement {
 
     stack
 }
-fn style_row(id: SharedString, row: &DxStylePanelRow, cx: &App) -> impl IntoElement {
+fn style_row(id: SharedString, row: &DxStylePanelRow, cx: &App) -> impl IntoElement + use<> {
     v_flex()
         .id(id)
         .gap_0p5()

@@ -19,7 +19,7 @@ pub(in super::super) fn runtime_proof_receipt_row(
         &receipt.validation_status,
         receipt.blocker_count,
     );
-    let mut stack = v_flex()
+    let stack = v_flex()
         .id(id)
         .gap_0p5()
         .min_w_0()

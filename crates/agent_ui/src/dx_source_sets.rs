@@ -6,7 +6,7 @@ mod restore;
 
 use self::dx_editor_toolchain::dx_editor_toolchain_set;
 use self::formatting::{display_name, format_bytes, short_hash, source_set_status};
-use self::receipt_fields::{array_strings_at, bool_at, string_at, u64_at, usize_at};
+use self::receipt_fields::{bool_at, string_at, u64_at, usize_at};
 use self::receipts::{ReceiptCandidate, latest_receipts, read_receipt_json};
 use self::restore::forge_restore_warnings;
 use serde_json::Value;

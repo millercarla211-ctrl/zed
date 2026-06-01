@@ -106,9 +106,8 @@ pub(crate) fn deserialize_serialized_terminal_panel_json(
         return None;
     }
 
-    let mut serialized_panel = serde_json::from_str::<SerializedTerminalPanel>(panel_json)
-        .log_err()
-        .ok()?;
+    let mut serialized_panel =
+        serde_json::from_str::<SerializedTerminalPanel>(panel_json).log_err()?;
     if !sanitize_serialized_terminal_panel(&mut serialized_panel) {
         return None;
     }

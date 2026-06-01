@@ -79,6 +79,7 @@ pub(super) fn style_editor_write_bridge_snapshot() -> StyleEditorWriteBridgeSnap
     let ResolvedEditorWriteBridgePreflight {
         preflight,
         source,
+        source_label,
         source_detail,
     } = read_preflight_fixture(&preflight_path)
         .map(|preflight| {

@@ -1,4 +1,4 @@
-use gpui::{AnyElement, App, prelude::*};
+use gpui::{AnyElement, App};
 use ui::{Color, IconName};
 
 use crate::dx_launch_source_audit::DxLaunchSourceAuditSnapshot;

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::multibuffer_hint::MultibufferHint;
 use client::{Client, UserStore, zed_urls};
 use cloud_api_types::Plan;
@@ -14,10 +16,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::{SettingsStore, VsCodeSettingsSource};
 use std::{rc::Rc, sync::Arc};
-use ui::{
-    Divider, KeyBinding, ParentElement as _, StatefulInteractiveElement, Vector, VectorName,
-    WithScrollbar as _, prelude::*, rems_from_px,
-};
+use ui::{KeyBinding, ParentElement as _, Vector, VectorName, prelude::*, rems_from_px};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use web_preview::web_preview_view::WebPreviewView;

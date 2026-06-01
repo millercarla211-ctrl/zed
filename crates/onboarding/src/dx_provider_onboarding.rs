@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{env, path::PathBuf};
 
 use gpui::{App, SharedString};

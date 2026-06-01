@@ -128,6 +128,9 @@ fn deploy_provider_gate_status(receipt: &DxDeployProviderGateReceiptSummary) -> 
     if receipt.warning_count > 0 {
         parts.push(format!("{} warning(s)", receipt.warning_count));
     }
+    if receipt.quick_fix_count > 0 {
+        parts.push(format!("{} quick fix(es)", receipt.quick_fix_count));
+    }
 
     if parts.is_empty() {
         receipt.label.clone()

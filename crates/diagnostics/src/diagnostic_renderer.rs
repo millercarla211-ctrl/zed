@@ -57,42 +57,7 @@ impl DiagnosticRenderer {
             let mut markdown = Self::bounded_diagnostic_markdown(entry.entry.diagnostic);
             if entry.entry.diagnostic.is_primary {
                 let diagnostic = primary.diagnostic;
-                if diagnostic.source.is_some() || diagnostic.code.is_some() {
-                    markdown.push_str(" (");
-                }
-                if let Some(source) = diagnostic.source.as_ref() {
-                    markdown.push_str(&Self::escaped_bounded_diagnostic_text(
-                        source,
-                        MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
-                    ));
-                }
-                if diagnostic.source.is_some() && diagnostic.code.is_some() {
-                    markdown.push(' ');
-                }
-                if let Some(code) = diagnostic.code.as_ref() {
-                    let code = code.to_string();
-                    if let Some(description) = diagnostic.code_description.as_ref() {
-                        markdown.push('[');
-                        markdown.push_str(&Self::escaped_bounded_diagnostic_text(
-                            &code,
-                            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
-                        ));
-                        markdown.push_str("](");
-                        markdown.push_str(&Self::escaped_bounded_diagnostic_text(
-                            description.as_ref(),
-                            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
-                        ));
-                        markdown.push(')');
-                    } else {
-                        markdown.push_str(&Self::escaped_bounded_diagnostic_text(
-                            &code,
-                            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
-                        ));
-                    }
-                }
-                if diagnostic.source.is_some() || diagnostic.code.is_some() {
-                    markdown.push(')');
-                }
+                append_source_and_code(&mut markdown, diagnostic);
 
                 for entry in bounded_entries
                     .iter()
@@ -130,6 +95,7 @@ impl DiagnosticRenderer {
                     }),
                 });
             } else {
+                append_source_and_code(&mut markdown, entry.entry.diagnostic);
                 if entry
                     .entry
                     .range
@@ -222,6 +188,44 @@ impl DiagnosticRenderer {
         truncated.push_str(DIAGNOSTIC_TRUNCATION_MARKER);
         Cow::Owned(truncated)
     }
+}
+
+fn append_source_and_code(markdown: &mut String, diagnostic: &Diagnostic) {
+    if diagnostic.source.is_none() && diagnostic.code.is_none() {
+        return;
+    }
+    markdown.push_str(" (");
+    if let Some(source) = diagnostic.source.as_ref() {
+        markdown.push_str(&DiagnosticRenderer::escaped_bounded_diagnostic_text(
+            source,
+            MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+        ));
+    }
+    if diagnostic.source.is_some() && diagnostic.code.is_some() {
+        markdown.push(' ');
+    }
+    if let Some(code) = diagnostic.code.as_ref() {
+        let code = code.to_string();
+        if let Some(description) = diagnostic.code_description.as_ref() {
+            markdown.push('[');
+            markdown.push_str(&DiagnosticRenderer::escaped_bounded_diagnostic_text(
+                &code,
+                MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+            ));
+            markdown.push_str("](");
+            markdown.push_str(&DiagnosticRenderer::escaped_bounded_diagnostic_text(
+                description.as_ref(),
+                MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+            ));
+            markdown.push(')');
+        } else {
+            markdown.push_str(&DiagnosticRenderer::escaped_bounded_diagnostic_text(
+                &code,
+                MAX_DIAGNOSTIC_INLINE_METADATA_CHARS,
+            ));
+        }
+    }
+    markdown.push(')');
 }
 
 impl editor::DiagnosticRenderer for DiagnosticRenderer {

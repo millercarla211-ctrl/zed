@@ -779,7 +779,7 @@ impl Render for AcpTools {
                     } else {
                         div()
                             .size_full()
-                            .flex_grow()
+                            .flex_grow_1()
                             .child(
                                 list(
                                     connection.list_state.clone(),

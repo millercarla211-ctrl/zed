@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use gpui::{ObjectFit, img};
+use gpui::{ObjectFit, SharedString, StatefulInteractiveElement, img};
 use project::Entry;
-use ui::prelude::*;
+use ui::{Tooltip, prelude::*};
 
 pub(crate) const MAX_PROJECT_PANEL_MEDIA_CHILD_SCAN: usize = 512;
 pub(crate) const MAX_PROJECT_PANEL_MEDIA_PREVIEW_ITEMS: usize = 12;
@@ -125,6 +125,7 @@ pub(crate) fn render_folder_media_preview(
 ) -> AnyElement {
     let summary = media_preview_summary(preview);
     let tooltip_summary = summary.clone();
+    let tooltip_id = SharedString::from(format!("project-panel-media-preview-{summary}"));
     let cards = preview
         .items
         .iter()
@@ -133,6 +134,7 @@ pub(crate) fn render_folder_media_preview(
         .collect::<Vec<_>>();
 
     h_flex()
+        .id(tooltip_id)
         .h_6()
         .max_w(px(184.))
         .gap_0p5()
@@ -243,10 +245,16 @@ pub(crate) fn render_media_preview_card(item: &MediaPreviewItem, cx: &mut App) -
             ),
     };
 
-    card.tooltip(move |_window, cx| {
-        Tooltip::with_meta(tooltip_title.clone(), None, tooltip_meta.clone(), cx)
-    })
-    .into_any_element()
+    let card_id = SharedString::from(format!(
+        "project-panel-media-card-{:?}-{}",
+        item.kind, item.name
+    ));
+
+    card.id(card_id)
+        .tooltip(move |_window, cx| {
+            Tooltip::with_meta(tooltip_title.clone(), None, tooltip_meta.clone(), cx)
+        })
+        .into_any_element()
 }
 
 fn media_preview_card_tooltip_meta(item: &MediaPreviewItem) -> String {

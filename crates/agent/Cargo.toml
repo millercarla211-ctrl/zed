@@ -67,6 +67,7 @@ streaming_diff.workspace = true
 strsim.workspace = true
 task.workspace = true
 telemetry.workspace = true
+tempfile.workspace = true
 text.workspace = true
 thiserror.workspace = true
 ui.workspace = true
@@ -82,6 +83,7 @@ zstd.workspace = true
 windows.workspace = true
 
 [dev-dependencies]
+assets.workspace = true
 async-io.workspace = true
 agent_servers = { workspace = true, "features" = ["test-support"] }
 client = { workspace = true, "features" = ["test-support"] }
@@ -105,9 +107,9 @@ project = { workspace = true, "features" = ["test-support"] }
 rand.workspace = true
 reqwest_client.workspace = true
 settings = { workspace = true, "features" = ["test-support"] }
-tempfile.workspace = true
 
 theme = { workspace = true, "features" = ["test-support"] }
+theme_settings.workspace = true
 
 unindent = { workspace = true }
 

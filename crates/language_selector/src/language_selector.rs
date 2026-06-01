@@ -31,7 +31,7 @@ const MAX_LANGUAGE_SELECTOR_MATCHES: usize = MAX_LANGUAGE_SELECTOR_CANDIDATES;
 const MAX_LANGUAGE_SELECTOR_FUZZY_MATCHES: usize = 100;
 
 fn capped_language_selector_candidates(
-    language_registry: &LanguageRegistry,
+    language_registry: &Arc<LanguageRegistry>,
     current_language_name: Option<&str>,
 ) -> Vec<StringMatchCandidate> {
     let mut candidates = Vec::new();

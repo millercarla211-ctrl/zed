@@ -1,4 +1,4 @@
-use gpui::{AnyElement, SharedString, prelude::*};
+use gpui::{AnyElement, SharedString};
 use ui::{Color, IconName};
 
 use crate::dx_agent_bridge::DxAgentBridgeSnapshot;

@@ -236,7 +236,7 @@ impl ActiveStyleContextSnapshot {
 
 pub(super) fn active_style_context(
     workspace: &WeakEntity<Workspace>,
-    cx: &App,
+    cx: &mut App,
 ) -> ActiveStyleContextSnapshot {
     let Some(workspace) = workspace.upgrade() else {
         return ActiveStyleContextSnapshot::new("workspace unavailable", "No active workspace");
@@ -250,15 +250,17 @@ pub(super) fn active_style_context(
     };
 
     let display_path = project_path.path.display(PathStyle::local()).into_owned();
-    let project = workspace.project().read(cx);
-    let source_path = project
-        .absolute_path(&project_path, cx)
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| display_path.clone());
-    let workspace_root = project
-        .get_workspace_root(&project_path, cx)
-        .map(|path| path.display().to_string());
-    drop(project);
+    let (source_path, workspace_root) = {
+        let project = workspace.project().read(cx);
+        let source_path = project
+            .absolute_path(&project_path, cx)
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| display_path.clone());
+        let workspace_root = project
+            .get_workspace_root(&project_path, cx)
+            .map(|path| path.display().to_string());
+        (source_path, workspace_root)
+    };
     if !is_style_bearing_path(&source_path) {
         return ActiveStyleContextSnapshot::new("non-style file", source_path);
     }
@@ -269,8 +271,7 @@ pub(super) fn active_style_context(
             .with_workspace_root(workspace_root.as_deref())
             .with_source_state("active item is not an editor buffer");
     };
-    let editor = editor.read(cx);
-    let source_len = editor.buffer().read(cx).len(cx).0;
+    let source_len = editor.update(cx, |editor, cx| editor.buffer().read(cx).len(cx).0);
     if source_len > MAX_ACTIVE_STYLE_CONTEXT_BYTES {
         return ActiveStyleContextSnapshot::new("style file too large", source_path.clone())
             .with_source_path(source_path)
@@ -279,13 +280,15 @@ pub(super) fn active_style_context(
             .with_source_state("cursor token scan skipped for large active file");
     }
 
-    let display_snapshot = editor.display_snapshot(cx);
-    let cursor = editor
-        .selections
-        .newest::<MultiBufferOffset>(&display_snapshot)
-        .head()
-        .0;
-    let source = editor.text(cx);
+    let (cursor, source) = editor.update(cx, |editor, cx| {
+        let display_snapshot = editor.display_snapshot(cx);
+        let cursor = editor
+            .selections
+            .newest::<MultiBufferOffset>(&display_snapshot)
+            .head()
+            .0;
+        (cursor, editor.text(cx))
+    });
     if source.len() > MAX_ACTIVE_STYLE_CONTEXT_BYTES {
         return ActiveStyleContextSnapshot::new("style file too large", source_path.clone())
             .with_source_path(source_path)

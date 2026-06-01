@@ -1,4 +1,4 @@
-use super::fields::{bool_field, safe_string_field, string_field, usize_field};
+use super::fields::{bool_field, safe_string_field, usize_field};
 use serde_json::Value;
 
 pub(super) fn forge_history_kind(schema: &str, value: &Value) -> Option<&'static str> {

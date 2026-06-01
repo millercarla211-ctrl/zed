@@ -247,7 +247,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
                         all_repositories
                             .into_iter()
                             .take(MAX_REPOSITORY_SELECTOR_MATCHES)
-                            .collect()
+                            .collect::<Vec<_>>()
                     } else {
                         let query_lower = query.to_lowercase();
                         repo_names
@@ -255,7 +255,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
                             .filter(|(_, display_name)| display_name.contains(&query_lower))
                             .take(MAX_REPOSITORY_SELECTOR_MATCHES)
                             .map(|(repo, _)| repo)
-                            .collect()
+                            .collect::<Vec<_>>()
                     }
                 })
                 .await;

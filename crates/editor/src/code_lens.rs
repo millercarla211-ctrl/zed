@@ -464,7 +464,7 @@ impl Editor {
         let mut truncated_visible_ranges = false;
         let mut truncated_resolves = false;
         for (visible_range_ix, (buffer_snapshot, visible_range, _)) in
-            self.visible_buffer_ranges(cx).enumerate()
+            self.visible_buffer_ranges(cx).into_iter().enumerate()
         {
             if visible_range_ix >= MAX_CODE_LENS_VISIBLE_BUFFERS {
                 truncated_visible_ranges = true;

@@ -1,4 +1,4 @@
-use gpui::{AnyElement, prelude::*};
+use gpui::AnyElement;
 use ui::{Color, IconName};
 
 use crate::dx_launch_readiness::DxLaunchReadinessSnapshot;

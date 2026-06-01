@@ -623,7 +623,7 @@ pub fn open_settings_editor(
                 && let SettingsPageItem::SubPageLink(link) = item
                 && let Some(SettingsPageItem::SectionHeader(header)) = page.items.get(header_index)
             {
-                Some((link.clone(), SharedString::from(header)))
+                Some((link.clone(), SharedString::from(*header)))
             } else {
                 None
             };
@@ -786,6 +786,9 @@ pub struct SettingsWindow {
     pub(crate) hidden_deleted_skill_directory_paths: HashSet<PathBuf>,
     pub(crate) regex_validation_error: Option<String>,
     last_copied_link_path: Option<&'static str>,
+    /// Directory path of the skill whose share link was most recently copied,
+    /// used to show a transient "copied" checkmark on its share button.
+    pub(crate) last_copied_skill_directory_path: Option<PathBuf>,
 }
 
 struct SearchDocument {
@@ -1733,6 +1736,7 @@ impl SettingsWindow {
             regex_validation_error: None,
             list_state,
             last_copied_link_path: None,
+            last_copied_skill_directory_path: None,
         };
 
         this.fetch_files(window, cx);
@@ -2383,6 +2387,10 @@ impl SettingsWindow {
     }
 
     fn open_navbar_entry_page(&mut self, navbar_entry: usize) {
+        // Navigating to another page dismisses the transient "copied share
+        // link" checkmark shown on a Skills page row.
+        self.last_copied_skill_directory_path = None;
+
         let Some(target_page_index) = self
             .navbar_entries
             .get(navbar_entry)
@@ -4711,6 +4719,7 @@ pub mod test {
                 hidden_deleted_skill_directory_paths: HashSet::default(),
                 regex_validation_error: None,
                 last_copied_link_path: None,
+                last_copied_skill_directory_path: None,
             }
         }
     }
@@ -4838,6 +4847,7 @@ pub mod test {
             hidden_deleted_skill_directory_paths: HashSet::default(),
             regex_validation_error: None,
             last_copied_link_path: None,
+            last_copied_skill_directory_path: None,
         };
 
         settings_window.build_filter_table();

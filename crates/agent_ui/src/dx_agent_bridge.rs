@@ -589,19 +589,6 @@ fn string_array_field(value: &Value, path: &[&str]) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn string_values_field(value: &Value, path: &[&str]) -> Vec<String> {
-    value_at(value, path)
-        .and_then(|value| value.as_object())
-        .map(|values| {
-            values
-                .values()
-                .filter_map(|value| value.as_str().map(ToString::to_string))
-                .take(8)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 fn bool_field(value: &Value, path: &[&str]) -> Option<bool> {
     value_at(value, path)?.as_bool()
 }

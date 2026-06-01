@@ -5,7 +5,10 @@ use crate::dx_source_sets::DxSourceAttachmentSummary;
 
 use super::super::{metric_row, muted_card};
 
-pub(super) fn source_attachment_state(summary: &DxSourceAttachmentSummary, cx: &App) -> AnyElement {
+pub(in crate::dx_launch_workspace) fn source_attachment_state(
+    summary: &DxSourceAttachmentSummary,
+    cx: &App,
+) -> AnyElement {
     let state = if summary.attachable_sources == 0 {
         "No attach-ready sources".to_string()
     } else {

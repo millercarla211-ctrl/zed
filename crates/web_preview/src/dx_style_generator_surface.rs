@@ -26,14 +26,6 @@ const ACTIVE_STYLE_CONTEXT_SCHEMA: &str = "zed.dx_style.active_context.v1";
 const MAX_DX_STYLE_CONTEXT_JSON_BYTES: usize = 256 * 1024;
 const MAX_DX_STYLE_SOURCE_APPLY_SESSION_TOKEN_BYTES: usize = 256;
 
-pub fn dx_style_generator_url() -> String {
-    dx_style_generator_url_with_context_and_source_apply_session(None, "")
-}
-
-pub fn dx_style_generator_url_with_context(source_context_json: Option<&str>) -> String {
-    dx_style_generator_url_with_context_and_source_apply_session(source_context_json, "")
-}
-
 pub fn dx_style_generator_url_with_context_and_source_apply_session(
     source_context_json: Option<&str>,
     source_apply_session_token: &str,
