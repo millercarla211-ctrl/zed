@@ -1,3 +1,19 @@
+[2026-06-02] - Empty Workspace Agent Start Surface
+
+CHANGED:
+- `crates\zed\src\zed.rs` now keeps empty New Window and Close Project workspaces itemless when AI is enabled instead of creating a throwaway untitled editor first.
+- The legacy blank editor is still created when AI is disabled or tests are running, preserving non-AI behavior.
+- `script\zed-startup-reliability-source.test.ts` now guards the AI-empty-workspace decision and both empty workspace action paths.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\zed\src\zed.rs`
+- `C:\Users\Computer\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --test script\zed-startup-reliability-source.test.ts`
+- `git diff --check -- crates/zed/src/zed.rs script/zed-startup-reliability-source.test.ts`
+- Targeted source scan for empty-workspace AgentPanel helpers and conflict markers.
+
+NOTES:
+- No `just run`, Cargo, build, server, browser automation, or runtime AgentPanel validation was run for this source-only checkpoint.
+
 [2026-06-02] - AI Panel Model Picker Provider Headers
 
 CHANGED:

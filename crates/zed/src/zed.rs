@@ -859,6 +859,31 @@ fn show_agent_panel_for_empty_workspace(
     }
 }
 
+fn should_start_empty_workspace_with_agent(cx: &App) -> bool {
+    !cfg!(test)
+        && !SettingsStore::global(cx)
+            .get::<DisableAiSettings>(None)
+            .disable_ai
+}
+
+fn open_empty_workspace_start_surface(
+    workspace: &mut Workspace,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    if should_start_empty_workspace_with_agent(cx) {
+        return;
+    }
+
+    // Create the legacy blank editor synchronously to avoid flicker when AI is disabled.
+    let project = workspace.project().clone();
+    let buffer = project.update(cx, |project, cx| {
+        project.create_local_buffer("", None, true, cx)
+    });
+    let editor = cx.new(|cx| Editor::for_buffer(buffer, Some(project), window, cx));
+    workspace.add_item_to_active_pane(Box::new(editor), None, true, window, cx);
+}
+
 async fn initialize_agent_panel(
     workspace_handle: WeakEntity<Workspace>,
     mut cx: AsyncWindowContext,
@@ -1202,21 +1227,7 @@ fn register_actions(
                     cx,
                     |workspace, window, cx| {
                         cx.activate(true);
-                        // Create buffer synchronously to avoid flicker
-                        let project = workspace.project().clone();
-                        let buffer = project.update(cx, |project, cx| {
-                            project.create_local_buffer("", None, true, cx)
-                        });
-                        let editor = cx.new(|cx| {
-                            Editor::for_buffer(buffer, Some(project), window, cx)
-                        });
-                        workspace.add_item_to_active_pane(
-                            Box::new(editor),
-                            None,
-                            true,
-                            window,
-                            cx,
-                        );
+                        open_empty_workspace_start_surface(workspace, window, cx);
                     },
                 )
                 .detach();
@@ -1251,20 +1262,7 @@ fn register_actions(
                                 cx,
                                 |workspace, window, cx| {
                                     cx.activate(true);
-                                    let project = workspace.project().clone();
-                                    let buffer = project.update(cx, |project, cx| {
-                                        project.create_local_buffer("", None, true, cx)
-                                    });
-                                    let editor = cx.new(|cx| {
-                                        Editor::for_buffer(buffer, Some(project), window, cx)
-                                    });
-                                    workspace.add_item_to_active_pane(
-                                        Box::new(editor),
-                                        None,
-                                        true,
-                                        window,
-                                        cx,
-                                    );
+                                    open_empty_workspace_start_surface(workspace, window, cx);
                                 },
                             )
                         })?;

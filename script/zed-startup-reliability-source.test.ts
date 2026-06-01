@@ -86,6 +86,52 @@ test("user keymap reload bounds watched content before migration and parse", () 
   );
 });
 
+test("empty workspace startup defers blank editor creation when agent panel is enabled", () => {
+  const source = read("crates/zed/src/zed.rs");
+
+  const agentDecision = sliceBetween(
+    source,
+    "fn should_start_empty_workspace_with_agent",
+    "fn open_empty_workspace_start_surface",
+  );
+  assert.match(agentDecision, /!\s*cfg!\(test\)/);
+  assert.match(agentDecision, /SettingsStore::global\(cx\)/);
+  assert.match(agentDecision, /\.get::<DisableAiSettings>\(None\)/);
+  assert.match(agentDecision, /\.disable_ai/);
+
+  const startSurface = sliceBetween(
+    source,
+    "fn open_empty_workspace_start_surface",
+    "async fn initialize_agent_panel",
+  );
+  assert.match(startSurface, /if should_start_empty_workspace_with_agent\(cx\) \{\s*return;\s*\}/);
+  assert.match(startSurface, /project\.create_local_buffer\("", None, true, cx\)/);
+  assert.ok(
+    startSurface.indexOf("should_start_empty_workspace_with_agent(cx)") <
+      startSurface.indexOf('project.create_local_buffer("", None, true, cx)'),
+    "blank editor creation must be gated behind the AI-empty-workspace decision",
+  );
+
+  const registerActions = sliceBetween(
+    source,
+    "fn register_actions",
+    "#[cfg(not(target_os = \"windows\"))]",
+  );
+  const newWindowStart = registerActions.indexOf("move |_, _: &NewWindow");
+  const closeProjectStart = registerActions.indexOf("move |workspace, _: &CloseProject");
+  const newFileStart = registerActions.indexOf("move |_, _: &NewFile");
+  assert.ok(newWindowStart >= 0, "expected NewWindow action");
+  assert.ok(closeProjectStart > newWindowStart, "expected CloseProject after NewWindow");
+  assert.ok(newFileStart > closeProjectStart, "expected NewFile after CloseProject");
+
+  const newWindowBlock = registerActions.slice(newWindowStart, closeProjectStart);
+  const closeProjectBlock = registerActions.slice(closeProjectStart, newFileStart);
+  assert.match(newWindowBlock, /open_empty_workspace_start_surface\(workspace, window, cx\)/);
+  assert.match(closeProjectBlock, /open_empty_workspace_start_surface\(workspace, window, cx\)/);
+  assert.doesNotMatch(newWindowBlock, /create_local_buffer\("", None, true, cx\)/);
+  assert.doesNotMatch(closeProjectBlock, /create_local_buffer\("", None, true, cx\)/);
+});
+
 test("startup user-theme loading bounds directory scans and theme bytes", () => {
   const source = read("crates/zed/src/main.rs");
 
