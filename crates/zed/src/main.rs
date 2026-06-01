@@ -57,7 +57,7 @@ use reqwest_client::ReqwestClient;
 use assets::Assets;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use parking_lot::Mutex;
-use project::{project_settings::ProjectSettings, trusted_worktrees};
+use project::{DisableAiSettings, project_settings::ProjectSettings, trusted_worktrees};
 use proto;
 use recent_projects::{RemoteSettings, open_remote_project};
 use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
@@ -206,6 +206,13 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
         .detach();
     }
 }
+
+fn should_open_untitled_for_empty_workspace(cx: &App) -> bool {
+    SettingsStore::global(cx)
+        .get::<DisableAiSettings>(None)
+        .disable_ai
+}
+
 static STARTUP_TIME: OnceLock<Instant> = OnceLock::new();
 
 fn main() {
@@ -1657,9 +1664,10 @@ pub(crate) async fn restore_or_create_workspace(
                             WorkspaceSettings::get_global(cx).restore_on_startup;
                         match restore_on_startup {
                             workspace::RestoreOnStartupBehavior::Launchpad => {}
-                            _ => {
+                            _ if should_open_untitled_for_empty_workspace(cx) => {
                                 Editor::new_file(workspace, &Default::default(), window, cx);
                             }
+                            _ => {}
                         }
                     },
                 )
@@ -1678,9 +1686,10 @@ pub(crate) async fn restore_or_create_workspace(
                     let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
                     match restore_on_startup {
                         workspace::RestoreOnStartupBehavior::Launchpad => {}
-                        _ => {
+                        _ if should_open_untitled_for_empty_workspace(cx) => {
                             Editor::new_file(workspace, &Default::default(), window, cx);
                         }
+                        _ => {}
                     }
                 },
             )

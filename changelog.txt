@@ -12600,6 +12600,18 @@ NOTES:
 - This keeps insertion behind explicit user actions and preserves drag-and-drop plus the existing recent/pinned Insert buttons.
 - No Cargo, build, or `just run` command was run for this source patch.
 
+[2026-06-02] - Empty Workspace AI Surface
+
+CHANGED:
+- `crates\zed\src\main.rs` no longer creates an untitled editor for normal post-onboarding empty workspaces when AI is enabled.
+- `crates\zed\src\main.rs` keeps the untitled editor fallback when AI is disabled, preserving a usable center surface if the AgentPanel is unavailable.
+- `crates\zed\src\zed.rs` now focuses the real `AgentPanel` after it loads when the active workspace has no project roots and no center item.
+- `crates\zed\src\zed.rs` emits the existing dock `PanelEvent::ZoomIn` path for that empty-workspace AgentPanel so the fullscreen/zoomed panel behavior stays aligned with normal dock zoom semantics.
+
+NOTES:
+- This does not add a dummy AI landing screen. It routes the empty workspace to the existing AgentPanel and its existing empty/draft state.
+- No `just run` or broad Cargo command was run for this source-only startup slice.
+
 [2026-06-02] - Workspace Sidebar Activity Bar Mode
 
 CHANGED:

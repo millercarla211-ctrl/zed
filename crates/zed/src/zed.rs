@@ -95,7 +95,7 @@ use vim_mode_setting::VimModeSetting;
 use workspace::notifications::{NotificationId, dismiss_app_notification, show_app_notification};
 
 use workspace::{
-    AppState, MultiWorkspace, NewFile, NewWindow, OpenLog, Panel, Toast, Workspace,
+    AppState, MultiWorkspace, NewFile, NewWindow, OpenLog, Panel, PanelEvent, Toast, Workspace,
     WorkspaceSettings, create_and_open_local_file,
     notifications::simple_message_notification::MessageNotification, open_new,
 };
@@ -837,8 +837,25 @@ fn ensure_agent_panel_for_workspace(
                     panel.initialize_from_source_workspace_if_needed(source_workspace, window, cx);
                 });
             }
+            show_agent_panel_for_empty_workspace(workspace, window, cx);
         })
     })
+}
+
+fn show_agent_panel_for_empty_workspace(
+    workspace: &mut Workspace,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    if !workspace.root_paths(cx).is_empty() || workspace.active_item(cx).is_some() {
+        return;
+    }
+
+    if let Some(panel) = workspace.focus_panel::<agent_ui::AgentPanel>(window, cx) {
+        panel.update(cx, |_panel, cx| {
+            cx.emit(PanelEvent::ZoomIn);
+        });
+    }
 }
 
 async fn initialize_agent_panel(
