@@ -923,7 +923,7 @@ impl TitleBar {
     fn screen_kind_icon(kind: WorkspaceScreenKind) -> IconName {
         match kind {
             WorkspaceScreenKind::Editor => IconName::Code,
-            WorkspaceScreenKind::Browser => IconName::Public,
+            WorkspaceScreenKind::Browser => IconName::ToolWeb,
             WorkspaceScreenKind::Terminal => IconName::Terminal,
             WorkspaceScreenKind::LiquidGlass => IconName::Sparkle,
             WorkspaceScreenKind::Other => IconName::Circle,
@@ -936,14 +936,14 @@ impl TitleBar {
             self.render_title_action_button(
                 "titlebar-icon-picker",
                 IconName::SquareDot,
-                "Icon Picker",
+                "Icons",
                 icon_picker::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("Icon Picker"),
             ),
             self.render_title_action_button(
                 "titlebar-font-panel",
                 IconName::Font,
-                "Font Panel",
+                "Fonts",
                 font_panel::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("Font Panel"),
             ),
@@ -956,10 +956,17 @@ impl TitleBar {
             ),
             self.render_title_action_button(
                 "titlebar-shadcn-ui-panel",
-                IconName::Blocks,
+                IconName::Box,
                 "UI",
                 shadcn_ui_panel::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("UI"),
+            ),
+            self.render_title_right_panel_button(
+                "titlebar-dx-style-panel",
+                IconName::Sparkle,
+                "Style",
+                zed_actions::dx_style::TogglePanel.boxed_clone(),
+                active_right_panel == Some("Style"),
             ),
             self.render_hidden_feature_menu(cx),
         ]
@@ -988,6 +995,36 @@ impl TitleBar {
             .tooltip(Tooltip::text(tooltip))
             .on_click(move |_, window, cx| {
                 window.dispatch_action(action.boxed_clone(), cx);
+            })
+            .into_any_element()
+    }
+
+    fn render_title_right_panel_button(
+        &self,
+        id: &'static str,
+        icon: IconName,
+        tooltip: &'static str,
+        action: Box<dyn Action>,
+        selected: bool,
+    ) -> AnyElement {
+        let workspace = self.workspace.clone();
+        IconButton::new(id, icon)
+            .icon_size(IconSize::Small)
+            .style(ButtonStyle::Subtle)
+            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
+            .toggle_state(selected)
+            .tooltip(Tooltip::text(tooltip))
+            .on_click(move |_, window, cx| {
+                if selected && let Some(workspace) = workspace.upgrade() {
+                    let action = workspace
+                        .read(cx)
+                        .dock_at_position(DockPosition::Right)
+                        .read(cx)
+                        .toggle_action();
+                    window.dispatch_action(action, cx);
+                } else {
+                    window.dispatch_action(action.boxed_clone(), cx);
+                }
             })
             .into_any_element()
     }

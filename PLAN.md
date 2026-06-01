@@ -6,6 +6,45 @@ This checkpoint defines the next Zed DX editor feature batch. It is a planning-o
 
 ## Task Groups
 
+### 0. Editor Shell And Panel Polish From Latest Brief
+
+- Workspace sidebar:
+  - Add a real collapsed activity-bar mode with one icon column, hover tooltips, and an expand/collapse button.
+  - Keep expanded behavior available and preserve existing panel/workspace actions.
+  - Replace filler top controls with real actions only.
+  - Add a bottom add-project/open-folder affordance wired to existing project-opening commands.
+  - Add a persisted workspace shortcut/bookmark grid with three columns and up to twelve visible entries before overflow.
+- Empty workspace AI:
+  - When onboarding is complete and no project/folder is open, show the AI panel as the primary full-screen surface instead of an untitled editor.
+  - Keep the sidebar visible enough for opening folders/projects.
+  - Keep AI empty states honest when no folders or model/provider data are available.
+- AI model picker:
+  - Improve only the AI panel picker, not the settings page picker.
+  - Group models by provider with collapsible provider rows.
+  - Show a model-count badge beside each provider collapse control.
+- Top bar and panel buttons:
+  - Use product labels `Icons`, `Fonts`, `Media`, `UI`, and `Style`.
+  - Keep top-right buttons wired to real right-dock panels.
+  - Remove duplicate bottom/status-bar buttons for panels promoted to the top-right tool cluster.
+  - Keep active-click behavior consistent with dock panel buttons: clicking the active right-panel tool closes the right dock.
+  - Use more appropriate icons for Browser, UI, and Style surfaces.
+- Dock panel stacking:
+  - Add vertical split/stack controls to compatible left and right panels.
+  - Allow up to three visible stacked panels per dock area with half/third-height regions.
+  - Preserve current single-panel behavior by default and reuse existing panel stack persistence where possible.
+- Project/file panel:
+  - Add drag-select marquee selection for files/folders.
+  - Show selected-count and file operation actions when multiple entries are selected.
+  - Keep existing tree, rename, context menu, reveal, drag/drop, and keyboard behavior intact.
+- Tool panels:
+  - Icons panel should enlarge icon cells, select without auto-inserting, show explicit install/copy/apply actions, restrict insertion to supported source files, and preserve React JSX component casing.
+  - Fonts panel should move slow font metadata into a cache/artifact format before UI rendering.
+  - Media panel should support the broader DX media-source plan rather than only local/minimal sources.
+  - UI panel should expand beyond the small Shadcn subset through a source-backed component ecosystem catalog.
+  - Style panel should stay a real GPUI shell backed by the Web Preview generator surface, not a dummy native mock.
+- Web Preview:
+  - Use a live spinner loader with the existing UI icon system while native WebView content mounts.
+
 ### 1. Project Panel Performance And Media Explorer
 
 - Diagnose why the project panel/file explorer feels laggy, with special attention to expensive visible-tree derivation, large expanded directories, root-drive/system-file scanning, file metadata fanout, and render work done per visible row.

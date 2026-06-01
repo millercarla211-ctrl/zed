@@ -12557,6 +12557,29 @@ PASSED:
 NOTES:
 - This is still source-only replay evidence. It does not mutate files, does not enable Apply, and does not replace the required authorized runtime/WebView/build validation window.
 
+[2026-06-02] - Style Title Bar Tool Button
+
+CHANGED:
+- `crates\title_bar\src\title_bar.rs` now renders a Style button in the top-right hidden-feature tool cluster beside Icons, Fonts, Media, and UI.
+- `crates\title_bar\src\title_bar.rs` now gives the promoted Style tool dock-button parity: clicking it while Style is the active right panel closes the right dock.
+- `crates\agent_ui\src\dx_style_panel\panel.rs` now uses `Style` as the right-dock persistent panel name, keeps legacy restore aliases for `DxStylePanel` and `DX Style`, and suppresses the duplicate bottom status-bar panel icon.
+- `crates\agent_ui\src\dx_style_panel\panel_view.rs` now uses the cleaner Style label and generator button copy.
+- `crates\workspace\src\dock.rs` now supports generic legacy persistent panel names during dock restore.
+- `crates\title_bar\src\title_bar.rs` and `crates\workspace\src\screen_carousel.rs` now use the Web tool icon for Browser screen affordances.
+- `crates\web_preview\src\web_preview_view.rs` now animates the Web Preview loading icon while native WebView content mounts.
+- `PLAN.md` now records the latest editor shell, sidebar, panel, picker, file-panel, and Web Preview polish brief as the next implementation track.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\workspace\src\dock.rs crates\title_bar\src\title_bar.rs crates\agent_ui\src\dx_style_panel\panel.rs crates\agent_ui\src\dx_style_panel\panel_view.rs crates\workspace\src\screen_carousel.rs crates\web_preview\src\web_preview_view.rs`
+- Focused source scan for DX Style registration, `TogglePanel`, the title-bar Style button, Style active-state matching, legacy panel restore aliases, Style generator copy, and Web Preview loading text.
+- Focused stale-name scan for old `DxStylePanel`/`DX Style` active-panel comparisons.
+- `git diff --check -- PLAN.md todo.txt changelog.txt crates/workspace/src/dock.rs crates/title_bar/src/title_bar.rs crates/agent_ui/src/dx_style_panel/panel.rs crates/agent_ui/src/dx_style_panel/panel_view.rs crates/workspace/src/screen_carousel.rs crates/web_preview/src/web_preview_view.rs`
+- Focused conflict-marker scan across changed source/docs files.
+
+NOTES:
+- The title-bar button dispatches the existing real `dx_style::TogglePanel` action when opening/focusing Style and the existing right-dock toggle action when closing the active right dock; no dummy launcher or disconnected control was added.
+- `just run` was run only before this follow-up source patch, after the user explicitly asked for it. It was not rerun for this patch.
+
 [2026-06-01] - Onboarding Web Preview Fullscreen Visibility
 
 FIXED:

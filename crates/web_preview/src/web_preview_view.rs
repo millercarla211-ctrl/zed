@@ -36156,7 +36156,8 @@ impl Render for WebPreviewView {
                         .child(
                             ui::Icon::new(IconName::LoadCircle)
                                 .size(IconSize::Small)
-                                .color(Color::Muted),
+                                .color(Color::Muted)
+                                .with_rotate_animation(2),
                         )
                         .child(
                             Label::new("Loading Web Preview")

@@ -27,12 +27,12 @@ pub(super) fn render_panel(
         .child(
             Button::new(
                 "dx-style-panel-open-generator-preview",
-                "Open Web Preview Generators",
+                "Open Style Generators",
             )
             .full_width()
             .label_size(LabelSize::Small)
             .color(Color::Muted)
-            .start_icon(Icon::new(IconName::Sliders).size(IconSize::Small))
+            .start_icon(Icon::new(IconName::Sparkle).size(IconSize::Small))
             .disabled(!can_open_generator)
             .on_click(move |_, window, cx| {
                 window.dispatch_action(
@@ -50,8 +50,8 @@ fn panel_header() -> impl IntoElement {
     h_flex().justify_between().gap_2().child(
         h_flex()
             .gap_1()
-            .child(Icon::new(IconName::Sliders).size(IconSize::Small))
-            .child(Label::new("DX Style").size(LabelSize::Small)),
+            .child(Icon::new(IconName::Sparkle).size(IconSize::Small))
+            .child(Label::new("Style").size(LabelSize::Small)),
     )
 }
 fn style_summary(

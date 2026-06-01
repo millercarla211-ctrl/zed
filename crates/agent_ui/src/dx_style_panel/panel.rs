@@ -72,7 +72,11 @@ impl EventEmitter<PanelEvent> for DxStylePanel {}
 
 impl Panel for DxStylePanel {
     fn persistent_name() -> &'static str {
-        "DxStylePanel"
+        "Style"
+    }
+
+    fn legacy_persistent_names() -> &'static [&'static str] {
+        &["DxStylePanel", "DX Style"]
     }
 
     fn panel_key() -> &'static str {
@@ -98,11 +102,11 @@ impl Panel for DxStylePanel {
     }
 
     fn icon(&self, _: &Window, _: &App) -> Option<IconName> {
-        Some(IconName::Sliders)
+        None
     }
 
     fn icon_tooltip(&self, _: &Window, _: &App) -> Option<&'static str> {
-        Some("DX Style")
+        Some("Style")
     }
 
     fn toggle_action(&self) -> Box<dyn gpui::Action> {

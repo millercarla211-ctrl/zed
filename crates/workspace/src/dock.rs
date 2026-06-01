@@ -35,6 +35,9 @@ pub use proto::PanelId;
 
 pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
     fn persistent_name() -> &'static str;
+    fn legacy_persistent_names() -> &'static [&'static str] {
+        &[]
+    }
     fn panel_key() -> &'static str;
     fn position(&self, window: &Window, cx: &App) -> DockPosition;
     fn position_is_valid(&self, position: DockPosition) -> bool;
@@ -101,6 +104,7 @@ pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized {
 pub trait PanelHandle: Send + Sync {
     fn panel_id(&self) -> EntityId;
     fn persistent_name(&self) -> &'static str;
+    fn legacy_persistent_names(&self) -> &'static [&'static str];
     fn panel_key(&self) -> &'static str;
     fn position(&self, window: &Window, cx: &App) -> DockPosition;
     fn position_is_valid(&self, position: DockPosition, cx: &App) -> bool;
@@ -155,6 +159,10 @@ where
 
     fn persistent_name(&self) -> &'static str {
         T::persistent_name()
+    }
+
+    fn legacy_persistent_names(&self) -> &'static [&'static str] {
+        T::legacy_persistent_names()
     }
 
     fn panel_key(&self) -> &'static str {
@@ -537,9 +545,10 @@ impl Dock {
     }
 
     pub fn panel_index_for_persistent_name(&self, ui_name: &str, _cx: &App) -> Option<usize> {
-        self.panel_entries
-            .iter()
-            .position(|entry| entry.panel.persistent_name() == ui_name)
+        self.panel_entries.iter().position(|entry| {
+            entry.panel.persistent_name() == ui_name
+                || entry.panel.legacy_persistent_names().contains(&ui_name)
+        })
     }
 
     pub fn panel_index_for_proto_id(&self, panel_id: PanelId) -> Option<usize> {
