@@ -633,8 +633,12 @@ impl Dock {
             .any(|(_, entry)| entry.panel.panel_id() == panel_id)
     }
 
+    fn supports_panel_stack(&self) -> bool {
+        matches!(self.position, DockPosition::Left | DockPosition::Right)
+    }
+
     fn can_stack_panel(&self, panel_id: EntityId) -> bool {
-        if self.position != DockPosition::Right || self.panel_entries.len() < 2 {
+        if !self.supports_panel_stack() || self.panel_entries.len() < 2 {
             return false;
         }
 
@@ -734,7 +738,7 @@ impl Dock {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.position != DockPosition::Right {
+        if !self.supports_panel_stack() {
             return false;
         }
 
@@ -1636,8 +1640,16 @@ impl Render for PanelButtons {
                 let has_panel_stack = dock.has_panel_stack();
                 let dock_for_menu = dock_entity.clone();
                 let workspace_for_menu = workspace.clone();
+                let dock_for_trigger = dock_entity.clone();
+                let workspace_for_trigger = workspace.clone();
 
                 let is_active_button = Some(i) == active_index && is_open;
+                let show_stack_button = can_stack_panel || is_panel_stacked;
+                let stack_button_tooltip: SharedString = if is_panel_stacked {
+                    format!("Remove from {} Dock Stack", dock_position.label()).into()
+                } else {
+                    format!("Split into {} Dock Stack", dock_position.label()).into()
+                };
                 let (action, tooltip) = if is_active_button {
                     let action = dock.toggle_action();
 
@@ -1694,7 +1706,7 @@ impl Render for PanelButtons {
                                         let dock_for_stack = dock_for_menu.clone();
                                         let workspace_for_stack = workspace_for_menu.clone();
                                         menu = menu.entry(
-                                            "Add to Right Dock Stack",
+                                            format!("Add to {} Dock Stack", dock_position.label()),
                                             None,
                                             move |window, cx| {
                                                 let did_change =
@@ -1715,7 +1727,10 @@ impl Render for PanelButtons {
                                         let dock_for_unstack = dock_for_menu.clone();
                                         let workspace_for_unstack = workspace_for_menu.clone();
                                         menu = menu.entry(
-                                            "Remove from Right Dock Stack",
+                                            format!(
+                                                "Remove from {} Dock Stack",
+                                                dock_position.label()
+                                            ),
                                             None,
                                             move |window, cx| {
                                                 let did_change =
@@ -1836,13 +1851,50 @@ impl Render for PanelButtons {
                                     })
                                 });
 
-                            div().relative().child(button).when_some(
-                                icon_label
-                                    .clone()
-                                    .filter(|_| !is_active_button)
-                                    .and_then(|label| label.parse::<usize>().ok()),
-                                |this, count| this.child(CountBadge::new(count)),
-                            )
+                            h_flex()
+                                .gap_0()
+                                .child(
+                                    div().relative().child(button).when_some(
+                                        icon_label
+                                            .clone()
+                                            .filter(|_| !is_active_button)
+                                            .and_then(|label| label.parse::<usize>().ok()),
+                                        |this, count| this.child(CountBadge::new(count)),
+                                    ),
+                                )
+                                .when(show_stack_button, |this| {
+                                    let dock_for_button = dock_for_trigger.clone();
+                                    let workspace_for_button = workspace_for_trigger.clone();
+                                    let stack_button_tooltip = stack_button_tooltip.clone();
+                                    this.child(
+                                        IconButton::new(
+                                            ("dock-panel-stack", panel_id),
+                                            IconName::SplitAlt,
+                                        )
+                                        .icon_size(IconSize::XSmall)
+                                        .tooltip(Tooltip::text(stack_button_tooltip))
+                                        .on_click(
+                                            move |_, window, cx| {
+                                                let did_change =
+                                                    dock_for_button.update(cx, |dock, cx| {
+                                                        if is_panel_stacked {
+                                                            dock.unstack_panel(panel_id, window, cx)
+                                                        } else {
+                                                            dock.stack_panel(panel_id, window, cx)
+                                                        }
+                                                    });
+                                                if did_change
+                                                    && let Some(workspace) =
+                                                        workspace_for_button.upgrade()
+                                                {
+                                                    workspace.update(cx, |workspace, cx| {
+                                                        workspace.serialize_workspace(window, cx);
+                                                    });
+                                                }
+                                            },
+                                        ),
+                                    )
+                                })
                         }),
                 )
             })

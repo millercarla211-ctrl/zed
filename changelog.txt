@@ -1,3 +1,25 @@
+[2026-06-02] - Dock Stack Controls And Run Fixes
+
+CHANGED:
+- `crates\workspace\src\dock.rs` now allows the existing panel stack model on left and right docks while keeping the bottom dock excluded.
+- Eligible left/right dock panel buttons now expose a real split/stack icon wired to `stack_panel` and `unstack_panel`, preserving existing workspace serialization.
+- Dock stack context menu labels now name the current dock side instead of assuming the right dock.
+
+FIXED:
+- `crates\sidebar\src\sidebar.rs` no longer keeps an immutable `Context` borrow alive across the collapsed activity-bar secondary action rendering.
+- `crates\zed\src\zed.rs` imports `PanelEvent` from `workspace::dock`, matching the existing workspace module ownership.
+- `crates\zed\src\main.rs` imports `ReadGlobal` so `SettingsStore::global` resolves for the empty-workspace AI fallback check.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\zed\src\zed.rs crates\zed\src\main.rs crates\sidebar\src\sidebar.rs crates\workspace\src\dock.rs`
+- `git diff --check -- crates/zed/src/zed.rs crates/zed/src/main.rs crates/sidebar/src/sidebar.rs crates/workspace/src/dock.rs`
+- Targeted conflict-marker scan over the touched Rust files.
+- Authorized `just run`; it built `zed` and `cli` successfully and launched Zed process `29584`.
+
+NOTES:
+- No additional `just run` is needed for this documentation-only handoff update.
+- The broader screenshot brief still has remaining source work beyond this checkpoint, especially file-panel marquee selection/media explorer polish and the deeper tool-panel source catalog work.
+
 [2026-05-31] - DX Style Source-only Goal Final Polish
 
 CHANGED:

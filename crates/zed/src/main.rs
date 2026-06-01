@@ -41,7 +41,7 @@ use futures::{StreamExt, channel::oneshot, future};
 use git::GitHostingProviderRegistry;
 use git_ui::clone::clone_and_open;
 use gpui::{
-    App, AppContext, Application, AsyncApp, Focusable as _, QuitMode, Task, TaskExt,
+    App, AppContext, Application, AsyncApp, Focusable as _, QuitMode, ReadGlobal, Task, TaskExt,
     UpdateGlobal as _, block_on,
 };
 use gpui_platform;

@@ -7383,7 +7383,8 @@ impl Sidebar {
 
     fn render_coding_activity_bar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let is_archive = matches!(self.view, SidebarView::Archive(..));
-        let button = |id,
+        let button = |cx: &mut Context<Self>,
+                      id,
                       icon,
                       tooltip,
                       on_click: fn(
@@ -7402,6 +7403,7 @@ impl Sidebar {
 
         let primary_actions = vec![
             button(
+                cx,
                 "sidebar-activity-new-chat",
                 IconName::NewThread,
                 "New Chat",
@@ -7413,6 +7415,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-search",
                 IconName::MagnifyingGlass,
                 "Search",
@@ -7424,6 +7427,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-add-folder",
                 IconName::SquarePlus,
                 "Add Folder to Project",
@@ -7431,6 +7435,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-agents",
                 IconName::ZedAgent,
                 "Agents",
@@ -7438,6 +7443,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-sources",
                 IconName::Book,
                 "Sources",
@@ -7445,6 +7451,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-plugins",
                 IconName::Blocks,
                 "Plugins",
@@ -7454,6 +7461,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-automations",
                 IconName::ListTodo,
                 "Automations",
@@ -7461,6 +7469,7 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-background-tasks",
                 IconName::Clock,
                 "Background Tasks",
@@ -7474,6 +7483,7 @@ impl Sidebar {
             self.render_activity_bar_expand_button(cx)
                 .into_any_element(),
             button(
+                cx,
                 "sidebar-activity-settings",
                 IconName::Settings,
                 "Settings",

@@ -1,4 +1,6 @@
 COMPLETED:
+- Dock stack controls now use existing stack persistence for both left and right docks, expose a visible split/stack button beside eligible panel buttons, and use side-aware stack/unstack labels.
+- Build integration fixes from the authorized `just run` pass are in place: the collapsed activity-bar helper no longer holds a stale immutable `Context` borrow, `PanelEvent` is imported from the dock module, and `SettingsStore::global` has the required GPUI global-read trait in scope.
 - Empty post-onboarding workspaces now leave the center itemless when AI is enabled, then focus and zoom the real AgentPanel after it loads so the AI surface becomes the primary fullscreen state instead of an untitled editor.
 - Workspace sidebar now defaults to a real collapsed activity-bar mode, can be expanded/collapsed through real sidebar controls, uses a three-column shortcut grid in expanded mode, and exposes Add Folder actions in collapsed, toolbar, and bottom chrome.
 - AI panel model picker now groups provider models behind collapsible provider headers with model-count badges, while search results stay expanded so matches remain visible.
