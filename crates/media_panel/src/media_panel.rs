@@ -2087,7 +2087,7 @@ impl Panel for MediaPanel {
     }
 
     fn default_size(&self, _: &Window, _: &App) -> Pixels {
-        px(340.)
+        px(360.)
     }
 
     fn min_size(&self, _: &Window, _: &App) -> Option<Pixels> {

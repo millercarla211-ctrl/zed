@@ -1,3 +1,16 @@
+[2026-06-02] - Right Tool Panel Width Alignment
+
+CHANGED:
+- `crates\icon_picker\src\icon_picker.rs`, `crates\font_panel\src\font_panel.rs`, and `crates\media_panel\src\media_panel.rs` now use the same 360px default right-panel width as UI and Style.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\icon_picker\src\icon_picker.rs crates\font_panel\src\font_panel.rs crates\media_panel\src\media_panel.rs`
+- `git diff --check -- crates/icon_picker/src/icon_picker.rs crates/font_panel/src/font_panel.rs crates/media_panel/src/media_panel.rs`
+- Targeted conflict-marker scan over the touched files.
+
+NOTES:
+- No `just run`, Cargo, build, server, or browser automation was run for this small source-only checkpoint.
+
 [2026-06-02] - Onboarding Web Preview Entry Consistency
 
 CHANGED:
