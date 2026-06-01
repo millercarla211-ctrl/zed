@@ -933,28 +933,28 @@ impl TitleBar {
     fn render_hidden_feature_buttons(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let active_right_panel = self.active_right_panel_name(cx);
         vec![
-            self.render_title_action_button(
+            self.render_title_right_panel_button(
                 "titlebar-icon-picker",
                 IconName::SquareDot,
                 "Icons",
                 icon_picker::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("Icon Picker"),
             ),
-            self.render_title_action_button(
+            self.render_title_right_panel_button(
                 "titlebar-font-panel",
                 IconName::Font,
                 "Fonts",
                 font_panel::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("Font Panel"),
             ),
-            self.render_title_action_button(
+            self.render_title_right_panel_button(
                 "titlebar-media-panel",
                 IconName::Library,
                 "Media",
                 media_panel::ToggleFocus.boxed_clone(),
                 active_right_panel == Some("Media"),
             ),
-            self.render_title_action_button(
+            self.render_title_right_panel_button(
                 "titlebar-shadcn-ui-panel",
                 IconName::Box,
                 "UI",
@@ -977,26 +977,6 @@ impl TitleBar {
         let workspace = workspace.read(cx);
         let dock = workspace.dock_at_position(DockPosition::Right).read(cx);
         dock.visible_panel().map(|panel| panel.persistent_name())
-    }
-
-    fn render_title_action_button(
-        &self,
-        id: &'static str,
-        icon: IconName,
-        tooltip: &'static str,
-        action: Box<dyn Action>,
-        selected: bool,
-    ) -> AnyElement {
-        IconButton::new(id, icon)
-            .icon_size(IconSize::Small)
-            .style(ButtonStyle::Subtle)
-            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
-            .toggle_state(selected)
-            .tooltip(Tooltip::text(tooltip))
-            .on_click(move |_, window, cx| {
-                window.dispatch_action(action.boxed_clone(), cx);
-            })
-            .into_any_element()
     }
 
     fn render_title_right_panel_button(

@@ -1,3 +1,18 @@
+[2026-06-02] - Right Tool Buttons And Dock Stack Restore
+
+CHANGED:
+- `crates\title_bar\src\title_bar.rs` now routes Icons, Fonts, Media, UI, and Style through the same right-dock-aware titlebar button helper.
+- Clicking the active top-right tool now closes the right dock consistently instead of only doing so for Style.
+- `crates\workspace\src\dock.rs` now restores persisted stacked panels for every dock side that supports stacking, not only the right dock.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\workspace\src\dock.rs crates\title_bar\src\title_bar.rs`
+- `git diff --check -- crates/workspace/src/dock.rs crates/title_bar/src/title_bar.rs`
+- Targeted conflict-marker scan over the touched files.
+
+NOTES:
+- No `just run`, Cargo, build, server, or browser automation was run for this small source-only checkpoint.
+
 [2026-06-02] - Dock Stack Controls And Run Fixes
 
 CHANGED:

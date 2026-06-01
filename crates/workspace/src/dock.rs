@@ -682,7 +682,7 @@ impl Dock {
     }
 
     fn restore_stacked_panels(&mut self, panel_names: &[String], cx: &mut Context<Self>) {
-        if self.position != DockPosition::Right || panel_names.len() < 2 {
+        if !self.supports_panel_stack() || panel_names.len() < 2 {
             self.stacked_panel_ids.clear();
             return;
         }
