@@ -12600,6 +12600,19 @@ NOTES:
 - This keeps insertion behind explicit user actions and preserves drag-and-drop plus the existing recent/pinned Insert buttons.
 - No Cargo, build, or `just run` command was run for this source patch.
 
+[2026-06-02] - Workspace Sidebar Activity Bar Mode
+
+CHANGED:
+- `crates\sidebar\src\sidebar.rs` now treats the one-column activity bar as the default workspace sidebar mode and uses the existing expanded state to render the full sidebar only after the user expands it.
+- `crates\sidebar\src\sidebar.rs` persists the expanded/collapsed sidebar mode through serialized sidebar state, defaulting old state to collapsed.
+- `crates\sidebar\src\sidebar.rs` changes the shortcut grid to three columns while keeping the existing twelve-item cap and cache-backed entry derivation.
+- `crates\sidebar\src\sidebar.rs` replaces duplicate top toolbar space-navigation buttons with a real Add Folder action wired to the active workspace.
+- `crates\sidebar\src\sidebar.rs` adds real Add Folder affordances to the collapsed activity bar and expanded bottom bar.
+
+NOTES:
+- This reuses the existing sidebar, workspace activation, folder-open, recent-projects, and thread-history wiring. It does not introduce a parallel dummy activity bar.
+- No `just run` or broad Cargo command was run for this source-only sidebar slice.
+
 [2026-06-02] - AI Panel Model Picker Provider Groups
 
 CHANGED:

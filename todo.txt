@@ -1,4 +1,5 @@
 COMPLETED:
+- Workspace sidebar now defaults to a real collapsed activity-bar mode, can be expanded/collapsed through real sidebar controls, uses a three-column shortcut grid in expanded mode, and exposes Add Folder actions in collapsed, toolbar, and bottom chrome.
 - AI panel model picker now groups provider models behind collapsible provider headers with model-count badges, while search results stay expanded so matches remain visible.
 - Icons panel selection is now non-mutating: grid tiles select only, selected icon actions live at the top, icon cells are larger, and React icon component names are sanitized into valid PascalCase before insertion.
 - Style tool entry moved to the top-right title bar cluster beside Icons, Fonts, Media, and UI; the right-dock panel no longer exposes a duplicate bottom status-bar icon, active-click closes the right dock, and old `DxStylePanel`/`DX Style` restore names remain compatible.

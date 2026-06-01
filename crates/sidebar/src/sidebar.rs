@@ -110,7 +110,7 @@ const DEFAULT_WIDTH: Pixels = px(300.0);
 const MIN_WIDTH: Pixels = px(200.0);
 const MAX_WIDTH: Pixels = px(800.0);
 const CODING_ACTIVITY_BAR_WIDTH: Pixels = px(48.0);
-const SIDEBAR_SPACE_GRID_COLUMNS: usize = 4;
+const SIDEBAR_SPACE_GRID_COLUMNS: usize = 3;
 const MAX_VISIBLE_SPACE_DOTS: usize = 7;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -155,6 +155,8 @@ struct SerializedSidebar {
     next_space_number: usize,
     #[serde(default)]
     active_view: SerializedSidebarView,
+    #[serde(default)]
+    activity_bar_expanded: bool,
 }
 
 fn default_next_space_number() -> usize {
@@ -7249,8 +7251,7 @@ impl Sidebar {
     fn render_gen_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let is_archive = matches!(self.view, SidebarView::Archive(..));
         let show_import_button = is_archive && !self.should_render_acp_import_onboarding(cx);
-        let can_collapse_to_activity_bar =
-            self.activity_bar_expanded && self.should_use_coding_activity_bar(cx);
+        let can_collapse_to_activity_bar = self.activity_bar_expanded;
         let collapse_icon = if self.side(cx) == SidebarSide::Left {
             IconName::ChevronLeft
         } else {
@@ -7287,6 +7288,7 @@ impl Sidebar {
                             "Collapse to Activity Bar",
                             |this, _, _window, cx| {
                                 this.activity_bar_expanded = false;
+                                this.serialize(cx);
                                 cx.notify();
                             },
                         ))
@@ -7310,16 +7312,10 @@ impl Sidebar {
                         },
                     ))
                     .child(button(
-                        "sidebar-toolbar-prev-space",
-                        IconName::ArrowLeft,
-                        "Previous Space",
-                        |this, _, window, cx| this.cycle_project_impl(false, window, cx),
-                    ))
-                    .child(button(
-                        "sidebar-toolbar-next-space",
-                        IconName::ArrowRight,
-                        "Next Space",
-                        |this, _, window, cx| this.cycle_project_impl(true, window, cx),
+                        "sidebar-toolbar-add-folder",
+                        IconName::SquarePlus,
+                        "Add Folder to Project",
+                        |this, _, window, cx| this.add_folder_to_active_workspace(window, cx),
                     )),
             )
             .child(
@@ -7428,6 +7424,13 @@ impl Sidebar {
             )
             .into_any_element(),
             button(
+                "sidebar-activity-add-folder",
+                IconName::SquarePlus,
+                "Add Folder to Project",
+                |this, _, window, cx| this.add_folder_to_active_workspace(window, cx),
+            )
+            .into_any_element(),
+            button(
                 "sidebar-activity-agents",
                 IconName::ZedAgent,
                 "Agents",
@@ -7468,6 +7471,8 @@ impl Sidebar {
         ];
 
         let secondary_actions = vec![
+            self.render_activity_bar_expand_button(cx)
+                .into_any_element(),
             button(
                 "sidebar-activity-settings",
                 IconName::Settings,
@@ -7482,6 +7487,14 @@ impl Sidebar {
         ];
 
         coding_activity_bar::render_coding_activity_bar(primary_actions, secondary_actions)
+    }
+
+    fn add_folder_to_active_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(workspace) = self.active_workspace(cx) {
+            workspace.update(cx, |workspace, cx| {
+                workspace.add_folder_to_project(&AddFolderToProject, window, cx);
+            });
+        }
     }
 
     fn background_task_entry_index(&self) -> Option<usize> {
@@ -7634,39 +7647,6 @@ impl Sidebar {
             .and_then(|workspace| workspace.read(cx).active_item(cx))
             .map(|item| item.screen_kind(cx))
             .unwrap_or(WorkspaceScreenKind::Editor)
-    }
-
-    fn should_use_coding_activity_bar(&self, cx: &App) -> bool {
-        let Some(workspace) = self.active_workspace(cx) else {
-            return false;
-        };
-
-        if !AgentPanel::is_visible(&workspace, cx) {
-            return false;
-        }
-
-        let workspace = workspace.read(cx);
-        let mut has_editor = false;
-        let mut has_browser = false;
-        for pane in workspace.panes() {
-            let Some(item) = pane.read(cx).active_item() else {
-                continue;
-            };
-
-            match item.screen_kind(cx) {
-                WorkspaceScreenKind::Editor => has_editor = true,
-                WorkspaceScreenKind::Browser => has_browser = true,
-                WorkspaceScreenKind::Terminal
-                | WorkspaceScreenKind::LiquidGlass
-                | WorkspaceScreenKind::Other => {}
-            }
-
-            if has_editor && has_browser {
-                return true;
-            }
-        }
-
-        false
     }
 
     fn project_root_path(&self, cx: &App) -> Option<PathBuf> {
@@ -8137,6 +8117,26 @@ impl Sidebar {
             })
     }
 
+    fn render_activity_bar_expand_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let on_right = self.side(cx) == SidebarSide::Right;
+        let icon = if on_right {
+            IconName::ThreadsSidebarRightOpen
+        } else {
+            IconName::ThreadsSidebarLeftOpen
+        };
+
+        IconButton::new("sidebar-activity-expand", icon)
+            .shape(IconButtonShape::Square)
+            .style(ButtonStyle::Subtle)
+            .icon_size(IconSize::Small)
+            .tooltip(Tooltip::text("Expand Sidebar"))
+            .on_click(cx.listener(|this, _, _window, cx| {
+                this.activity_bar_expanded = true;
+                this.serialize(cx);
+                cx.notify();
+            }))
+    }
+
     fn render_space_carousel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let spaces = self.space_entries(cx);
         let active_space_id = self.active_space_id;
@@ -8433,6 +8433,14 @@ impl Sidebar {
             .border_color(cx.theme().colors().border)
             .bg(cx.theme().colors().status_bar_background)
             .child(left_slot)
+            .child(
+                IconButton::new("sidebar-bottom-add-folder", IconName::SquarePlus)
+                    .icon_size(IconSize::Small)
+                    .tooltip(Tooltip::text("Add Folder to Project"))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.add_folder_to_active_workspace(window, cx);
+                    })),
+            )
             .child(
                 IconButton::new("history", IconName::Clock)
                     .icon_size(IconSize::Small)
@@ -8762,8 +8770,8 @@ fn render_import_onboarding_banner(
 }
 
 impl WorkspaceSidebar for Sidebar {
-    fn width(&self, cx: &App) -> Pixels {
-        if self.should_use_coding_activity_bar(cx) && !self.activity_bar_expanded {
+    fn width(&self, _cx: &App) -> Pixels {
+        if !self.activity_bar_expanded {
             CODING_ACTIVITY_BAR_WIDTH
         } else {
             self.width
@@ -8847,6 +8855,7 @@ impl WorkspaceSidebar for Sidebar {
                 SidebarView::ThreadList => SerializedSidebarView::ThreadList,
                 SidebarView::Archive(_) => SerializedSidebarView::History,
             },
+            activity_bar_expanded: self.activity_bar_expanded,
         };
         serde_json::to_string(&serialized).ok()
     }
@@ -8880,6 +8889,7 @@ impl WorkspaceSidebar for Sidebar {
                 .map(WorkspaceId::from_i64)
                 .collect();
             self.next_space_number = serialized.next_space_number.max(1);
+            self.activity_bar_expanded = serialized.activity_bar_expanded;
             if serialized.active_view == SerializedSidebarView::History {
                 cx.defer_in(window, |this, window, cx| {
                     this.show_archive(window, cx);
@@ -8905,11 +8915,7 @@ impl Render for Sidebar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let _titlebar_height = ui::utils::platform_title_bar_height(window);
         let ui_font = theme_settings::setup_ui_font(window, cx);
-        let use_activity_bar =
-            self.should_use_coding_activity_bar(cx) && !self.activity_bar_expanded;
-        if !self.should_use_coding_activity_bar(cx) {
-            self.activity_bar_expanded = false;
-        }
+        let use_activity_bar = !self.activity_bar_expanded;
         let sticky_header = (!use_activity_bar)
             .then(|| self.render_sticky_header(window, cx))
             .flatten();
