@@ -1,4 +1,5 @@
 COMPLETED:
+- Onboarding Web Preview fullscreen visibility fix: the onboarding item now closes open workspace docks deterministically before opening and leaves the GPUI root transparent so the native WebPreview underlay can cover the onboarding surface.
 - DX Style/Zed source-only production-readiness goal was finalized on 2026-05-31: the Zed Style right-dock shell, Web Preview generator host, DX Style source-owned fixtures, grouped-class two-way review evidence, CSS declaration dry-run and hint provenance, review-only native source-apply bridge, and fail-closed writer/readiness gates are in place and covered by final lightweight source checks. Runtime/WebView/build proof and source mutation remain intentionally outside this no-`just run` completion window.
 
 IN PROGRESS:
