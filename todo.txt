@@ -1,4 +1,5 @@
 COMPLETED:
+- Icons panel selection is now non-mutating: grid tiles select only, selected icon actions live at the top, icon cells are larger, and React icon component names are sanitized into valid PascalCase before insertion.
 - Style tool entry moved to the top-right title bar cluster beside Icons, Fonts, Media, and UI; the right-dock panel no longer exposes a duplicate bottom status-bar icon, active-click closes the right dock, and old `DxStylePanel`/`DX Style` restore names remain compatible.
 - Latest editor shell and panel polish brief has been recorded in `PLAN.md` as the next multi-subsystem implementation track.
 - Onboarding Web Preview fullscreen visibility fix: the onboarding item now closes open workspace docks deterministically before opening and leaves the GPUI root transparent so the native WebPreview underlay can cover the onboarding surface.

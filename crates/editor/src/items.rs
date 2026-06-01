@@ -77,18 +77,32 @@ impl Editor {
     ) -> Result<SharedString> {
         let svg = icon_svg_source(icon);
 
-        if let Some(active_path) = target_file_abs_path_for_app(self, cx)
-            && is_react_editor_path(&active_path)
-            && let Some((project_root, active_path)) =
-                self.active_project_path(cx).and_then(|path| {
-                    let project = self.project()?.read(cx);
-                    Some((
-                        project.get_workspace_root(&path, cx)?,
-                        project.absolute_path(&path, cx)?,
-                    ))
-                })
-        {
-            return self.insert_react_icon_asset(icon, &svg, project_root, active_path, window, cx);
+        if let Some(active_path) = target_file_abs_path_for_app(self, cx) {
+            if is_react_editor_path(&active_path)
+                && let Some((project_root, active_path)) =
+                    self.active_project_path(cx).and_then(|path| {
+                        let project = self.project()?.read(cx);
+                        Some((
+                            project.get_workspace_root(&path, cx)?,
+                            project.absolute_path(&path, cx)?,
+                        ))
+                    })
+            {
+                return self.insert_react_icon_asset(
+                    icon,
+                    &svg,
+                    project_root,
+                    active_path,
+                    window,
+                    cx,
+                );
+            }
+
+            if !is_basic_icon_editor_path(&active_path) {
+                return Err(anyhow!(
+                    "Icon insertion is available in TSX, JSX, HTML, SVG, Markdown, MDX, and untitled editors."
+                ));
+            }
         }
 
         self.insert(&svg, window, cx);
@@ -147,18 +161,31 @@ impl Editor {
     ) -> Result<SharedString> {
         let svg = icon_svg_source(icon);
 
-        if let Some(active_path) = target_file_abs_path_for_app(self, cx)
-            && is_react_editor_path(&active_path)
-            && let Some((project_root, active_path)) =
-                self.active_project_path(cx).and_then(|path| {
-                    let project = self.project()?.read(cx);
-                    Some((
-                        project.get_workspace_root(&path, cx)?,
-                        project.absolute_path(&path, cx)?,
-                    ))
-                })
-        {
-            return self.insert_react_icon_asset_on_drop(icon, &svg, project_root, active_path, cx);
+        if let Some(active_path) = target_file_abs_path_for_app(self, cx) {
+            if is_react_editor_path(&active_path)
+                && let Some((project_root, active_path)) =
+                    self.active_project_path(cx).and_then(|path| {
+                        let project = self.project()?.read(cx);
+                        Some((
+                            project.get_workspace_root(&path, cx)?,
+                            project.absolute_path(&path, cx)?,
+                        ))
+                    })
+            {
+                return self.insert_react_icon_asset_on_drop(
+                    icon,
+                    &svg,
+                    project_root,
+                    active_path,
+                    cx,
+                );
+            }
+
+            if !is_basic_icon_editor_path(&active_path) {
+                return Err(anyhow!(
+                    "Icon insertion is available in TSX, JSX, HTML, SVG, Markdown, MDX, and untitled editors."
+                ));
+            }
         }
 
         self.insert_text_on_drop(svg, cx);
@@ -530,6 +557,13 @@ fn is_react_editor_path(path: &Path) -> bool {
     )
 }
 
+fn is_basic_icon_editor_path(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()),
+        Some("html" | "htm" | "svg" | "md" | "mdx")
+    )
+}
+
 fn icon_svg_source(icon: &DraggedIconAsset) -> String {
     icon.svg
         .as_ref()
@@ -768,13 +802,16 @@ fn relative_import_path(from_file: &Path, to_file: &Path) -> Option<String> {
 
 fn react_icon_component_name(stem: &str) -> String {
     let mut name = String::new();
-    for segment in stem.split('_').filter(|segment| !segment.is_empty()) {
-        let mut chars = segment.chars();
-        if let Some(first) = chars.next() {
-            name.extend(first.to_uppercase());
-            name.push_str(chars.as_str());
+    let mut segment = String::new();
+    for ch in stem.chars() {
+        if ch.is_ascii_alphanumeric() {
+            segment.push(ch);
+        } else {
+            push_react_component_name_segment(&mut name, &segment);
+            segment.clear();
         }
     }
+    push_react_component_name_segment(&mut name, &segment);
 
     if name.is_empty() {
         name.push_str("Svg");
@@ -790,6 +827,18 @@ fn react_icon_component_name(stem: &str) -> String {
         name.push_str("Icon");
     }
     name
+}
+
+fn push_react_component_name_segment(name: &mut String, segment: &str) {
+    let mut chars = segment.chars();
+    let Some(first) = chars.next() else {
+        return;
+    };
+
+    name.push(first.to_ascii_uppercase());
+    for ch in chars {
+        name.push(ch.to_ascii_lowercase());
+    }
 }
 
 fn react_import_exists(text: &str, component_name: &str, import_path: &str) -> bool {

@@ -828,6 +828,33 @@ impl IconPickerPanel {
         );
     }
 
+    fn select_icon(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
+        let payload = self.payload_for_icon(&icon);
+        self.selected_icon = Some(icon);
+        self.status = Some(icon_status_label("Selected ", payload.label.as_ref()));
+        cx.notify();
+    }
+
+    fn copy_selected_icon_name(&mut self, cx: &mut Context<Self>) {
+        let Some(icon) = self.selected_icon.clone() else {
+            self.status = Some("Select an icon to copy".into());
+            cx.notify();
+            return;
+        };
+
+        self.copy_icon_name(icon, cx);
+    }
+
+    fn insert_selected_icon(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(icon) = self.selected_icon.clone() else {
+            self.status = Some("Select an icon to insert".into());
+            cx.notify();
+            return;
+        };
+
+        self.insert_icon(icon, window, cx);
+    }
+
     fn copy_icon_name(&mut self, icon: PickerIcon, cx: &mut Context<Self>) {
         self.selected_icon = Some(icon.clone());
         let payload = self.payload_for_icon(&icon);
@@ -1006,13 +1033,13 @@ impl IconPickerPanel {
             .selected_icon
             .as_ref()
             .is_some_and(|selected| selected.same_identity_as(&icon));
-        let icon_preview = self.render_icon_preview(&icon, IconSize::Medium, cx);
+        let icon_preview = self.render_icon_preview(&icon, IconSize::Custom(rems_from_px(22.)), cx);
 
         div()
             .id(tile_id)
             .min_w(px(0.))
-            .h(px(44.))
-            .p_0p5()
+            .h(px(66.))
+            .p_1()
             .gap_1()
             .v_flex()
             .items_center()
@@ -1034,8 +1061,8 @@ impl IconPickerPanel {
             .tooltip(Tooltip::text(tooltip_label))
             .on_click(cx.listener({
                 let icon = icon.clone();
-                move |panel, _, window, cx| {
-                    panel.insert_icon(icon.clone(), window, cx);
+                move |panel, _, _, cx| {
+                    panel.select_icon(icon.clone(), cx);
                 }
             }))
             .on_drag(payload, |icon, position, _, cx| {
@@ -1053,6 +1080,72 @@ impl IconPickerPanel {
                     .color(Color::Muted)
                     .truncate(),
             )
+    }
+
+    fn render_selected_icon_actions(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let icon = self.selected_icon.clone()?;
+        let payload = self.payload_for_icon(&icon);
+        let label = payload.label.clone();
+        let source_label = icon_source_label(&icon);
+        let preview = self.render_icon_preview(&icon, IconSize::Custom(rems_from_px(24.)), cx);
+
+        Some(
+            h_flex()
+                .id("icon-picker-selected-icon-actions")
+                .gap_2()
+                .items_center()
+                .p_2()
+                .rounded_sm()
+                .border_1()
+                .border_color(cx.theme().colors().border_variant)
+                .bg(cx.theme().colors().element_background)
+                .child(preview)
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .gap_0p5()
+                        .child(Label::new(label).size(LabelSize::Small).truncate())
+                        .child(
+                            Label::new(source_label)
+                                .size(LabelSize::XSmall)
+                                .color(Color::Muted)
+                                .truncate(),
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_1()
+                        .child(
+                            IconButton::new("icon-picker-copy-selected", IconName::Copy)
+                                .shape(ui::IconButtonShape::Square)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text("Copy icon name"))
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.copy_selected_icon_name(cx);
+                                })),
+                        )
+                        .child(
+                            IconButton::new("icon-picker-insert-selected", IconName::Plus)
+                                .shape(ui::IconButtonShape::Square)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text("Insert selected icon"))
+                                .on_click(cx.listener(|panel, _, window, cx| {
+                                    panel.insert_selected_icon(window, cx);
+                                })),
+                        )
+                        .child(
+                            IconButton::new("icon-picker-pin-selected", IconName::Star)
+                                .shape(ui::IconButtonShape::Square)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text("Pin selected icon"))
+                                .on_click(cx.listener(|panel, _, _, cx| {
+                                    panel.pin_selected_icon(cx);
+                                })),
+                        ),
+                )
+                .into_any_element(),
+        )
     }
 
     fn render_recent_icon_section(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -1407,6 +1500,7 @@ impl Render for IconPickerPanel {
         } else {
             None
         };
+        let selected_icon_actions = self.render_selected_icon_actions(cx);
         let has_content = !icon_tiles.is_empty()
             || pinned_icon_section.is_some()
             || recent_icon_section.is_some();
@@ -1448,15 +1542,6 @@ impl Render for IconPickerPanel {
                                 h_flex()
                                     .gap_1()
                                     .items_center()
-                                    .child(
-                                        IconButton::new("icon-picker-pin-selected", IconName::Star)
-                                            .shape(ui::IconButtonShape::Square)
-                                            .icon_size(IconSize::Small)
-                                            .tooltip(Tooltip::text("Pin selected icon"))
-                                            .on_click(cx.listener(|panel, _, _, cx| {
-                                                panel.pin_selected_icon(cx);
-                                            })),
-                                    )
                                     .when_some(working_set_label, |this, working_set_label| {
                                         this.child(
                                             div()
@@ -1480,6 +1565,7 @@ impl Render for IconPickerPanel {
                     )
                     .child(self.filter_editor.clone()),
             )
+            .when_some(selected_icon_actions, |this, actions| this.child(actions))
             .child(self.render_pack_filters(cx))
             .child(
                 div()
@@ -1509,7 +1595,7 @@ impl Render for IconPickerPanel {
                                 .when_some(recent_icon_section, |this, section| this.child(section))
                                 .when(!icon_tiles.is_empty(), |this| {
                                     this.child(
-                                        div().grid().grid_cols(10).gap_1().children(icon_tiles),
+                                        div().grid().grid_cols(5).gap_1p5().children(icon_tiles),
                                     )
                                 }),
                         )

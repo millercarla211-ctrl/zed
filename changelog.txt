@@ -12580,6 +12580,26 @@ NOTES:
 - The title-bar button dispatches the existing real `dx_style::TogglePanel` action when opening/focusing Style and the existing right-dock toggle action when closing the active right dock; no dummy launcher or disconnected control was added.
 - `just run` was run only before this follow-up source patch, after the user explicitly asked for it. It was not rerun for this patch.
 
+[2026-06-02] - Icons Panel Selection And Insert Safety
+
+CHANGED:
+- `crates\icon_picker\src\icon_picker.rs` now makes icon grid tile clicks select icons without auto-inserting into the active editor.
+- `crates\icon_picker\src\icon_picker.rs` now shows the selected icon near the top of the panel with explicit copy, insert, and pin actions.
+- `crates\icon_picker\src\icon_picker.rs` now uses larger icon grid cells with fewer columns so icon previews are easier to inspect.
+- `crates\editor\src\items.rs` now blocks icon insertion for unsupported file extensions instead of inserting SVG into arbitrary source files.
+- `crates\editor\src\items.rs` now converts icon stems with hyphens or other separators into valid PascalCase React component names before inserting JSX.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\icon_picker\src\icon_picker.rs crates\editor\src\items.rs`
+- Focused source scan for non-mutating icon selection, selected-icon actions, larger grid configuration, icon insertion file-type guard, and React component-name sanitization helpers.
+- Focused duplicate helper scan for the icon insertion methods.
+- `git diff --check -- crates/icon_picker/src/icon_picker.rs crates/editor/src/items.rs`
+- Focused conflict-marker scan across the changed Icons/editor files.
+
+NOTES:
+- This keeps insertion behind explicit user actions and preserves drag-and-drop plus the existing recent/pinned Insert buttons.
+- No Cargo, build, or `just run` command was run for this source patch.
+
 [2026-06-01] - Onboarding Web Preview Fullscreen Visibility
 
 FIXED:
