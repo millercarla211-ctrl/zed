@@ -35,6 +35,10 @@ test("favorites and picker rows are bounded before render materialization", () =
   assert.match(entries, /let all_models = capped_model_refs\(&model_list\);/);
   assert.match(entries, /fn push_picker_entry/);
   assert.match(entries, /entries\.len\(\) >= MAX_MODEL_SELECTOR_PICKER_ENTRIES/);
+  assert.match(entries, /ModelPickerEntry::ProviderHeader\(ProviderHeaderInfo \{/);
+  assert.match(entries, /model_count: models\.len\(\)/);
+  assert.match(entries, /collapsed_model_groups\.contains\(&group_name\)/);
+  assert.match(entries, /if collapsed \{\s*continue;\s*\}/);
   assert.match(entries, /list\.into_iter\(\)\.take\(MAX_MODEL_SELECTOR_MODELS\)/);
   assert.match(
     entries,
@@ -45,6 +49,17 @@ test("favorites and picker rows are bounded before render materialization", () =
     /models\s*\.into_iter\(\)\s*\.take\(MAX_MODEL_SELECTOR_MODELS_PER_GROUP\)/,
   );
   assert.doesNotMatch(entries, /values\(\)\.flatten\(\)\.collect/);
+});
+
+test("acp model selector uses collapsible provider headers in the real picker", () => {
+  assert.match(source, /AgentModelGroupName, AgentModelIcon/);
+  assert.match(source, /collapsed_model_groups:\s*HashSet<AgentModelGroupName>/);
+  assert.match(source, /ProviderHeader\(ProviderHeaderInfo\)/);
+  assert.match(source, /struct ProviderHeaderInfo \{[\s\S]*group_name: AgentModelGroupName,[\s\S]*model_count: usize,[\s\S]*collapsed: bool,[\s\S]*\}/);
+  assert.match(source, /fn toggle_model_group\(/);
+  assert.match(source, /let force_model_groups_expanded = !query\.is_empty\(\);/);
+  assert.match(source, /\.count\(header\.model_count\)[\s\S]*\.expanded\(!collapsed\)[\s\S]*\.on_toggle\(on_toggle\)/);
+  assert.match(source, /ModelPickerEntry::ProviderHeader\(_\)[\s\S]*false/);
 });
 
 test("favorite cycling checks the next favorite before selecting it", () => {

@@ -1,3 +1,19 @@
+[2026-06-02] - AI Panel Model Picker Provider Headers
+
+CHANGED:
+- `crates\agent_ui\src\model_selector.rs` now renders grouped ACP model lists with real collapsible provider headers instead of plain separators.
+- Provider headers show model-count badges, preserve favorite/default model behavior, and force groups open while search is active so matching models stay visible.
+- `script\dx-model-selector-source.test.ts` now guards the actual AI panel ACP picker path for provider-header entries, collapse state, count badges, and search-time expansion.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\agent_ui\src\model_selector.rs`
+- `C:\Users\Computer\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe --test script\dx-model-selector-source.test.ts`
+- `git diff --check -- crates/agent_ui/src/model_selector.rs script/dx-model-selector-source.test.ts`
+- Targeted source scan for provider-header wiring and conflict markers.
+
+NOTES:
+- No `just run`, Cargo, build, server, browser automation, or live model-provider call was run for this source-only checkpoint.
+
 [2026-06-02] - Project Panel Selection Action Strip
 
 ADDED:
