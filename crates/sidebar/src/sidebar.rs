@@ -7333,12 +7333,7 @@ impl Sidebar {
                         "sidebar-toolbar-automations",
                         IconName::ListTodo,
                         "Automations",
-                        |_this, _, window, cx| {
-                            window.dispatch_action(
-                                zed_actions::OpenProjectDebugTasks.boxed_clone(),
-                                cx,
-                            );
-                        },
+                        |this, _, window, cx| this.draft_dx_automation_action(window, cx),
                     ))
                     .child(button(
                         "sidebar-toolbar-refresh",

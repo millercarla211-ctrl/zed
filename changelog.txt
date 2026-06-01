@@ -1,3 +1,17 @@
+[2026-06-02] - Sidebar Automation Action Consistency
+
+FIXED:
+- `crates\sidebar\src\sidebar.rs` now routes the expanded toolbar Automations button through the same DX automation draft handler used by the collapsed activity-bar Automations button.
+- This removes the visible label/action mismatch where the expanded Automations button opened project debug tasks.
+
+PASSED:
+- `rustfmt --edition 2024 --check crates\sidebar\src\sidebar.rs`
+- `git diff --check -- crates/sidebar/src/sidebar.rs`
+- Targeted conflict-marker scan over the touched file.
+
+NOTES:
+- No `just run`, Cargo, build, server, or browser automation was run for this small source-only checkpoint.
+
 [2026-06-02] - Right Tool Buttons And Dock Stack Restore
 
 CHANGED:
